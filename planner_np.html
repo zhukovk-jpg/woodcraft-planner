@@ -67,6 +67,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
 .dc.abs-vacation{background:#cce5ff!important}
 .dc.abs-sick{background:#fff3cd!important}
 .dc.abs-off{background:#ffecec!important}
+.dc.abs-ctrl{background:#fef3cd!important}
 .dc.clickable{cursor:pointer}
 .dc.clickable:hover{filter:brightness(.85)}
 .s-doing{background:#2980b9}.s-doing-done{background:#27ae60}.s-doing-fail{background:#e74c3c}
@@ -2559,14 +2560,15 @@ function getPersonalDayType(d,cid){
 }
 function isWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='off'||pd==='vacation'||pd==='sick')return false;
+  if(pd==='off'||pd==='vacation'||pd==='sick'||pd==='ctrl')return false;
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
-// For ctrl stages: only weekends block — vacation/sick/off don't stop control
+// For ctrl stages: only weekends and full-off days block — 'ctrl' days allow control
 function isCtrlWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='work')return true;
+  if(pd==='off'||pd==='vacation'||pd==='sick')return false;
+  if(pd==='work'||pd==='ctrl')return true;
   return!isBaseWknd(d);
 }
 function nextWork(s,cid){let d=addDay(s,1);while(!isWorkDay(d,cid))d=addDay(d,1);return d;}
@@ -5582,6 +5584,7 @@ function renderCalendar(){
       if(pdt==='vacation'){cls+='pd-vacation';txt='🏖';}
       else if(pdt==='sick'){cls+='pd-sick';txt='🤒';}
       else if(pdt==='off'){cls+='pd-off';txt='—';}
+      else if(pdt==='ctrl'){cls+='pd-ctrl';txt='◎';}
       else if(pdt==='work'){cls+='pd-work';txt='+';}
       else if(isWknd)cls+='pd-wknd';
       else cls+='pd-normal';
@@ -5589,7 +5592,7 @@ function renderCalendar(){
       if(canToggle&&pdt!=='vacation'&&pdt!=='sick'){
         const _d=d,_cid=con.id;
         cell.onclick=()=>togglePDay(_cid,_d);
-        cell.title=pdt==='off'?'Личный выходной':pdt==='work'?'Рабочий выходной':isWknd?'Нажмите — сделать рабочим':'Нажмите — взять выходной';
+        cell.title=pdt==='off'?'Выходной (ничего)':pdt==='ctrl'?'Только контроль':pdt==='work'?'Рабочий день':isWknd?'Нажмите: рабочий / контроль / выходной':'Нажмите: выходной / только контроль / рабочий';
       }
       pdr.appendChild(cell);
     }
@@ -5656,7 +5659,7 @@ function renderCalendar(){
           else if(absT==='sick')cell.className='dc abs-sick';
           else if(isOff){
             const pdT2=getPersonalDayType(d,con.id);
-            cell.className='dc'+(pdT2==='off'?' abs-off':' wknd-cell');
+            cell.className='dc'+(pdT2==='off'?' abs-off':pdT2==='ctrl'?' abs-ctrl':' wknd-cell');
           }
           else cell.className='dc';
 
@@ -5839,8 +5842,12 @@ function renderCalendar(){
 function togglePDay(cid,d){
   if(!S.personalDays[cid])S.personalDays[cid]={};
   const pd=S.personalDays[cid][d];
-  if(!pd){S.personalDays[cid][d]=isBaseWknd(d)?'work':'off';}
-  else delete S.personalDays[cid][d];
+  const isWknd=isBaseWknd(d);
+  // Weekday cycle: null→'off'→'ctrl'→null
+  // Weekend cycle: null→'work'→'ctrl'→null
+  if(!pd){S.personalDays[cid][d]=isWknd?'work':'off';}
+  else if(pd==='off'||pd==='work'){S.personalDays[cid][d]='ctrl';}
+  else{delete S.personalDays[cid][d];}
   rebuildForConstructor(cid);renderCalendar();
 }
 
