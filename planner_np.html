@@ -6185,7 +6185,8 @@ function openAddMMProd(){
   document.getElementById('mmProdQty').value='1';
   document.getElementById('mmProdBitrix').value='';
   document.getElementById('mmProdStatus').value='active';
-  fillMMProdSelects();
+  document.querySelector('input[name=mmProdPair][value=both]').checked=true;
+  fillMMProdSelects();updateMMProdPairUI();
   openModal('mMMProd');
 }
 function openEditMMProd(id){
@@ -6198,8 +6199,15 @@ function openEditMMProd(id){
   document.getElementById('mmProdQty').value=p.qty||1;
   document.getElementById('mmProdBitrix').value=p.bitrixUrl||'';
   document.getElementById('mmProdStatus').value=p.status||'active';
-  fillMMProdSelects(p);
+  const pairVal=p.pairType||'both';
+  document.querySelector(`input[name=mmProdPair][value=${pairVal}]`).checked=true;
+  fillMMProdSelects(p);updateMMProdPairUI();
   openModal('mMMProd');
+}
+function updateMMProdPairUI(){
+  const val=document.querySelector('input[name=mmProdPair]:checked')?.value||'both';
+  document.getElementById('mmProdCidAWrap').style.display=val==='sewing'?'none':'';
+  document.getElementById('mmProdCidBWrap').style.display=val==='frame'?'none':'';
 }
 function fillMMProdSelects(p){
   const tmplSel=document.getElementById('mmProdTemplate');
@@ -6217,8 +6225,9 @@ function saveMMProd(){
   const name=document.getElementById('mmProdName').value.trim();
   if(!name)return alert('Введите название');
   const templateId=document.getElementById('mmProdTemplate').value;
-  const cidA=document.getElementById('mmProdCidA').value;
-  const cidB=document.getElementById('mmProdCidB').value;
+  const pairType=document.querySelector('input[name=mmProdPair]:checked')?.value||'both';
+  const cidA=pairType==='sewing'?'':document.getElementById('mmProdCidA').value;
+  const cidB=pairType==='frame'?'':document.getElementById('mmProdCidB').value;
   const startDate=document.getElementById('mmProdStart').value;
   const priority=parseInt(document.getElementById('mmProdPri').value)||1;
   const qty=parseInt(document.getElementById('mmProdQty').value)||1;
@@ -6227,9 +6236,9 @@ function saveMMProd(){
   const id=document.getElementById('mMMProdId').value;
   if(id){
     const p=S.mm.products.find(x=>x.id===id);
-    if(p)Object.assign(p,{name,templateId,cidA,cidB,startDate,priority,qty,bitrixUrl,status});
+    if(p)Object.assign(p,{name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status});
   }else{
-    S.mm.products.push({id:'mp'+Date.now(),name,templateId,cidA,cidB,startDate,priority,qty,bitrixUrl,status:'active'});
+    S.mm.products.push({id:'mp'+Date.now(),name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status:'active'});
   }
   rebuildAllMM();save();closeModal('mMMProd');renderMMProducts();
 }
@@ -6770,9 +6779,20 @@ function tryAutoLogin(){
   <input type="hidden" id="mMMProdId">
   <div class="fg"><label>Название</label><input type="text" id="mmProdName"></div>
   <div class="fg"><label>Шаблон</label><select id="mmProdTemplate"></select></div>
+  <div style="display:flex;gap:12px;margin-bottom:8px">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+      <input type="radio" name="mmProdPair" value="both" checked onchange="updateMMProdPairUI()"> 👥 Пара (каркас + швейка)
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+      <input type="radio" name="mmProdPair" value="frame" onchange="updateMMProdPairUI()"> 🪵 Только каркасника
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+      <input type="radio" name="mmProdPair" value="sewing" onchange="updateMMProdPairUI()"> 🧵 Только швейника
+    </label>
+  </div>
   <div style="display:flex;gap:10px">
-    <div class="fg" style="flex:1"><label>🪵 Каркасника</label><select id="mmProdCidA"></select></div>
-    <div class="fg" style="flex:1"><label>🧵 Швейника</label><select id="mmProdCidB"></select></div>
+    <div class="fg" style="flex:1" id="mmProdCidAWrap"><label>🪵 Каркасника</label><select id="mmProdCidA"></select></div>
+    <div class="fg" style="flex:1" id="mmProdCidBWrap"><label>🧵 Швейника</label><select id="mmProdCidB"></select></div>
   </div>
   <div class="fg"><label>Дата начала</label><input type="date" id="mmProdStart"></div>
   <div style="display:flex;gap:10px">
