@@ -2557,8 +2557,16 @@ function isWorkDay(d,cid){
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
+// For ctrl stages: vacation/sick don't block — control continues
+function isCtrlWorkDay(d,cid){
+  const pd=getPersonalDayType(d,cid);
+  if(pd==='off')return false;
+  if(pd==='work')return true;
+  return!isBaseWknd(d);
+}
 function nextWork(s,cid){let d=addDay(s,1);while(!isWorkDay(d,cid))d=addDay(d,1);return d;}
 function ensureWork(s,cid){while(!isWorkDay(s,cid))s=addDay(s,1);return s;}
+function ensureCtrlWork(s,cid){while(!isCtrlWorkDay(s,cid))s=addDay(s,1);return s;}
 
 function monthDays(yr,mo){
   const days=[];const d=new Date(yr,mo,1);
@@ -2640,8 +2648,9 @@ function rebuildForConstructor(cid){
         }else{
           let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
           // accept (ПРМ) stage snaps to individual date (if set) or nearest planned acceptance date
-          if(stage.id==='accept'){const ind=S.individualAcceptDates[prod.id];const na=ind&&ind>=probe?ind:getNextAccDate(probe);if(na&&na>probe)probe=ensureWork(na,cid);}
-          while(planned.length<remaining){if(isWorkDay(probe,cid))planned.push(probe);probe=addDay(probe,1);}
+          if(stage.id==='accept'){const ind=S.individualAcceptDates[prod.id];const na=ind&&ind>=probe?ind:getNextAccDate(probe);if(na&&na>probe)probe=ensureCtrlWork(na,cid);}
+          // ctrl stages ignore vacation — control continues during absence
+          while(planned.length<remaining){if(isCtrlWorkDay(probe,cid))planned.push(probe);probe=addDay(probe,1);}
         }
         allDays=[...new Set([...failDays,...doneDays,...planned])].sort();
         for(const d of failDays)entry.days[d]={...prevMarks[d]};
@@ -2652,7 +2661,8 @@ function rebuildForConstructor(cid){
       entry.startDate=s[0]||cursor;
       entry.endDate=s[s.length-1]||cursor;
       const lastEff=stageComplete?doneDays[doneDays.length-1]:entry.endDate;
-      cursor=addDay(lastEff,1);cursor=ensureWork(cursor,cid);
+      cursor=addDay(lastEff,1);
+      cursor=stage.type==='ctrl'?ensureCtrlWork(cursor,cid):ensureWork(cursor,cid);
     }
   }
   save();
