@@ -907,7 +907,7 @@ const MONTHS=['Январь','Февраль','Март','Апрель','Май'
 const MONTHS_G=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_S=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 
-let S={constructors:[],products:[],schedule:{},personalDays:{},absences:{},shiftsLog:[],hallOfFame:[],customDurations:{},stageConstraints:{},acceptanceDates:[],rejections:[],kingdoms:{},extraTaskDefs:[],extraAssignments:[],factory:{contributions:[],items:{}},acceptanceResults:{},acceptanceManualItems:{}};
+let S={constructors:[],products:[],schedule:{},personalDays:{},absences:{},shiftsLog:[],hallOfFame:[],customDurations:{},stageConstraints:{},acceptanceDates:[],rejections:[],kingdoms:{},extraTaskDefs:[],extraAssignments:[],factory:{contributions:[],items:{}},acceptanceResults:{},acceptanceManualItems:{},individualAcceptDates:{}};
 let session={role:null,cid:null,name:null};
 let viewYear,viewMonth;
 let markCtx=null;
@@ -1583,6 +1583,7 @@ function migrate(){
   if(!S.assemblyChecks)S.assemblyChecks={};
   if(!S.acceptanceResults)S.acceptanceResults={};
   if(!S.acceptanceManualItems)S.acceptanceManualItems={};
+  if(!S.individualAcceptDates)S.individualAcceptDates={};
   if(!S.factory)S.factory={contributions:[],items:{}};
   if(!S.factory.contributions)S.factory.contributions=[];
   if(!S.factory.items)S.factory.items={};
@@ -1721,16 +1722,16 @@ function rebuildForConstructor(cid){
           for(const d of doneDays)doingBusy.add(d);
           for(const d of failDays)doingBusy.add(d);
           let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
-          // accept (ПРМ) stage snaps to nearest planned acceptance date
-          if(stage.id==='accept'){const na=getNextAccDate(probe);if(na&&na>probe)probe=ensureWork(na,cid);}
+          // accept (ПРМ) stage snaps to individual date (if set) or nearest planned acceptance date
+          if(stage.id==='accept'){const ind=S.individualAcceptDates[prod.id];const na=ind&&ind>=probe?ind:getNextAccDate(probe);if(na&&na>probe)probe=ensureWork(na,cid);}
           while(planned.length<remaining){
             if(isWorkDay(probe,cid)&&!doingBusy.has(probe)){planned.push(probe);doingBusy.add(probe);}
             probe=addDay(probe,1);
           }
         }else{
           let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
-          // accept (ПРМ) stage snaps to nearest planned acceptance date
-          if(stage.id==='accept'){const na=getNextAccDate(probe);if(na&&na>probe)probe=ensureWork(na,cid);}
+          // accept (ПРМ) stage snaps to individual date (if set) or nearest planned acceptance date
+          if(stage.id==='accept'){const ind=S.individualAcceptDates[prod.id];const na=ind&&ind>=probe?ind:getNextAccDate(probe);if(na&&na>probe)probe=ensureWork(na,cid);}
           while(planned.length<remaining){if(isWorkDay(probe,cid))planned.push(probe);probe=addDay(probe,1);}
         }
         allDays=[...new Set([...failDays,...doneDays,...planned])].sort();
@@ -2037,6 +2038,24 @@ function switchKMTab(el,id){
 }
 
 // ─── ACCEPTANCE HELPERS ───────────────────────────────────────
+function setIndividualAcceptDate(pid,date){
+  if(!date){delete S.individualAcceptDates[pid];}
+  else{S.individualAcceptDates[pid]=date;}
+  save();
+  const p=S.products.find(x=>x.id===pid);
+  if(p&&p.constructorId)rebuildForConstructor(p.constructorId);
+  renderAcceptanceKM();renderCalendar();
+}
+function openIndividualAccept(pid){
+  const p=S.products.find(x=>x.id===pid);if(!p)return;
+  const cur=S.individualAcceptDates[pid]||'';
+  // get earliest possible date = end of previous stage (insp)
+  const prevEnd=S.schedule[pid]?.insp?.endDate||S.schedule[pid]?.sample?.endDate||todayStr();
+  const d=prompt(`Индивидуальная дата приёмки для «${p.name}»\nНе раньше: ${fmtFull(prevEnd)}\n(формат ГГГГ-ММ-ДД, пусто — сбросить)`,cur);
+  if(d===null)return;
+  if(d&&d<prevEnd){alert('Дата не может быть раньше окончания предыдущего этапа ('+fmtFull(prevEnd)+')');return;}
+  setIndividualAcceptDate(pid,d.trim()||null);
+}
 function getNextAccDate(afterDate){
   // Find nearest acceptance date >= afterDate
   const sorted=S.acceptanceDates.map(a=>a.date).filter(d=>d>=afterDate).sort();
@@ -2074,16 +2093,58 @@ function renderAcceptanceKM(){
   }
 
   let html='';
+
+  // Individual acceptance section
+  const indivProds=S.products.filter(p=>S.individualAcceptDates[p.id]&&p.constructorId&&!isProductAccepted(p.id));
+  if(indivProds.length){
+    const byDate={};
+    for(const p of indivProds){
+      const d=S.individualAcceptDates[p.id];
+      if(!byDate[d])byDate[d]=[];
+      byDate[d].push(p);
+    }
+    html+=`<div style="margin-bottom:20px;border:2px solid #a569bd;border-radius:12px;overflow:hidden">
+      <div style="background:#7d3c98;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:18px">🗓️</span>
+        <div style="flex:1"><div style="font-weight:700;font-size:15px">Индивидуальные приёмки</div>
+        <div style="font-size:12px;opacity:.8">Согласование отдельно от общей даты</div></div>
+      </div>`;
+    for(const [date,prods] of Object.entries(byDate).sort()){
+      html+=`<div style="padding:8px 16px;background:#f9f0ff;border-bottom:1px solid #e8daef;font-weight:700;font-size:12px;color:#7d3c98">📅 ${fmtFull(date)}</div>`;
+      for(const prod of prods){
+        const con=S.constructors.find(x=>x.id===prod.constructorId);
+        const key=`${date}_${prod.id}`;
+        const res=S.acceptanceResults[key];
+        const canMark=isAdmin||(session.role==='constructor'&&session.cid===prod.constructorId);
+        const resBadge=res?({ok:'✅ Принято',redo:'➕ Доработка',rework:'🔄 Переделка',stop:'🚫 Остановлено'}[res.result]||res.result):'⬜ Ожидает';
+        const resBg=res?({ok:'#d4edda',redo:'#fff3cd',rework:'#f8d7da',stop:'#e2e3e5'}[res.result]||'#eee'):'#f0f4f8';
+        const resColor=res?({ok:'#155724',redo:'#856404',rework:'#721c24',stop:'#383d41'}[res.result]||'#333'):'#555';
+        html+=`<div style="padding:10px 16px;border-bottom:1px solid #f0f0f0;display:flex;gap:12px;align-items:center;background:#fff">
+          <div style="flex:1">
+            <div style="font-weight:600;color:#1a3a5c;font-size:13px">${prod.name}
+              <span class="type-badge ${TYPE_CSS[prod.type]}">${TYPE_LABEL[prod.type]}</span>
+            </div>
+            <div style="font-size:11px;color:#888;margin-top:2px">${con?con.name:'—'} · ОБР: ${fmtFull(S.schedule[prod.id]?.sample?.endDate||'—')}</div>
+          </div>
+          <span style="background:${resBg};color:${resColor};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">${resBadge}</span>
+          ${canMark?`<button onclick="openAccResult('${date}','${prod.id}')" style="font-size:11px;padding:3px 10px;background:#eaf4fb;border:1px solid #aed6f1;color:#1a5276;border-radius:6px;cursor:pointer">${res?'✏️ Изменить':'📝 Отметить'}</button>`:''}
+          ${isAdmin?`<button onclick="openIndividualAccept('${prod.id}')" title="Изменить/сбросить дату" style="font-size:11px;padding:3px 10px;background:#fef9e7;border:1px solid #f9e79f;color:#9a7d0a;border-radius:6px;cursor:pointer">📅 ${fmtShort(date)}</button>`:''}
+        </div>`;
+      }
+    }
+    html+=`</div>`;
+  }
+
   for(const acc of accDates){
     const isPast=acc.date<today, isToday=acc.date===today;
     const hdrBg=isToday?'#1a5276':isPast?'#5d6d7e':'#2471a3';
 
-    // Auto-list: products whose accept (ПРМ) stage falls on this acceptance date
+    // Auto-list: products whose accept (ПРМ) stage falls on this acceptance date (excluding individually assigned)
     const autoProds=S.products.filter(p=>{
       if(!p.constructorId)return false;
+      if(S.individualAcceptDates[p.id])return false; // has individual date — excluded from general
       const acceptEntry=S.schedule[p.id]?.accept;
       if(!acceptEntry?.startDate)return false;
-      // accept stage starts on or within this acceptance date
       if(acceptEntry.startDate!==acc.date)return false;
       if(isProductAccepted(p.id))return false;
       return true;
@@ -2144,6 +2205,7 @@ function renderAcceptanceKM(){
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
           <span style="background:${resBg};color:${resColor};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">${resBadge}</span>
           ${canMark?`<button onclick="openAccResult('${acc.date}','${prod.id}')" style="font-size:11px;padding:3px 10px;background:#eaf4fb;border:1px solid #aed6f1;color:#1a5276;border-radius:6px;cursor:pointer">${res?'✏️ Изменить':'📝 Отметить'}</button>`:''}
+          ${isAdmin?`<button onclick="openIndividualAccept('${prod.id}')" title="Назначить индивидуальную дату приёмки" style="font-size:11px;padding:3px 10px;background:#fef9e7;border:1px solid #f9e79f;color:#9a7d0a;border-radius:6px;cursor:pointer">📅 Индивид.</button>`:''}
         </div>
       </div>`;
     }
