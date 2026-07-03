@@ -6047,6 +6047,9 @@ function renderMMTemplates(){
   if(!el)return;
   const MODE_LABEL={ctrl:'Контроль',seq:'Посл.',par:'Парал.',combined:'Совм.'};
   const MODE_COLOR={ctrl:'#e67e22',seq:'#2471a3',par:'#8e44ad',combined:'#1e8449'};
+  const SPEC_LABEL={frame:'🪵 Каркас',sewing:'🧵 Швейка',both:'👥 Оба',merge:'🔀 Слияние'};
+  const SPEC_BG={frame:'#efebe9',sewing:'#f3e5f5',both:'#e8f5e9',merge:'#e3f2fd'};
+  const SPEC_COLOR={frame:'#4e342e',sewing:'#6a1b9a',both:'#1b5e20',merge:'#0d47a1'};
   el.innerHTML=S.mm.templates.map(t=>`
     <div style="background:#fff;border-radius:9px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
@@ -6060,6 +6063,7 @@ function renderMMTemplates(){
         <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#f8fafc;border-radius:6px;margin-bottom:4px;border:1px solid #e8eaf0">
           <span style="font-weight:700;color:#1a3a5c;min-width:38px;font-size:12px">${st.abbr}</span>
           <span style="flex:1;font-size:12px">${st.name}</span>
+          <span style="background:${SPEC_BG[st.spec||'frame']};color:${SPEC_COLOR[st.spec||'frame']};border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700">${SPEC_LABEL[st.spec||'frame']}</span>
           <span style="background:${MODE_COLOR[st.mode]||'#888'};color:#fff;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700">${MODE_LABEL[st.mode]||st.mode}</span>
           <span style="font-size:11px;color:#555">${st.days}д</span>
           ${st.expWorkshop?`<span style="background:#e8f5e9;color:#1e8449;border-radius:10px;padding:1px 6px;font-size:10px">ЭУ×${st.expWorkshopSlots||1}</span>`:''}
@@ -6080,6 +6084,7 @@ function openAddMMStage(templateId){
   document.getElementById('mmStageAbbr').value='';
   document.getElementById('mmStageDays').value='1';
   document.querySelectorAll('input[name=mmStageMode]')[0].checked=true;
+  document.querySelectorAll('input[name=mmStageSpec]')[0].checked=true;
   document.getElementById('mmStageEW').checked=false;
   document.getElementById('mmStageEWSlots').value='1';
   document.getElementById('mmStageEWRow').style.display='none';
@@ -6095,6 +6100,7 @@ function openEditMMStage(templateId,stageId){
   document.getElementById('mmStageAbbr').value=st.abbr;
   document.getElementById('mmStageDays').value=st.days;
   document.querySelectorAll('input[name=mmStageMode]').forEach(r=>r.checked=r.value===st.mode);
+  document.querySelectorAll('input[name=mmStageSpec]').forEach(r=>r.checked=r.value===(st.spec||'frame'));
   document.getElementById('mmStageEW').checked=!!st.expWorkshop;
   document.getElementById('mmStageEWSlots').value=st.expWorkshopSlots||1;
   document.getElementById('mmStageEWRow').style.display=st.expWorkshop?'':'none';
@@ -6105,15 +6111,16 @@ function saveMMStage(){
   const abbr=document.getElementById('mmStageAbbr').value.trim().toUpperCase().slice(0,5);
   const days=Math.max(1,parseInt(document.getElementById('mmStageDays').value)||1);
   const mode=document.querySelector('input[name=mmStageMode]:checked')?.value||'ctrl';
+  const spec=document.querySelector('input[name=mmStageSpec]:checked')?.value||'frame';
   const expWorkshop=document.getElementById('mmStageEW').checked;
   const expWorkshopSlots=parseInt(document.getElementById('mmStageEWSlots').value)||1;
   if(!name)return alert('Введите название');if(!abbr)return alert('Введите аббревиатуру');
   const t=S.mm.templates.find(x=>x.id===_mmStageEditTemplateId);if(!t)return;
   if(_mmStageEditId){
     const st=t.stages.find(x=>x.id===_mmStageEditId);
-    if(st){Object.assign(st,{name,abbr,days,mode,expWorkshop,expWorkshopSlots});}
+    if(st){Object.assign(st,{name,abbr,days,mode,spec,expWorkshop,expWorkshopSlots});}
   }else{
-    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,expWorkshop,expWorkshopSlots});
+    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,spec,expWorkshop,expWorkshopSlots});
   }
   save();closeModal('mMMStage');renderMMTemplates();
 }
@@ -6780,6 +6787,14 @@ function tryAutoLogin(){
   <input type="hidden" id="mmStageId">
   <div class="fg"><label>Полное название</label><input type="text" id="mmStageName"></div>
   <div class="fg"><label>Аббревиатура (до 5 симв.)</label><input type="text" id="mmStageAbbr" maxlength="5"></div>
+  <div class="fg"><label>Исполнитель</label>
+    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="frame" checked> 🪵 Каркасника</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="sewing"> 🧵 Швейника</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="both"> 👥 Оба</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="merge"> 🔀 Слияние (ждёт обоих)</label>
+    </div>
+  </div>
   <div class="fg"><label>Режим</label>
     <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="ctrl" checked> Контроль</label>
