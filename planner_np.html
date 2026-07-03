@@ -635,7 +635,11 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="divider"></div>
     <div class="slabel">Ключевой этап</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-blue btn-sm" id="btnPostpone" onclick="doPostponeStage()">📅 Перенести на след. месяц</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span style="font-size:12px;color:#555">📅 Начать с:</span>
+        <input type="date" id="postponeDate" style="border:1px solid #ccc;border-radius:6px;padding:3px 7px;font-size:13px">
+        <button class="btn btn-blue btn-sm" onclick="doPostponeStage()">Зафиксировать</button>
+      </div>
       <button class="btn btn-gray btn-sm" id="btnReturnPostpone" onclick="doReturnStage()" style="display:none">↺ Вернуть назад</button>
       <button class="btn btn-red btn-sm" onclick="openRejectStage()">🚫 Отклонить / закрыть</button>
     </div>
@@ -1647,7 +1651,7 @@ function getPersonalDayType(d,cid){
 }
 function isWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='off'||pd==='vacation'||pd==='sick'||pd==='ctrl')return false;
+  if(pd==='off'||pd==='ctrl')return false; // vacation/sick = visual only, no schedule effect
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
@@ -1706,7 +1710,7 @@ function rebuildForConstructor(cid){
       }
       // Respect earliest allowed start date (postpone to next month)
       const minStart=(S.stageConstraints[prod.id]||{})[stage.id];
-      if(minStart&&cursor<minStart)cursor=ensureWork(minStart,cid);
+      if(minStart)cursor=ensureWork(minStart,cid); // pinned date = exact, always use it
       const prevMarks=(saved[prod.id]||{})[stage.id]?.marks||{};
       const prevFR=(saved[prod.id]||{})[stage.id]?.failReason||null;
       sched[stage.id]={startDate:null,endDate:null,days:{},failReason:prevFR};
@@ -5043,7 +5047,8 @@ function openMarkModal(pid,sid,dateStr,mark,prodName,stageName,isActiveStage,pro
     document.getElementById('btnPostpone').style.display=alreadyPostponed?'none':'';
     document.getElementById('btnReturnPostpone').style.display=alreadyPostponed?'':'none';
     const noteEl=document.getElementById('postponedNote');
-    if(alreadyPostponed){const ms=(S.stageConstraints[pid]||{})[sid];noteEl.textContent='⏳ Перенесён на '+fmtFull(ms);noteEl.style.display='';}
+    if(alreadyPostponed){const ms=(S.stageConstraints[pid]||{})[sid];noteEl.textContent='⏳ Зафиксирован на '+fmtFull(ms);noteEl.style.display='';const di=document.getElementById('postponeDate');if(di)di.value=ms;}
+  else{const di=document.getElementById('postponeDate');if(di){const nm=new Date();nm.setMonth(nm.getMonth()+1);nm.setDate(1);di.value=toStr(nm);}}
     else noteEl.style.display='none';
   }
   openModal('mMark');
@@ -5577,10 +5582,8 @@ function doPostponeStage(){
   const{pid,sid,prodCid}=markCtx;
   const prod=S.products.find(p=>p.id===pid);
   const stage=STAGES.find(s=>s.id===sid);
-  // Find first workday of next month
-  const now=new Date();
-  const nextMonthFirst=new Date(now.getFullYear(),now.getMonth()+1,1);
-  const minStart=toStr(nextMonthFirst);
+  const dateInput=document.getElementById('postponeDate');
+  const minStart=dateInput&&dateInput.value?dateInput.value:(()=>{const n=new Date();const nm=new Date(n.getFullYear(),n.getMonth()+1,1);return toStr(nm);})();
   if(!S.stageConstraints[pid])S.stageConstraints[pid]={};
   S.stageConstraints[pid][sid]=minStart;
   // Clear any planned days for this stage
@@ -5588,7 +5591,7 @@ function doPostponeStage(){
   if(entry){for(const d in entry.days){if(entry.days[d].status==='planned')delete entry.days[d];}}
   S.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
     constructorId:prodCid,fromDate:minStart,type:'postpone',
-    reason:`Перенос этапа на следующий месяц (с ${fmtShort(minStart)})`,
+    reason:`Этап зафиксирован на дату ${fmtShort(minStart)}`,
     productId:pid,stageId:sid,productName:prod.name,stageName:stage.name,shiftedCount:0});
   rebuildForConstructor(prodCid);save();closeModal('mMark');renderCalendar();
 }
