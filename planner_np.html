@@ -5047,9 +5047,8 @@ function openMarkModal(pid,sid,dateStr,mark,prodName,stageName,isActiveStage,pro
     document.getElementById('btnPostpone').style.display=alreadyPostponed?'none':'';
     document.getElementById('btnReturnPostpone').style.display=alreadyPostponed?'':'none';
     const noteEl=document.getElementById('postponedNote');
-    if(alreadyPostponed){const ms=(S.stageConstraints[pid]||{})[sid];noteEl.textContent='⏳ Зафиксирован на '+fmtFull(ms);noteEl.style.display='';const di=document.getElementById('postponeDate');if(di)di.value=ms;}
-  else{const di=document.getElementById('postponeDate');if(di){const nm=new Date();nm.setMonth(nm.getMonth()+1);nm.setDate(1);di.value=toStr(nm);}}
-    else noteEl.style.display='none';
+    if(alreadyPostponed){const ms=(S.stageConstraints[pid]||{})[sid];noteEl.textContent='📌 Зафиксирован на '+fmtFull(ms);noteEl.style.display='';const di=document.getElementById('postponeDate');if(di)di.value=ms;}
+    else{noteEl.style.display='none';const di=document.getElementById('postponeDate');if(di){const nm=new Date();nm.setMonth(nm.getMonth()+1);nm.setDate(1);di.value=toStr(nm);}}
   }
   openModal('mMark');
 }
