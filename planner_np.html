@@ -72,6 +72,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
 .dc.clickable:hover{filter:brightness(.85)}
 .s-doing{background:#2980b9!important;opacity:.85}.s-doing-done{background:#27ae60!important;opacity:.9}.s-doing-fail{background:#e74c3c!important;opacity:.85}
 .s-ctrl{background:#e67e22!important;opacity:.8}.s-ctrl-done{background:#1abc9c!important;opacity:.85}.s-ctrl-fail{background:#e74c3c!important;opacity:.8}
+.s-mm-accept{background:#8e44ad!important;opacity:.9}.s-mm-accept-done{background:#1abc9c!important;opacity:.9}.s-mm-accept-fail{background:#e74c3c!important;opacity:.9}
 .s-admin-mark{outline:2px solid #f39c12;outline-offset:-2px}
 .dc-txt{font-size:9px;color:#fff;font-weight:700;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;line-height:1}
 .pday-row td{padding:0}
@@ -6662,6 +6663,7 @@ function renderMMCalendar(){
         const e=sched[stage.id];
         const spec=stage.spec||'both';
         const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
+        const isAccept=stage.abbr==='ПРМЧ'||stage.abbr==='ПРМЦ';
         const rowBg=SPEC_ROW_BG[spec]||'';
         const lblColor=SPEC_LABEL_COLOR[spec]||'#333';
         const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
@@ -6676,9 +6678,9 @@ function renderMMCalendar(){
           const v=isCtrl?(e?.days?.[d]||e?.track0?.days?.[d]):spec==='sewing'?e?.track1?.days?.[d]:(e?.track0?.days?.[d]||e?.days?.[d]);
           const st=v?.status||'';
           let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';
-          else if(st==='fail')cls+=' s-doing-fail';
-          else if(st==='planned')cls+=' '+(isCtrl?'s-ctrl':'s-doing');
+          if(st==='done')cls+=' '+(isAccept?'s-mm-accept-done':'s-doing-done');
+          else if(st==='fail')cls+=' '+(isAccept?'s-mm-accept-fail':'s-doing-fail');
+          else if(st==='planned')cls+=' '+(isAccept?'s-mm-accept':isCtrl?'s-ctrl':'s-doing');
           const cellClick=canClick&&(st==='planned'||st==='done'||st==='fail');
           const showAbbr=st&&firstActive;
           if(st)firstActive=false;
