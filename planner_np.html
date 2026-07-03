@@ -1612,6 +1612,11 @@ function migrate(){
   if(!S.mm.extraTaskDefs)S.mm.extraTaskDefs=[];
   if(!S.mm.extraAssignments)S.mm.extraAssignments=[];
   if(!S.mm.personalDays)S.mm.personalDays={};
+  // v2: full MM data reset — clears old templates/products/constructors
+  if(!S.mmDataVersion||S.mmDataVersion<2){
+    S.mm={constructors:[],products:[],schedule:{},templates:[],personalDays:{},absences:{},shiftsLog:[]};
+    S.mmDataVersion=2;
+  }
   if(!S.mm.absences)S.mm.absences={};
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
