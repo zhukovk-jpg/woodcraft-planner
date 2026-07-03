@@ -295,6 +295,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="sub-tab" onclick="switchMMTab(this,'mm-shifts')">📋 Переносы</div>
     <div class="sub-tab admin-only" onclick="switchMMTab(this,'mm-constructors')">👷 Конструкторы</div>
     <div class="sub-tab admin-only" onclick="switchMMTab(this,'mm-templates')">⚙️ Шаблоны</div>
+    <div class="sub-tab" onclick="switchMMTab(this,'mm-acceptance')">📋 Приёмка</div>
     <div class="sub-tab" onclick="switchMMTab(this,'mm-extras')">⭐ Доп. задачи</div>
   </div>
 
@@ -410,6 +411,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       <div class="gantt-wrap"><table class="gantt" id="mmGanttTable"></table></div>
     </div>
     <div id="tab-mm-templates" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Шаблоны сроков ММ</h2></div><div id="mmTemplateList"></div></div></div>
+    <div id="tab-mm-acceptance" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Приёмка ММ</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="date" id="mmAccNewDate" style="border:1px solid #ccc;border-radius:6px;padding:4px 8px;font-size:13px"><button class="btn btn-green btn-sm admin-only" onclick="addMMAccDate()">+ Дата приёмки</button></div></div><div id="mmAcceptanceList"></div></div></div>
     <div id="tab-mm-extras" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Доп. задачи ММ</h2></div><p style="color:#888;font-size:13px">Раздел в разработке</p></div></div>
     <div id="tab-mm-shifts" style="display:none">
       <div class="panel">
@@ -1609,7 +1611,10 @@ function migrate(){
       for(const d in e.days){const v=e.days[d];nd[d]=typeof v==='string'?{status:v,setBy:'system'}:v;}
       e.days=nd;
     }
-  if(!S.mm)S.mm={constructors:[],products:[],schedule:{},templates:[],extraTaskDefs:[],extraAssignments:[],personalDays:{},absences:{},shiftsLog:[]};
+  if(!S.mm)S.mm={constructors:[],products:[],schedule:{},templates:[],extraTaskDefs:[],extraAssignments:[],personalDays:{},absences:{},shiftsLog:[],acceptanceDates:[],acceptanceResults:{},individualAcceptDates:{}};
+  if(!S.mm.acceptanceDates)S.mm.acceptanceDates=[];
+  if(!S.mm.acceptanceResults)S.mm.acceptanceResults={};
+  if(!S.mm.individualAcceptDates)S.mm.individualAcceptDates={};
   if(!S.mm.constructors)S.mm.constructors=[];
   if(!S.mm.products)S.mm.products=[];
   if(!S.mm.schedule)S.mm.schedule={};
@@ -1619,7 +1624,7 @@ function migrate(){
   if(!S.mm.personalDays)S.mm.personalDays={};
   // v2: full MM data reset — clears old templates/products/constructors
   if(!S.mmDataVersion||S.mmDataVersion<3){
-    S.mm={constructors:[],products:[],schedule:{},templates:[],personalDays:{},absences:{},shiftsLog:[]};
+    S.mm={constructors:[],products:[],schedule:{},templates:[],personalDays:{},absences:{},shiftsLog:[],acceptanceDates:[],acceptanceResults:{},individualAcceptDates:{}};
     S.mmDataVersion=3;
   }
   if(!S.mm.templates.length||!S.mm.templates[0]?.stages?.[0]?.phase)S.mm.templates=MM_DEFAULT_TEMPLATES();
@@ -2026,7 +2031,7 @@ function switchSection(section){
   ['calendar','products','shifts','constructors','configurator','extratasks'].forEach(t=>
     document.getElementById('tab-'+t).style.display='none');
   document.getElementById('tab-mm').style.display='none';
-  ['mm-constructors','mm-products','mm-calendar','mm-templates','mm-extras','mm-shifts'].forEach(t=>
+  ['mm-constructors','mm-products','mm-calendar','mm-templates','mm-acceptance','mm-extras','mm-shifts'].forEach(t=>
     document.getElementById('tab-'+t).style.display='none');
   if(section==='rating'){
     document.getElementById('tab-rating').style.display='';
@@ -5936,12 +5941,13 @@ function loginMMC(){
 function switchMMTab(el,id){
   document.querySelectorAll('#subNavMm .sub-tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  const mmTabIds=['mm-constructors','mm-products','mm-calendar','mm-templates','mm-extras','mm-shifts'];
+  const mmTabIds=['mm-constructors','mm-products','mm-calendar','mm-templates','mm-acceptance','mm-extras','mm-shifts'];
   mmTabIds.forEach(t=>document.getElementById('tab-'+t).style.display=t===id?'':'none');
   if(id==='mm-constructors')renderMMConstructors();
   else if(id==='mm-products')renderMMProducts();
   else if(id==='mm-calendar')renderMMCalendar();
   else if(id==='mm-templates')renderMMTemplates();
+  else if(id==='mm-acceptance')renderMMAcceptance();
   else if(id==='mm-extras')renderMMExtraDefs();
   else if(id==='mm-shifts')renderMMShifts();
 }
@@ -6417,17 +6423,118 @@ function rebuildAllMM(){
         entry.startDate=r.startDate;entry.endDate=r.endDate;cursorB=r.nextCursor;
       }else{
         // both or merge: start from max of both cursors
-        const startFrom=cursorA>cursorB?cursorA:cursorB;
+        let startFrom=cursorA>cursorB?cursorA:cursorB;
+        // acceptance stages jump to next scheduled acceptance date
+        const acceptType=stage.abbr==='ПРМЧ'?'draft':stage.abbr==='ПРМЦ'?'clean':null;
+        if(acceptType){
+          const indDates=S.mm.individualAcceptDates[prod.id]||{};
+          const ind=indDates[acceptType];
+          const nextAcc=getNextMMAccDate(startFrom,ind);
+          if(nextAcc&&nextAcc>startFrom)startFrom=nextAcc;
+        }
         const pm=sv.marks0||sv.marks||{};
         const r=_mmSchedBoth(pm,dur,startFrom,cidA,cidB,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
         entry.track0={constructorId:cidA,days:r.days};
         entry.track1={constructorId:cidB,days:{...r.days}};
-        entry.days=r.days;
+        entry.days=r.days;entry.acceptType=acceptType||null;
         entry.startDate=r.startDate;entry.endDate=r.endDate;
         cursorA=r.nextCursor;cursorB=r.nextCursor;
       }
     }
   }
+}
+
+// ── MM Acceptance ─────────────────────────────────────────────
+function getNextMMAccDate(afterDate,individualDate){
+  if(individualDate&&individualDate>=afterDate)return individualDate;
+  const sorted=(S.mm.acceptanceDates||[]).map(a=>a.date).filter(d=>d>=afterDate).sort();
+  return sorted[0]||null;
+}
+function addMMAccDate(){
+  const d=document.getElementById('mmAccNewDate').value;
+  if(!d)return alert('Укажите дату');
+  if(S.mm.acceptanceDates.find(a=>a.date===d))return alert('Такая дата уже есть');
+  S.mm.acceptanceDates.push({id:'mmac'+Date.now(),date:d});
+  S.mm.acceptanceDates.sort((a,b)=>a.date.localeCompare(b.date));
+  save();rebuildAllMM();save();renderMMAcceptance();
+}
+function deleteMMAccDate(id){
+  if(!confirm('Удалить дату приёмки?'))return;
+  S.mm.acceptanceDates=S.mm.acceptanceDates.filter(a=>a.id!==id);
+  save();rebuildAllMM();save();renderMMAcceptance();
+}
+function setMMIndividualAccDate(pid,type,date){
+  if(!S.mm.individualAcceptDates[pid])S.mm.individualAcceptDates[pid]={};
+  if(date)S.mm.individualAcceptDates[pid][type]=date;
+  else delete S.mm.individualAcceptDates[pid][type];
+  save();rebuildAllMM();save();renderMMAcceptance();
+}
+function markMMAccResult(dateKey,pid,type,result){
+  const key=dateKey+'_'+pid+'_'+type;
+  const existing=S.mm.acceptanceResults[key];
+  if(existing&&existing.result===result){delete S.mm.acceptanceResults[key];}
+  else{S.mm.acceptanceResults[key]={result,markedBy:session.name||'admin',markedAt:new Date().toISOString()};}
+  save();rebuildAllMM();save();renderMMAcceptance();
+}
+function renderMMAcceptance(){
+  const el=document.getElementById('mmAcceptanceList');if(!el)return;
+  const isAdmin=session.role==='admin';
+  const today=todayStr();
+  const accDates=[...S.mm.acceptanceDates].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!accDates.length){el.innerHTML='<div style="padding:20px;color:#aaa;text-align:center">Нет запланированных дат приёмки.<br>Добавьте дату выше.</div>';return;}
+  // collect products with ПРМЧ/ПРМЦ on each date
+  const prods=S.mm.products.filter(p=>p.status!=='closed');
+  let html='';
+  for(const acc of accDates){
+    const isPast=acc.date<today;const isToday=acc.date===today;
+    const borderC=isToday?'#2980b9':isPast?'#bbb':'#7c4dff';
+    html+=`<div style="border:2px solid ${borderC};border-radius:10px;margin-bottom:18px;overflow:hidden">`;
+    html+=`<div style="background:${isToday?'#2980b9':isPast?'#eee':'#ede7f6'};padding:10px 16px;display:flex;align-items:center;gap:12px">`;
+    html+=`<b style="font-size:15px;color:${isToday?'#fff':isPast?'#888':'#4a148c'}">${fmtFull(acc.date)}${isToday?' — Сегодня':''}</b>`;
+    if(isAdmin)html+=`<button class="btn btn-red btn-sm" style="margin-left:auto" onclick="deleteMMAccDate('${acc.id}')">🗑 Удалить</button>`;
+    html+='</div><div style="padding:12px 16px">';
+    // find products with acceptance on this date
+    let hasAny=false;
+    for(const prod of prods){
+      const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+      const sched=S.mm.schedule[prod.id]||{};
+      const accStages=tmpl.stages.filter(s=>s&&(s.abbr==='ПРМЧ'||s.abbr==='ПРМЦ'));
+      for(const stage of accStages){
+        const e=sched[stage.id];if(!e||!e.startDate)continue;
+        if(e.startDate!==acc.date)continue;
+        hasAny=true;
+        const type=stage.abbr==='ПРМЧ'?'draft':'clean';
+        const typeLabel=type==='draft'?'Черновой образец':'Чистовой образец';
+        const key=acc.date+'_'+prod.id+'_'+type;
+        const res=S.mm.acceptanceResults[key];
+        const conA=S.mm.constructors.find(x=>x.id===prod.cidA);
+        const conB=S.mm.constructors.find(x=>x.id===prod.cidB);
+        const pairStr=`🪵 ${conA?.name||'—'} + 🧵 ${conB?.name||'—'}`;
+        // individual date override input
+        const indDate=(S.mm.individualAcceptDates[prod.id]||{})[type]||'';
+        html+=`<div style="border:1px solid #e0e0e0;border-radius:8px;padding:10px 14px;margin-bottom:8px;background:${res?.result==='ok'?'#f0fff4':res?.result==='fail'?'#fff5f5':'#fafafa'}">`;
+        html+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">`;
+        html+=`<b style="font-size:13px">${prod.name}</b>`;
+        html+=`<span style="font-size:11px;color:#888">${typeLabel}</span>`;
+        html+=`<span style="font-size:11px;color:#555">${pairStr}</span>`;
+        if(res?.result==='ok')html+=`<span style="background:#27ae60;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px">✅ Принято</span>`;
+        else if(res?.result==='fail')html+=`<span style="background:#e74c3c;color:#fff;border-radius:10px;padding:1px 8px;font-size:11px">❌ Отклонено</span>`;
+        html+='</div>';
+        if(isAdmin){
+          html+=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">`;
+          html+=`<button class="btn btn-sm" style="background:${res?.result==='ok'?'#27ae60':'#eee'};color:${res?.result==='ok'?'#fff':'#333'}" onclick="markMMAccResult('${acc.date}','${prod.id}','${type}','ok')">✅ Принято</button>`;
+          html+=`<button class="btn btn-sm" style="background:${res?.result==='fail'?'#e74c3c':'#eee'};color:${res?.result==='fail'?'#fff':'#333'}" onclick="markMMAccResult('${acc.date}','${prod.id}','${type}','fail')">❌ Отклонено</button>`;
+          html+=`<span style="font-size:11px;color:#888;margin-left:8px">Инд. дата:</span>`;
+          html+=`<input type="date" value="${indDate}" style="border:1px solid #ccc;border-radius:5px;padding:2px 6px;font-size:12px" onchange="setMMIndividualAccDate('${prod.id}','${type}',this.value)">`;
+          html+='</div>';
+        }
+        html+='</div>';
+      }
+    }
+    if(!hasAny)html+='<div style="color:#aaa;font-size:13px;padding:4px 0">Нет изделий на эту дату. Пересчитайте график.</div>';
+    html+='</div></div>';
+  }
+  el.innerHTML=html;
 }
 
 // ── MM Calendar ───────────────────────────────────────────────
