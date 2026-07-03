@@ -1616,6 +1616,7 @@ function migrate(){
   if(!S.mm.acceptanceResults)S.mm.acceptanceResults={};
   if(!S.mm.individualAcceptDates)S.mm.individualAcceptDates={};
   if(!S.mm.stageConstraints)S.mm.stageConstraints={};
+  if(!S.mm.customDurations)S.mm.customDurations={};
   if(!S.mm.constructors)S.mm.constructors=[];
   if(!S.mm.products)S.mm.products=[];
   if(!S.mm.schedule)S.mm.schedule={};
@@ -6407,7 +6408,7 @@ function rebuildAllMM(){
     for(const stage of tmpl.stages.filter(s=>s&&s.id)){
       const sv=saved[prod.id]?.[stage.id]||{};
       const spec=stage.spec||'both';
-      const dur=stage.days||1;
+      const dur=(S.mm.customDurations[prod.id]||{})[stage.id]??stage.days??1;
       const ew=stage.expWorkshop,ewSlots=stage.expWorkshopSlots||1;
       const isCtrl=stage.mode==='ctrl';
       sched[stage.id]={startDate:null,endDate:null,days:{},failReason:sv.failReason||null};
@@ -6447,6 +6448,58 @@ function rebuildAllMM(){
       }
     }
   }
+}
+
+// ── MM Duration Popup ─────────────────────────────────────────
+let mmDurPopupEl=null,mmDurPopupTimer=null;
+function showMMDurPopup(pid,stageId,x,y){
+  clearTimeout(mmDurPopupTimer);
+  if(!mmDurPopupEl){
+    mmDurPopupEl=document.createElement('div');
+    mmDurPopupEl.className='dur-popup';
+    mmDurPopupEl.addEventListener('mouseenter',()=>clearTimeout(mmDurPopupTimer));
+    mmDurPopupEl.addEventListener('mouseleave',()=>scheduleMMDurPopupHide());
+    document.body.appendChild(mmDurPopupEl);
+  }
+  const prod=S.mm.products.find(p=>p.id===pid);
+  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
+  const stage=tmpl?.stages.find(s=>s.id===stageId);
+  if(!stage)return;
+  const origDur=stage.days||1;
+  const curDur=(S.mm.customDurations[pid]||{})[stageId]??origDur;
+  mmDurPopupEl.innerHTML=`<div class="dur-popup-title">${stage.abbr} — ${stage.name}</div>
+    <div class="dur-popup-row">
+      <button class="dur-btn" onclick="adjustMMDur('${pid}','${stageId}',-1)">−</button>
+      <div><div class="dur-val">${curDur} дн.</div><div class="dur-orig">(исх. ${origDur} дн.)</div></div>
+      <button class="dur-btn" onclick="adjustMMDur('${pid}','${stageId}',1)">+</button>
+    </div>
+    ${curDur!==origDur?`<div style="text-align:center"><button class="btn btn-gray btn-sm" onclick="adjustMMDur('${pid}','${stageId}',${origDur-curDur})">↺ Сброс</button></div>`:''}`;
+  const vw=window.innerWidth,vh=window.innerHeight;
+  let left=x+10,top=y+10;
+  if(left+200>vw)left=x-210;if(top+120>vh)top=y-130;
+  mmDurPopupEl.style.left=left+'px';mmDurPopupEl.style.top=top+'px';
+  mmDurPopupEl.style.display='block';
+  mmDurPopupEl._pid=pid;mmDurPopupEl._sid=stageId;
+}
+function scheduleMMDurPopupHide(){mmDurPopupTimer=setTimeout(()=>{if(mmDurPopupEl)mmDurPopupEl.style.display='none';},300);}
+function adjustMMDur(pid,stageId,delta){
+  const prod=S.mm.products.find(p=>p.id===pid);
+  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
+  const stage=tmpl?.stages.find(s=>s.id===stageId);
+  if(!stage)return;
+  const origDur=stage.days||1;
+  if(!S.mm.customDurations[pid])S.mm.customDurations[pid]={};
+  const curDur=(S.mm.customDurations[pid][stageId])??origDur;
+  const newDur=Math.max(1,curDur+delta);
+  if(newDur===origDur)delete S.mm.customDurations[pid][stageId];
+  else S.mm.customDurations[pid][stageId]=newDur;
+  S.mm.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
+    type:delta>0?'extend':'shorten',productId:pid,stageId,
+    productName:prod?.name||'',stageName:stage.name,
+    reason:`${delta>0?'Удлинение':'Сокращение'} этапа на ${Math.abs(delta)} дн. (${curDur}→${newDur})`});
+  rebuildAllMM();save();renderMMCalendar();
+  if(mmDurPopupEl&&mmDurPopupEl.style.display!=='none')
+    showMMDurPopup(pid,stageId,parseInt(mmDurPopupEl.style.left)-10,parseInt(mmDurPopupEl.style.top)-10);
 }
 
 // ── MM Acceptance ─────────────────────────────────────────────
@@ -6614,16 +6667,21 @@ function renderMMCalendar(){
         const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
         const conLabel=spec==='frame'?conA?.name||'—':spec==='sewing'?conB?.name||'—':spec==='merge'?'слияние':'оба';
         const trackIdx=spec==='sewing'?'1':'0';
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor};padding-left:18px">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}${spec!=='both'&&spec!=='merge'?' · '+conLabel:''}</span></td>`;
+        const isPinned=!!(S.mm.stageConstraints[prod.id]||{})[stage.id];
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor};padding-left:18px;cursor:${canClick?'pointer':'default'}" ${canClick?`onmouseenter="showMMDurPopup('${prod.id}','${stage.id}',event.clientX,event.clientY)" onmouseleave="scheduleMMDurPopupHide()"`:''}>`;
+        html+=`${isPinned?'📌 ':''}${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}${spec!=='both'&&spec!=='merge'?' · '+conLabel:''}</span></td>`;
+        let firstActive=true;
         for(const d of days){
           const v=isCtrl?(e?.days?.[d]||e?.track0?.days?.[d]):spec==='sewing'?e?.track1?.days?.[d]:(e?.track0?.days?.[d]||e?.days?.[d]);
           const st=v?.status||'';
           let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' '+(isCtrl?'s-doing-done':'s-doing-done');
+          if(st==='done')cls+=' s-doing-done';
           else if(st==='fail')cls+=' s-doing-fail';
           else if(st==='planned')cls+=' '+(isCtrl?'s-ctrl':'s-doing');
           const cellClick=canClick&&(st==='planned'||st==='done'||st==='fail');
-          html+=`<td class="${cls}${cellClick?' clickable':''}" style="background:${rowBg}" ${cellClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','${isCtrl?'null':trackIdx}','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+          const showAbbr=st&&firstActive;
+          if(st)firstActive=false;
+          html+=`<td class="${cls}${cellClick?' clickable':''}" style="background:${rowBg}" ${cellClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','${isCtrl?'null':trackIdx}','${d}')"`:''}><div class="dc-txt" style="font-size:9px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${st==='done'?'✔':st==='fail'?'✖':showAbbr?stage.abbr:''}</div></td>`;
         }
         html+='</tr>';
       }
