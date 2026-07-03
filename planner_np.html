@@ -5900,6 +5900,7 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('overlay'))
 // ─── MM MODULE ────────────────────────────────────────────────
 
 let mmViewYear, mmViewMonth;
+let mmPhaseCollapsed={}; // key: 'prodId_phase' -> bool (true=collapsed)
 
 function isMMWorkDay(d,cid){
   for(const a of(S.mm.absences[cid]||[])){if(d>=a.startDate&&d<=a.endDate)return false;}
@@ -6470,7 +6471,10 @@ function renderMMCalendar(){
   html+='</tr>';
   const SPEC_ROW_BG={frame:'#fff8f5',sewing:'#fdf5ff',both:'#f5f9ff',merge:'#f0f7f0'};
   const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
+  const PHASE_NAMES={'1':'Черновой образец','2':'Чистовой и расчёты','3':'КТД','4':'Производство'};
+  const PHASE_COLORS={'1':'#7c4dff','2':'#0288d1','3':'#f57c00','4':'#2e7d32'};
   const prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  const canClick=session.role==='admin';
   for(const prod of prods){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
     const sched=S.mm.schedule[prod.id]||{};
@@ -6479,50 +6483,53 @@ function renderMMCalendar(){
     const pairLabel=prod.pairType==='frame'?`🪵 ${conA?.name||'—'}`:prod.pairType==='sewing'?`🧵 ${conB?.name||'—'}`:
       `🪵 ${conA?.name||'—'} + 🧵 ${conB?.name||'—'}`;
     html+=`<tr class="gc-hdr"><td colspan="${days.length+1}">${prod.name} [${tmpl?.name||'?'}] — ${pairLabel}</td></tr>`;
-    for(const stage of (tmpl?.stages||[])){
-      const e=sched[stage.id];
-      const spec=stage.spec||'both';
-      const isCtrl=stage.mode==='ctrl';
-      const canClick=session.role==='admin'||(session.module==='mm'&&(prod.cidA===session.cid||prod.cidB===session.cid));
-      const rowBg=SPEC_ROW_BG[spec]||'';
-      const lblColor=SPEC_LABEL_COLOR[spec]||'#333';
-      const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
-      const conLabel=spec==='frame'?conA?.name||'—':spec==='sewing'?conB?.name||'—':spec==='merge'?'слияние':'оба';
-      if(isCtrl){
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}</span></td>`;
-        for(const d of days){
-          const v=e?.days?.[d]||e?.track0?.days?.[d];const st=v?.status||'';
-          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-ctrl';
-          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}',null,'${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+    const allStages=(tmpl?.stages||[]).filter(s=>s&&s.id);
+    const phases=[...new Set(allStages.map(s=>s.phase||'1'))].sort();
+    for(const phase of phases){
+      const phKey=prod.id+'_'+phase;
+      const collapsed=mmPhaseCollapsed[phKey]!==false; // default collapsed
+      const phColor=PHASE_COLORS[phase]||'#555';
+      const phStages=allStages.filter(s=>(s.phase||'1')===phase);
+      // Phase header row with summary bars
+      html+=`<tr style="cursor:pointer" onclick="toggleMMPhase('${prod.id}','${phase}')">`;
+      html+=`<td class="gc-stage" style="background:#f0eeff;color:${phColor};font-weight:700;font-size:11px;letter-spacing:.5px;padding-left:6px">${collapsed?'▶':'▼'} ФАЗА ${phase}: ${PHASE_NAMES[phase]||''}</td>`;
+      for(const d of days){
+        // Summary: aggregate status across all phase stages
+        let sumSt='';
+        for(const st of phStages){
+          const e=sched[st.id];
+          const v=e?.days?.[d]||e?.track0?.days?.[d]||e?.track1?.days?.[d];
+          const s=v?.status||'';
+          if(s==='done'){sumSt='done';break;}
+          if(s==='fail'&&sumSt!=='done')sumSt='fail';
+          if(s==='planned'&&!sumSt)sumSt='planned';
         }
-        html+='</tr>';
-      }else if(spec==='frame'){
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name} · ${conLabel}</span></td>`;
+        let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
+        if(sumSt==='done')cls+=' s-doing-done';else if(sumSt==='fail')cls+=' s-doing-fail';else if(sumSt==='planned')cls+=' s-doing';
+        html+=`<td class="${cls}" style="background:${sumSt?'':'#f0eeff'}"><div class="dc-txt"></div></td>`;
+      }
+      html+='</tr>';
+      if(collapsed)continue;
+      // Expanded: render individual stage rows
+      for(const stage of phStages){
+        const e=sched[stage.id];
+        const spec=stage.spec||'both';
+        const isCtrl=stage.mode==='ctrl';
+        const rowBg=SPEC_ROW_BG[spec]||'';
+        const lblColor=SPEC_LABEL_COLOR[spec]||'#333';
+        const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
+        const conLabel=spec==='frame'?conA?.name||'—':spec==='sewing'?conB?.name||'—':spec==='merge'?'слияние':'оба';
+        const trackIdx=spec==='sewing'?'1':'0';
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor};padding-left:18px">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}${spec!=='both'&&spec!=='merge'?' · '+conLabel:''}</span></td>`;
         for(const d of days){
-          const v=e?.track0?.days?.[d];const st=v?.status||'';
+          const v=isCtrl?(e?.days?.[d]||e?.track0?.days?.[d]):spec==='sewing'?e?.track1?.days?.[d]:(e?.track0?.days?.[d]||e?.days?.[d]);
+          const st=v?.status||'';
           let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
-          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','0','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
-        }
-        html+='</tr>';
-      }else if(spec==='sewing'){
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name} · ${conLabel}</span></td>`;
-        for(const d of days){
-          const v=e?.track1?.days?.[d];const st=v?.status||'';
-          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
-          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','1','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
-        }
-        html+='</tr>';
-      }else{
-        // both or merge — one row
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}</span></td>`;
-        for(const d of days){
-          const v=e?.track0?.days?.[d]||e?.days?.[d];const st=v?.status||'';
-          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
-          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','0','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+          if(st==='done')cls+=' '+(isCtrl?'s-doing-done':'s-doing-done');
+          else if(st==='fail')cls+=' s-doing-fail';
+          else if(st==='planned')cls+=' '+(isCtrl?'s-ctrl':'s-doing');
+          const cellClick=canClick&&(st==='planned'||st==='done'||st==='fail');
+          html+=`<td class="${cls}${cellClick?' clickable':''}" style="background:${rowBg}" ${cellClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','${isCtrl?'null':trackIdx}','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
         }
         html+='</tr>';
       }
@@ -6530,6 +6537,11 @@ function renderMMCalendar(){
   }
   html+='</tbody>';
   tbl.innerHTML=html;
+}
+function toggleMMPhase(prodId,phase){
+  const k=prodId+'_'+phase;
+  mmPhaseCollapsed[k]=mmPhaseCollapsed[k]===false?true:false;
+  renderMMCalendar();
 }
 
 // ── MM Mark Day Modal ─────────────────────────────────────────
