@@ -1659,7 +1659,7 @@ function getPersonalDayType(d,cid){
 }
 function isWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='off'||pd==='ctrl')return false; // vacation/sick = visual only, no schedule effect
+  if(pd==='off'||pd==='ctrl'||pd==='vacation'||pd==='sick')return false;
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
