@@ -5971,11 +5971,15 @@ function renderMMConstructors(){
   const el=document.getElementById('mmConstructorList');
   if(!el)return;
   if(!S.mm.constructors.length){el.innerHTML='<div class="empty">Нет конструкторов ММ. Добавьте первого.</div>';return;}
+  const specLabel={frame:'🪵 Каркас',sewing:'🧵 Швейка'};
+  const specBg={frame:'#efebe9',sewing:'#f3e5f5'};
+  const specColor={frame:'#4e342e',sewing:'#6a1b9a'};
   el.innerHTML=S.mm.constructors.map(c=>`
     <div class="card">
-      <div style="flex:1">
+      <div style="flex:1;display:flex;align-items:center;gap:10px">
         <b>${c.name}</b>
-        <span style="margin-left:8px;font-size:12px;color:#888">${c.gender==='female'?'👩':'👨'}</span>
+        <span style="font-size:12px;color:#888">${c.gender==='female'?'👩':'👨'}</span>
+        <span style="background:${specBg[c.spec||'frame']};color:${specColor[c.spec||'frame']};border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700">${specLabel[c.spec||'frame']}</span>
       </div>
       ${session.role==='admin'?`<button class="btn btn-gray btn-sm" onclick="openEditMMCon('${c.id}')">✏️</button>
       <button class="btn btn-red btn-sm" onclick="delMMCon('${c.id}')">🗑</button>`:''}
@@ -5987,7 +5991,8 @@ function openAddMMCon(){
   document.getElementById('mMMConId').value='';
   document.getElementById('mmcName').value='';
   document.querySelectorAll('input[name=mmcGender]')[0].checked=true;
-  updateMMGenderUI();
+  document.querySelectorAll('input[name=mmcSpec]')[0].checked=true;
+  updateMMGenderUI();updateMMSpecUI();
   openModal('mMMCon');
 }
 
@@ -5997,7 +6002,8 @@ function openEditMMCon(id){
   document.getElementById('mMMConId').value=id;
   document.getElementById('mmcName').value=c.name;
   document.querySelectorAll('input[name=mmcGender]').forEach(r=>r.checked=r.value===c.gender);
-  updateMMGenderUI();
+  document.querySelectorAll('input[name=mmcSpec]').forEach(r=>r.checked=r.value===(c.spec||'frame'));
+  updateMMGenderUI();updateMMSpecUI();
   openModal('mMMCon');
 }
 
@@ -6006,17 +6012,24 @@ function updateMMGenderUI(){
     el.classList.toggle('sel',el.querySelector('input').checked);
   });
 }
+function updateMMSpecUI(){
+  ['mmspecK','mmspecS'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.classList.toggle('sel',el.querySelector('input').checked);
+  });
+}
 
 function saveMMCon(){
   const name=document.getElementById('mmcName').value.trim();
   if(!name)return alert('Введите ФИО');
   const gender=document.querySelector('input[name=mmcGender]:checked')?.value||'male';
+  const spec=document.querySelector('input[name=mmcSpec]:checked')?.value||'frame';
   const id=document.getElementById('mMMConId').value;
   if(id){
     const c=S.mm.constructors.find(x=>x.id===id);
-    if(c){c.name=name;c.gender=gender;}
+    if(c){c.name=name;c.gender=gender;c.spec=spec;}
   }else{
-    S.mm.constructors.push({id:'mc'+Date.now(),name,gender});
+    S.mm.constructors.push({id:'mc'+Date.now(),name,gender,spec});
   }
   save();closeModal('mMMCon');fillMMConSelect();renderMMConstructors();
 }
@@ -6726,6 +6739,13 @@ function tryAutoLogin(){
   <h2 id="mMMConTitle">Конструктор ММ</h2>
   <input type="hidden" id="mMMConId">
   <div class="fg"><label>ФИО</label><input type="text" id="mmcName"></div>
+  <div class="fg">
+    <label>Специализация</label>
+    <div class="gender-radio">
+      <label class="gender-opt" id="mmspecK" style="border-color:#8d6e63"><input type="radio" name="mmcSpec" value="frame" checked onchange="updateMMSpecUI()"> 🪵 Каркас</label>
+      <label class="gender-opt" id="mmspecS" style="border-color:#7b1fa2"><input type="radio" name="mmcSpec" value="sewing" onchange="updateMMSpecUI()"> 🧵 Швейка</label>
+    </div>
+  </div>
   <div class="fg">
     <label>Пол</label>
     <div class="gender-radio">
