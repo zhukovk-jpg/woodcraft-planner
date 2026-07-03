@@ -6207,8 +6207,10 @@ function fillMMProdSelects(p){
   if(p)tmplSel.value=p.templateId||'';
   const cidASel=document.getElementById('mmProdCidA');
   const cidBSel=document.getElementById('mmProdCidB');
-  const opts='<option value="">— выберите —</option>'+S.mm.constructors.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  cidASel.innerHTML=opts;cidBSel.innerHTML=opts;
+  const frameOpts='<option value="">— выберите —</option>'+S.mm.constructors.filter(c=>!c.spec||c.spec==='frame').map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const sewingOpts='<option value="">— выберите —</option>'+S.mm.constructors.filter(c=>c.spec==='sewing').map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  cidASel.innerHTML=frameOpts||'<option value="">— нет каркасников —</option>';
+  cidBSel.innerHTML=sewingOpts||'<option value="">— нет швейников —</option>';
   if(p){cidASel.value=p.cidA||'';cidBSel.value=p.cidB||'';}
 }
 function saveMMProd(){
@@ -6769,8 +6771,8 @@ function tryAutoLogin(){
   <div class="fg"><label>Название</label><input type="text" id="mmProdName"></div>
   <div class="fg"><label>Шаблон</label><select id="mmProdTemplate"></select></div>
   <div style="display:flex;gap:10px">
-    <div class="fg" style="flex:1"><label>Конструктор A</label><select id="mmProdCidA"></select></div>
-    <div class="fg" style="flex:1"><label>Конструктор B</label><select id="mmProdCidB"></select></div>
+    <div class="fg" style="flex:1"><label>🪵 Каркасника</label><select id="mmProdCidA"></select></div>
+    <div class="fg" style="flex:1"><label>🧵 Швейника</label><select id="mmProdCidB"></select></div>
   </div>
   <div class="fg"><label>Дата начала</label><input type="date" id="mmProdStart"></div>
   <div style="display:flex;gap:10px">
