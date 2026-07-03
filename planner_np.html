@@ -2564,11 +2564,11 @@ function isWorkDay(d,cid){
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
-// For ctrl stages: only weekends and full-off days block — 'ctrl' days allow control
+// For ctrl stages: only weekends and personal 'off' block — vacation/sick absences allow control
 function isCtrlWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='off'||pd==='vacation'||pd==='sick')return false;
-  if(pd==='work'||pd==='ctrl')return true;
+  if(pd==='off')return false;
+  if(pd==='work'||pd==='ctrl'||pd==='vacation'||pd==='sick')return true;
   return!isBaseWknd(d);
 }
 function nextWork(s,cid){let d=addDay(s,1);while(!isWorkDay(d,cid))d=addDay(d,1);return d;}
