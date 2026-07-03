@@ -1617,7 +1617,7 @@ function migrate(){
     S.mm={constructors:[],products:[],schedule:{},templates:[],personalDays:{},absences:{},shiftsLog:[]};
     S.mmDataVersion=2;
   }
-  if(!S.mm.templates.length)S.mm.templates=MM_DEFAULT_TEMPLATES();
+  if(!S.mm.templates.length||!S.mm.templates[0]?.stages?.length||!S.mm.templates[0]?.name?.startsWith('СП'))S.mm.templates=MM_DEFAULT_TEMPLATES();
   if(!S.mm.absences)S.mm.absences={};
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
