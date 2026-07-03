@@ -6172,11 +6172,12 @@ function saveMMStage(){
 function deleteMMStage(templateId,stageId){
   const t=S.mm.templates.find(x=>x.id===templateId);if(!t)return;
   if(!confirm('Удалить этап?'))return;
-  t.stages=t.stages.filter(x=>x.id!==stageId);
+  t.stages=t.stages.filter(x=>x&&x.id&&x.id!==stageId);
   save();renderMMTemplates();
 }
 function moveMMStage(templateId,stageId,dir){
   const t=S.mm.templates.find(x=>x.id===templateId);if(!t)return;
+  t.stages=t.stages.filter(x=>x&&x.id);
   const idx=t.stages.findIndex(x=>x.id===stageId);
   const ni=idx+(dir==='up'?-1:1);if(ni<0||ni>=t.stages.length)return;
   [t.stages[idx],t.stages[ni]]=[t.stages[ni],t.stages[idx]];
