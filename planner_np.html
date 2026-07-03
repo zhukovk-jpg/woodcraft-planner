@@ -613,6 +613,9 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div id="markRevertRow" style="display:none;margin-top:4px">
       <button class="btn btn-gray btn-sm" onclick="dispatchRevert()" style="width:100%">↩ Отменить отметку</button>
     </div>
+    <div id="markVacationRow" style="display:none;margin-top:4px">
+      <button class="btn btn-sm" onclick="doShiftFromVacation()" style="width:100%;background:#2980b9;color:#fff">🏖 Сдвинуть с отпуска</button>
+    </div>
   </div>
   <div id="markFailForm" style="display:none;margin-top:12px">
     <div class="warn">Все последующие плановые этапы этого конструктора сдвинутся на 1 рабочий день.</div>
@@ -5066,6 +5069,10 @@ function openMarkModal(pid,sid,dateStr,mark,prodName,stageName,isActiveStage,pro
   const isKey=KEY_STAGES.includes(sid);
   const canKeyAct=session.role==='admin'&&isKey;
   document.getElementById('markPostponeSection').style.display=canKeyAct?'':'none';
+  // Vacation shift button: only for doing stages on vacation/sick days
+  const _absType=getAbsenceType(dateStr,prodCid);
+  const _isDoingOnVac=(stage.type==='doing')&&(_absType==='vacation'||_absType==='sick');
+  document.getElementById('markVacationRow').style.display=_isDoingOnVac?'':'none';
   if(canKeyAct){
     const alreadyPostponed=!!(S.stageConstraints[pid]||{})[sid];
     document.getElementById('btnPostpone').style.display=alreadyPostponed?'none':'';
@@ -5146,6 +5153,13 @@ function doRevert(){
   }
   rebuildForConstructor(S.products.find(p=>p.id===pid).constructorId);
   closeModal('mMark');renderCalendar();
+}
+function doShiftFromVacation(){
+  const{pid,sid,dateStr,mark,prodCid}=markCtx;
+  if(mark&&!canModify(mark)){alert('Нельзя изменить отметку руководителя');return;}
+  const entry=S.schedule[pid]?.[sid];
+  if(entry&&entry.days[dateStr])delete entry.days[dateStr];
+  rebuildForConstructor(prodCid);save();closeModal('mMark');renderCalendar();
 }
 function showFailForm(){
   document.getElementById('markDayBtns').style.display='none';
