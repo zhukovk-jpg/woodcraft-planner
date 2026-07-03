@@ -6086,7 +6086,7 @@ function mmPhaseHeaders(t){
   const SB={frame:'#efebe9',sewing:'#f3e5f5',both:'#e8f5e9',merge:'#e3f2fd'};
   const SC={frame:'#4e342e',sewing:'#6a1b9a',both:'#1b5e20',merge:'#0d47a1'};
   let lp=null,html='';
-  (t.stages||[]).forEach((st,i)=>{
+  (t.stages||[]).filter(st=>st&&st.id).forEach((st,i)=>{
     const ph=st.phase||'1';
     if(ph!==lp){lp=ph;html+='<div style="font-size:10px;font-weight:700;color:#7c4dff;letter-spacing:1px;padding:'+(i>0?10:2)+'px 4px 3px">ФАЗА '+ph+': '+(PN[ph]||'')+'</div>';}
     const ew=st.expWorkshop?'<span style="background:#e8f5e9;color:#1e8449;border-radius:8px;padding:1px 6px;font-size:10px">ЭУ\xd7'+st.expWorkshopSlots+'</span>':'';
