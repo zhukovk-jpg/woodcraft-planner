@@ -396,7 +396,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div id="configuratorContent" style="padding:0 0 40px"></div>
   </div>
   <div id="tab-mm" style="display:none">
-    <div id="tab-mm-constructors" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Конструкторы ММ</h2><button class="btn btn-green admin-only" onclick="openAddMMCon()">+ Добавить</button></div><div id="mmConstructorList"></div></div></div>
+    <div id="tab-mm-constructors" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Конструкторы ММ</h2><button class="btn btn-green admin-only" onclick="openAddMMCon()">+ Добавить</button><button class="btn btn-red btn-sm admin-only" onclick="resetMMData()" style="margin-left:auto">🗑 Сбросить все данные ММ</button></div><div id="mmConstructorList"></div></div></div>
     <div id="tab-mm-products" style="display:none"><div class="panel"><div class="panel-hdr"><h2 id="mmProdHdr">Задачи ММ</h2><button class="btn btn-green admin-only" onclick="openAddMMProd()">+ Добавить</button></div><div id="mmProductList"></div></div></div>
     <div id="tab-mm-calendar" style="display:none">
       <div class="month-bar">
@@ -1621,8 +1621,7 @@ function migrate(){
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
   // Migrate: reset templates if they don't have spec-based stages yet
-  if(!S.mm.templates.length||!S.mm.templates[0].stages[0]?.spec||!S.mm.templates[0].name.startsWith('СП')){
-    S.mm.templates=[
+function MM_DEFAULT_TEMPLATES(){return[
   {
     "id": "mmt1",
     "name": "СП1 — Пуф / Банкетка / Кровать",
@@ -2535,8 +2534,9 @@ function migrate(){
     "pointsDoing": 8,
     "pointsCtrl": 4
   }
-];
-  }
+];}
+  if(!S.mm.templates.length||!S.mm.templates[0].stages[0]?.spec||!S.mm.templates[0].name.startsWith('СП')){
+    S.mm.templates=MM_DEFAULT_TEMPLATES()
 }
 
 // ─── DATE UTILS ───────────────────────────────────────────────
@@ -6894,6 +6894,19 @@ function renderMMExtraDefs(){
 }
 
 // ── MM Constructors ───────────────────────────────────────────
+function resetMMData(){
+  if(!confirm('Сбросить ВСЕ данные ММ? Конструкторы, задачи, шаблоны — всё удалится.'))return;
+  S.mm={constructors:[],products:[],schedule:{},templates:[],personalDays:{},absences:{},shiftsLog:[]};
+  S.mmDataVersion=2;
+  delete S.mmDataVersion; // force re-init of templates on next save/load
+  // init default templates immediately
+  S.mm.templates=MM_DEFAULT_TEMPLATES();
+  save();
+  renderMMConstructors();
+  renderMMProducts();
+  renderMMTemplates();
+  alert('✅ Данные ММ сброшены. Новые шаблоны загружены.');
+}
 function renderMMConstructors(){
   const el=document.getElementById('mmConstructorList');
   if(!el)return;
