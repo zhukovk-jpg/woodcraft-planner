@@ -1622,6 +1622,8 @@ function migrate(){
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
   // Migrate: reset templates if they don't have spec-based stages yet
+
+}
 function MM_DEFAULT_TEMPLATES(){return[
   {
     "id": "mmt1",
@@ -2536,9 +2538,7 @@ function MM_DEFAULT_TEMPLATES(){return[
     "pointsCtrl": 4
   }
 ];}
-  if(!S.mm.templates.length||!S.mm.templates[0].stages[0]?.spec||!S.mm.templates[0].name.startsWith('СП')){
-    S.mm.templates=MM_DEFAULT_TEMPLATES()
-}
+
 
 // ─── DATE UTILS ───────────────────────────────────────────────
 function toStr(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
