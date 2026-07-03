@@ -194,11 +194,13 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
       <button class="qsubtab" onclick="qSubGo('percent',this)">% рекламаций</button>
       <button class="qsubtab" onclick="qSubGo('defects',this)">Сводные дефекты</button>
       <button class="qsubtab" onclick="qSubGo('complaints',this);qcEnsureLoaded();">Анализ рекламаций</button>
+      <button class="qsubtab" onclick="qSubGo('d2table',this)">Коэф. D2</button>
     </div>
     <div id="qsub-shewhart" class="qsubpane on"></div>
     <div id="qsub-percent" class="qsubpane"></div>
     <div id="qsub-defects" class="qsubpane"></div>
     <div id="qsub-complaints" class="qsubpane"></div>
+    <div id="qsub-d2table" class="qsubpane"></div>
   </div>
   <div id="korpusm" class="pane">
     <div class="qsubtabs" id="km-subtabs"></div>
@@ -1123,16 +1125,24 @@ const Q_SECTIONS = {
 };
 const Q_MONTH_NAMES=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const Q_MONTH_SHORT={'Январь':'Янв','Февраль':'Фев','Март':'Мар','Апрель':'Апр','Май':'Май','Июнь':'Июн','Июль':'Июл','Август':'Авг','Сентябрь':'Сен','Октябрь':'Окт','Ноябрь':'Ноя','Декабрь':'Дек'};
-// Коэффициент D2 карты Шухарта (метод размаха) зависит от размера окна (n периодов) —
-// в исходной таблице «Диаграммы» он чуть меньше для более коротких рядов.
-// Значения взяты напрямую из формул заказчика (столбец D2 для n=13..17 точек).
-const Q_D2_TABLE={13:5.647,14:5.696,15:5.741,16:5.782,17:5.82};
+// D2 по ГОСТ Р 50779.42-99 (ISO 8258): D2 = d2 + 3·d3 — верхний предел размаха / σ
+// Используется для расчёта σ = Размах / D2, где n = количество измерений (месяцев).
+const Q_D2_TABLE={
+  2:3.686,3:4.358,4:4.696,5:4.918,6:5.078,7:5.204,8:5.306,9:5.394,
+  10:5.469,11:5.535,12:5.594,13:5.647,14:5.696,15:5.741,16:5.782,
+  17:5.820,18:5.856,19:5.891,20:5.921,21:5.951,22:5.979,23:6.006,24:6.031,25:6.058
+};
+// d2 (нижний) — для отображения в таблице D2
+const Q_d2_TABLE={
+  2:1.128,3:1.693,4:2.059,5:2.326,6:2.534,7:2.704,8:2.847,9:2.970,
+  10:3.078,11:3.173,12:3.258,13:3.336,14:3.407,15:3.472,16:3.532,
+  17:3.588,18:3.640,19:3.689,20:3.735,21:3.778,22:3.819,23:3.858,24:3.895,25:3.931
+};
 function qD2For(n){
-  const ns=Object.keys(Q_D2_TABLE).map(Number).sort((a,b)=>a-b);
   if(Q_D2_TABLE[n]!=null) return Q_D2_TABLE[n];
-  if(n<ns[0]) return Q_D2_TABLE[ns[0]];
-  if(n>ns[ns.length-1]) return Q_D2_TABLE[ns[ns.length-1]];
-  return Q_D2_TABLE[ns[0]];
+  if(n<2) return Q_D2_TABLE[2];
+  if(n>25) return Q_D2_TABLE[25];
+  return Q_D2_TABLE[2];
 }
 function qD2Sigma(knownVals){
   const range=Math.max(...knownVals)-Math.min(...knownVals);
@@ -1152,61 +1162,85 @@ function qHistSigmas(vals,months){
   return res; // [текущая, пред.месяц, позапред.месяц]
 }
 
-function parseQualityRows(rows){
-  // Row 1 (index0): sparse year markers at the first column of each year block.
-  // Row 2 (index1): month names starting at column C (index2) until a non-month label.
-  const yearRow=rows[0]||[], headerRow=rows[1]||[];
-  const yearCols={};
-  yearRow.forEach((v,i)=>{ if(typeof v==='number') yearCols[i]=v; });
-  const months=[]; let curYear=null;
-  for(let i=2;i<headerRow.length;i++){
-    const v=headerRow[i];
-    if(yearCols[i]!=null) curYear=yearCols[i];
-    if(!Q_MONTH_NAMES.includes(v)) break;
-    months.push((Q_MONTH_SHORT[v]||v)+"'"+String(curYear).slice(2));
+// Единственный источник данных — «Сводная ММ+Корпус».
+// Читаем ИТОГО + Реализация, рассчитываем σ через D2(n) из ГОСТ Р 50779.42-99.
+function parseSvodnayaData(rows){
+  // Находим строку заголовков (первая с «Причина обращения» и месяцами)
+  const months=[];
+  let headerRow=null;
+  for(const row of rows){
+    if(Q_MONTH_NAMES.includes(String(row[2]||''))){headerRow=row;break;}
+  }
+  if(headerRow){
+    let curYear=2025, seenJan=false;
+    for(let i=2;i<headerRow.length;i++){
+      const v=String(headerRow[i]||'');
+      if(!Q_MONTH_NAMES.includes(v)) break;
+      if(v==='Январь'){if(seenJan)curYear++;seenJan=true;}
+      months.push((Q_MONTH_SHORT[v]||v)+"'"+String(curYear).slice(2));
+    }
   }
   const n=months.length;
   const out={};
   let sec=null;
+  const getVals=row=>row.slice(2,2+n).map(v=>(v===''||v==null)?null:(typeof v==='number'?v:Number(v)||null));
   for(const row of rows){
-    const lb=(row[1]||'').toString().trim();
-    if(Q_SECTIONS[lb]){ sec=lb; continue; }
-    if(sec && lb==='Количество рекламаций'){
-      const vals=row.slice(2,2+n).map(v=>v===''||v==null?null:Number(v));
-      const known=vals.filter(v=>v!=null);
-      const mean=known.reduce((a,b)=>a+b,0)/known.length;
-      const sigma=qD2Sigma(known);
-      const sigmaHist=qHistSigmas(vals,months);
-      const {dept,view}=Q_SECTIONS[sec];
+    const c0=row[0], c1=String(row[1]||'').trim();
+    if((c0===''||c0==null)&&Q_SECTIONS[c1]){
+      sec=Q_SECTIONS[c1];
+      const {dept,view}=sec;
       out[dept]=out[dept]||{};
-      out[dept][view]={vals,mean,sigma,sigmaHist,months};
+      out[dept][view]=out[dept][view]||{vals:null,realizFab:null,realizDivan:null};
+      continue;
     }
-    // «%% рекламаций ...» — процент от реализации диван.ру, идёт чуть ниже «Количество рекламаций»
-    // внутри той же секции (sec остаётся выставленным до следующего заголовка секции).
-    if(sec && lb.startsWith('%% рекламаций')){
-      const pctVals=row.slice(2,2+n).map(v=>v===''||v==null?null:Number(v)*100);
-      const {dept,view}=Q_SECTIONS[sec];
-      if(out[dept] && out[dept][view]) out[dept][view].pct=pctVals;
+    if(!sec) continue;
+    const {dept,view}=sec;
+    const d=out[dept]&&out[dept][view];
+    if(!d) continue;
+    if(c1==='ИТОГО рекламаций')          d.vals=getVals(row);
+    else if(c1.startsWith('Реализация фабрики')) d.realizFab=getVals(row);
+    else if(c1.startsWith('Реализация диван'))   d.realizDivan=getVals(row);
+  }
+  // Собираем итоговую структуру
+  for(const [dept,view] of [['korpus','all'],['korpus','factory'],['myagkaya','all'],['myagkaya','factory']]){
+    const d=out[dept]&&out[dept][view];
+    if(!d||!d.vals){
+      out[dept]=out[dept]||{};
+      out[dept][view]={vals:[],months,mean:0,sigma:0,sigmaHist:[],pct:[]};
+      continue;
     }
+    const known=d.vals.filter(v=>v!=null);
+    const mean=known.length?known.reduce((a,b)=>a+b,0)/known.length:0;
+    const sigma=known.length>=2?qD2Sigma(known):0;
+    const sigmaHist=qHistSigmas(d.vals,months);
+    // % = ИТОГО / Реализация диван.ру (для «все виновники»), / фабрики (для ЦФО фабрика)
+    const denom=view==='all'?d.realizDivan:d.realizFab;
+    const pct=denom?d.vals.map((v,i)=>(v!=null&&denom[i])?+(v/denom[i]*100).toFixed(4):null):null;
+    out[dept][view]={vals:d.vals,months,mean,sigma,sigmaHist,pct,realizFab:d.realizFab,realizDivan:d.realizDivan};
   }
   return out;
 }
 
 function qualityFallback(){
-  const months=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26'];
-  const mk=(vals,mean,sigma,pct)=>({vals,mean,sigma,sigmaHist:qHistSigmas(vals,months),months,pct:pct.map(p=>p*100)});
+  const months=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26','Июн\'26'];
+  const mk=(vals,pct)=>{
+    const known=vals.filter(v=>v!=null);
+    const mean=known.reduce((a,b)=>a+b,0)/known.length;
+    const sigma=qD2Sigma(known);
+    return {vals,mean,sigma,sigmaHist:qHistSigmas(vals,months),months,pct:pct.map(p=>p!=null?p*100:null)};
+  };
   return {
     korpus:{
-      all:    mk([745,828,983,976,757,722,853,938,811,1037,1015,888,742,695,688,628,630], 819.7647058823529, 70.27491408934708,
-                 [0.09053347915907158,0.10757437962842666,0.11336639372621382,0.12509612919764163,0.09634720631284205,0.09743589743589744,0.10745779793398841,0.10795258372655081,0.08851779087535473,0.10837078064583551,0.11219188681330827,0.08941697714228175,0.09696811291165708,0.09090909090909091,0.08810347035471891,0.08082368082368083,0.0812]),
-      factory:mk([200,230,307,319,273,248,332,304,271,361,368,301,221,226,184,174,223],   267.1764705882353, 33.33333333333333,
-                 [0.02430428970713331,0.029881772119007406,0.03540537423595894,0.04088695206357344,0.034746086292478044,0.03346828609986505,0.0418241370622323,0.03498676487512947,0.029578694608164157,0.037725990176611976,0.04067646733723886,0.030309133017822978,0.028881338212232096,0.029561805101373448,0.023562556025099244,0.022393822393822392,0.0287]),
+      all:    mk([745,828,983,976,757,722,853,938,811,1037,1015,888,742,695,688,628,630,731],
+                 [0.0905,0.1076,0.1134,0.1251,0.0963,0.0974,0.1075,0.1080,0.0885,0.1084,0.1122,0.0894,0.0970,0.0909,0.0881,0.0808,0.0812,null]),
+      factory:mk([200,230,307,319,273,248,332,304,271,361,368,301,221,226,184,174,223,null],
+                 [0.0243,0.0299,0.0354,0.0409,0.0347,0.0335,0.0418,0.0350,0.0296,0.0377,0.0407,0.0303,0.0289,0.0296,0.0236,0.0224,0.0287,null]),
     },
     myagkaya:{
-      all:    mk([927,935,953,902,852,860,878,924,1002,1114,1041,1179,1049,885,931,876,757], 945, 72.5085910652921,
-                 [0.07019536574284416,0.06227520980418276,0.06442236192793889,0.06344963421496905,0.06546292739147137,0.06832989035436199,0.06201440881480435,0.0659481835700521,0.06718069057995307,0.06978638100607655,0.06655584681286363,0.06198738170347003,0.08318134961541511,0.06896820448877805,0.0672202166064982,0.06319890339802323,0.0519]),
-      factory:mk([262,256,252,292,301,280,281,316,376,374,363,407,364,308,332,301,342],     318.05882352941177, 26.63230240549828,
-                 [0.019839466908980766,0.01705075263087785,0.017035084161427703,0.020540236353404615,0.023127160968113715,0.02224694104560623,0.019847436078542165,0.02255370780101349,0.025209520616828695,0.023429179978700747,0.02320823476759798,0.02139852786540484,0.028863690428990563,0.024002493765586035,0.02397111913357401,0.021715604934708897,0.0234]),
+      all:    mk([927,935,953,902,852,860,878,924,1002,1114,1041,1179,1049,885,931,876,757,null],
+                 [0.0702,0.0623,0.0644,0.0634,0.0655,0.0683,0.0620,0.0659,0.0672,0.0698,0.0666,0.0620,0.0832,0.0690,0.0672,0.0632,0.0519,null]),
+      factory:mk([262,256,252,292,301,280,281,316,376,374,363,407,364,308,332,301,342,null],
+                 [0.0198,0.0171,0.0170,0.0205,0.0231,0.0222,0.0198,0.0226,0.0252,0.0234,0.0232,0.0214,0.0289,0.0240,0.0240,0.0217,0.0234,null]),
     },
   };
 }
@@ -1751,6 +1785,35 @@ function qPercentChart(id,pctAll,pctFactory,months){
   });
 }
 const _qpState={dept:'korpus'};
+function renderD2Table(elId){
+  const rows=Object.entries(Q_D2_TABLE).map(([n,D2])=>{
+    const d2=Q_d2_TABLE[n]||'';
+    const d3=d2?+((D2-d2)/3).toFixed(4):'';
+    return `<tr><td>${n}</td><td>${d2}</td><td>${d3}</td><td><b>${D2}</b></td></tr>`;
+  }).join('');
+  document.getElementById(elId).innerHTML=`
+  <div style="padding:24px;max-width:560px">
+    <h3 style="margin:0 0 6px;font-size:15px;color:#0f172a">Коэффициент D2 по ГОСТ Р 50779.42-99 (ISO 8258)</h3>
+    <p style="margin:0 0 14px;font-size:12px;color:#64748b">Используется для расчёта σ = Размах / D2, где n — количество наблюдений (месяцев). D2 = d2 + 3·d3.</p>
+    <table style="border-collapse:collapse;font-size:12px;width:100%">
+      <thead>
+        <tr style="background:#0f172a;color:#fff">
+          <th style="padding:7px 12px;text-align:center">n</th>
+          <th style="padding:7px 12px;text-align:center">d2</th>
+          <th style="padding:7px 12px;text-align:center">d3</th>
+          <th style="padding:7px 12px;text-align:center">D2 = d2+3·d3</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin:12px 0 0;font-size:11px;color:#94a3b8">Источник: ГОСТ Р 50779.42-99, таблица значений d2 и d3 для карт Шухарта.</p>
+  </div>`;
+  document.getElementById(elId).querySelector('tbody').querySelectorAll('tr').forEach((tr,i)=>{
+    tr.style.background=i%2===0?'#f8fafc':'#fff';
+    tr.querySelectorAll('td').forEach(td=>{td.style.padding='5px 12px';td.style.textAlign='center';td.style.borderBottom='1px solid #e2e8f0';});
+  });
+}
+
 function renderPercent(elId,data){
   document.getElementById(elId).innerHTML=`
   <div class="qtoggle">
@@ -2515,65 +2578,25 @@ async function init(){
   }
   renderSub('myagkaya2',v2Myag.myagkaya2);
 
-  // ── Качество: Диаграммы ───────────────────────────────────────────────
-  let qData;
+  // ── Качество: Сводная ММ+Корпус (единственный источник) ─────────────
+  let qData, qDefects;
   try{
     if(!GOOGLE_API_KEY) throw new Error('no key');
-    const resp2=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Диаграммы")}!A1:AB80?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
-    if(!resp2.ok) throw new Error(`Диаграммы ${resp2.status}`);
-    qData=parseQualityRows((await resp2.json()).values||[]);
+    const resp=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:V120?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
+    if(!resp.ok) throw new Error(`Сводная ${resp.status}`);
+    const svdRows=(await resp.json()).values||[];
+    qData=parseSvodnayaData(svdRows);
+    const months=(qData.korpus&&qData.korpus.all&&qData.korpus.all.months)||[];
+    qDefects={months,data:parseDefectRows(svdRows,months)};
   }catch(e){
     console.warn('quality fetch failed:',e);
     qData=qualityFallback();
-  }
-
-  // ── Сводные дефекты + расширение Шухарт (Сводная ММ+Корпус) ─────────
-  let qDefects;
-  try{
-    if(!GOOGLE_API_KEY) throw new Error('no key');
-    const resp3=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:V90?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
-    if(!resp3.ok) throw new Error(`Сводная ${resp3.status}`);
-    const svdRows=(await resp3.json()).values||[];
-    const svdMonthCount=(svdRows[1]||[]).filter((v,i)=>i>=2&&Q_MONTH_NAMES.includes(String(v))).length;
-    const svdMonths=QC_MONTH_SHORT.slice(0,svdMonthCount);
-    // Extend Шухарт if Сводная has more months than Диаграммы
-    const baseMonthCount=(qData.korpus&&qData.korpus.all&&qData.korpus.all.months||[]).length;
-    if(svdMonthCount>baseMonthCount){
-      // Build ИТОГО map
-      const itogoMap={};
-      let curSec=null;
-      for(const row of svdRows){
-        const c0=row[0],c1=String(row[1]||'').trim();
-        if((c0===''||c0==null)&&Q_SECTIONS[c1]) curSec=Q_SECTIONS[c1];
-        if(c1==='ИТОГО рекламаций'&&curSec){itogoMap[`${curSec.dept}.${curSec.view}`]=row;curSec=null;}
-      }
-      // months is shared across all sections — extend it only once
-      const sharedMonths=qData.korpus.all.months;
-      for(let i=baseMonthCount;i<svdMonthCount;i++) sharedMonths.push(QC_MONTH_SHORT[i]||'');
-      // Extend each series' vals only
-      for(const [dept,view] of [['korpus','all'],['korpus','factory'],['myagkaya','all'],['myagkaya','factory']]){
-        const d=qData[dept]&&qData[dept][view];
-        const irow=itogoMap[`${dept}.${view}`];
-        if(!d||!irow) continue;
-        for(let i=baseMonthCount;i<svdMonthCount;i++){
-          const v=irow[2+i];
-          d.vals.push(v!=null&&v!==''?Number(v)||0:null);
-        }
-        const known=d.vals.filter(v=>v!=null);
-        d.mean=known.reduce((a,b)=>a+b,0)/known.length;
-        d.sigma=qD2Sigma(known);
-        d.sigmaHist=qHistSigmas(d.vals,d.months);
-        if(d.pct) for(let i=baseMonthCount;i<svdMonthCount;i++) d.pct.push(null);
-      }
-    }
-    qDefects={months:svdMonths,data:parseDefectRows(svdRows,svdMonths)};
-  }catch(e){
-    console.warn('defects fetch failed:',e);
     qDefects=qDefectsFallback();
   }
   renderQuality('qsub-shewhart',qData);
   renderPercent('qsub-percent',qData);
   renderDefects('qsub-defects',qDefects);
+  renderD2Table('qsub-d2table');
 }
 
 // ── Выполнение плана производства ММ ─────────────────────────────────
