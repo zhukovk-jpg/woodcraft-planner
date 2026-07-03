@@ -1,0 +1,3047 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>СУ — Метрики</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;min-height:100vh}
+.hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:14px 18px 10px}
+.hdr h1{font-size:14px;font-weight:700}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px}
+.tab{padding:5px 12px;border-radius:20px;border:1.5px solid rgba(255,255,255,.35);background:transparent;color:rgba(255,255,255,.8);font-size:11px;font-weight:600;cursor:pointer;transition:.15s}
+.tab.active{background:#fff;color:#1e3a5f;border-color:#fff}
+.st{font-size:10px;opacity:.7;white-space:nowrap}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:4px;animation:blink 2s infinite}
+.dot.err{background:#f87171;animation:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.main{padding:14px 14px 28px}
+.pane{display:none}.pane.on{display:block}
+/* KPI cards */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.card{background:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.07);border-top:3px solid}
+.card.c1{border-top-color:#3b82f6}.card.c2{border-top-color:#8b5cf6}.card.c3{border-top-color:#f59e0b}
+.clbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#64748b;margin-bottom:3px}
+.cval{font-size:22px;font-weight:800;line-height:1}
+.csub{font-size:9px;color:#94a3b8;margin-top:2px}
+.pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;margin-top:5px}
+.ok{background:#dcfce7;color:#15803d}.warn{background:#fef9c3;color:#854d0e}.bad{background:#fee2e2;color:#991b1b}.na{background:#f1f5f9;color:#64748b}
+/* Chart grid */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.cbox{background:#fff;border-radius:10px;padding:12px 14px 10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.ctitle{font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.leg{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.li{display:flex;align-items:center;gap:4px;font-size:11px;color:#475569}
+.ld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.ll{width:14px;height:2px;flex-shrink:0}
+.cwrap{height:165px;position:relative}
+.note{font-size:9px;color:#94a3b8;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;margin-top:6px;line-height:1.5}
+.section-hdr{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+/* Wide single chart */
+.chart-single{margin-bottom:10px}
+.chart-single .cbox{background:#fff;border-radius:10px;padding:12px 14px 10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.chart-single .cwrap{height:160px;position:relative}
+/* Period filter */
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filter-label{font-size:10px;font-weight:600;color:#64748b}
+.fsel{font-size:11px;font-weight:600;padding:5px 10px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#1e293b;cursor:pointer;outline:none;transition:.15s}
+.fsel:hover{border-color:#3b82f6}
+.fsel:focus{border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.15)}
+.fbadge{font-size:9px;padding:3px 8px;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-weight:700;border:1px solid #bfdbfe}
+/* Forecast row */
+.cfcast{font-size:11px;font-weight:600;color:#64748b;margin-top:3px;display:none}
+.cfcast.show{display:block}
+.cfcast .arrow{color:#10b981;font-size:12px;margin-right:2px}
+.cfcast .fval{color:#0f172a}
+/* Quality (Shewhart) page */
+.qtoggle{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.qbtn{padding:6px 14px;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#475569;font-size:11px;font-weight:700;cursor:pointer;transition:.15s}
+.qbtn:hover{border-color:#3b82f6}
+.qbtn.on{background:#1e3a5f;color:#fff;border-color:#1e3a5f}
+.qcards{display:grid;grid-template-columns:1fr 1fr 1.6fr 1.6fr;gap:10px;margin-bottom:10px}
+.qstat{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;margin-top:5px;display:inline-block}
+.cinsight{font-size:10px;font-weight:700;margin-top:7px;line-height:1.4}
+.cinsight.ok{color:#15803d}
+.cinsight.warn{color:#854d0e}
+.cinsight.bad{color:#991b1b}
+.cinsight.na{color:#94a3b8;font-weight:600}
+.qhelp{font-size:10px;color:#94a3b8;border:1px solid #cbd5e1;border-radius:50%;width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:4px;font-weight:700}
+.qpatterns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.qpat{flex:1 1 150px;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:700;cursor:pointer;border:1.5px solid}
+.qpat.qp-ok{background:#f8fafc;border-color:#e2e8f0;color:#94a3b8}
+.qpat.qp-good{background:#dcfce7;border-color:#86efac;color:#15803d}
+.qpat.qp-bad{background:#fee2e2;border-color:#fca5a5;color:#991b1b}
+.qpat.qp-warn{background:#fef9c3;border-color:#fde047;color:#854d0e}
+.qpat .qp-mark{font-size:12px;margin-right:4px}
+.qpatlink{font-size:10px;color:#3b82f6;font-weight:700;cursor:pointer;margin-bottom:8px;display:inline-block}
+.qhelpbox{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:-2px 0 12px;font-size:11px;color:#475569;line-height:1.5;display:none}
+.qhelpbox.show{display:block}
+.qhelpbox ul{margin:4px 0 0 16px;padding:0}
+.qhelpbox li{margin-bottom:4px}
+.qbig{background:#fff;border-radius:10px;padding:14px 16px 10px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:10px}
+.qbig .ctitle{font-size:13px;font-weight:700;color:#334155;margin-bottom:8px}
+.qbig .leg{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.qwrap{height:260px;position:relative}
+.qsigcard{cursor:pointer;position:relative}
+.qsigcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.qsigcard .qcaret{font-size:9px;color:#94a3b8;margin-left:4px}
+.qdelta{display:flex;align-items:baseline;gap:4px;margin-top:4px}
+.qdelta .qarrow{font-size:20px;line-height:1}
+.qdelta .qnum{font-size:13px;font-weight:700}
+.qdrill{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin:-2px 0 12px;display:none}
+.qdrill.show{display:block}
+.qdrill table{width:100%;border-collapse:collapse;font-size:11px}
+.qdrill td{padding:4px 6px;border-bottom:1px solid #e2e8f0}
+.qdrill tr:last-child td{border-bottom:none}
+.qdrill .qd-arrow{font-size:13px;font-weight:700}
+.qsubtabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.qsubtab{padding:7px 14px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#475569;font-size:11px;font-weight:700;cursor:pointer;transition:.15s}
+.qsubtab:hover{border-color:#3b82f6}
+.qsubtab.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.qsubpane{display:none}
+.qsubpane.on{display:block}
+.qheatwrap{overflow-x:auto;background:#fff;border-radius:10px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:10px}
+.qheat{border-collapse:collapse;font-size:10px;white-space:nowrap}
+.qheat th{padding:6px 8px;background:#f1f5f9;color:#475569;font-weight:700;text-align:center}
+.qheat td{padding:5px 8px;text-align:center;border-bottom:1px solid #f1f5f9;color:#1e293b}
+.qheat .qheat-label{text-align:left;white-space:normal;max-width:220px;font-weight:600;background:#fff;position:sticky;left:0}
+.qheat th:first-child{text-align:left;position:sticky;left:0;background:#f1f5f9}
+.qheat .qheat-median{font-weight:700;background:#f8fafc}
+.qheat tr:hover .qheat-label{text-decoration:underline}
+.qheat tr.qd-selected .qheat-label{background:#dbeafe!important;border-left:3px solid #3b82f6;font-weight:700}
+.qheat tr.qd-selected td{outline:1px solid #93c5fd;outline-offset:-1px}
+/* Анализ рекламаций */
+.qctable{width:100%;border-collapse:collapse;font-size:11px}
+.qctable th{text-align:left;padding:5px 8px;color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #e2e8f0}
+.qctable td{padding:6px 8px;border-bottom:1px solid #f1f5f9;color:#1e293b;vertical-align:middle}
+.qctable tr:last-child td{border-bottom:none}
+.qcbar-wrap{position:relative;background:#f1f5f9;border-radius:4px;height:16px;width:100%;min-width:80px;overflow:hidden}
+.qcbar{position:absolute;left:0;top:0;height:100%;background:rgba(59,130,246,.55);border-radius:4px}
+.qcbar.pareto{background:rgba(245,158,11,.6)}
+.qctrend{font-size:10px;font-weight:700;white-space:nowrap}
+.qccard{background:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.qcgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+@media (max-width:700px){.qcgrid{grid-template-columns:1fr}}
+.qcgrowlist .qcgrow-item{padding:8px 10px;border-radius:8px;margin-bottom:6px;font-size:11px}
+@media (max-width:480px){.qcards{grid-template-columns:repeat(2,1fr)}}
+.km-leader{border:2px solid #f59e0b!important;box-shadow:0 6px 22px rgba(245,158,11,.5)!important;background:linear-gradient(180deg,#fff7e6 0%,#fff 65%)}
+.km-trophy{position:absolute;top:-22px;right:-14px;font-size:48px;transform:rotate(14deg);filter:drop-shadow(0 4px 5px rgba(0,0,0,.3));animation:km-bounce 1.6s ease-in-out infinite;z-index:2}
+@keyframes km-bounce{0%,100%{transform:rotate(14deg) translateY(0) scale(1)}50%{transform:rotate(14deg) translateY(-6px) scale(1.08)}}
+.km-badge{display:inline-block;margin-top:6px;padding:4px 13px;border-radius:14px;font-family:'Comic Sans MS','Marker Felt',cursive,sans-serif;font-weight:800;font-size:12px;color:#7c2d12;background:linear-gradient(135deg,#fde047,#f97316);transform:rotate(-3deg);box-shadow:0 3px 8px rgba(249,115,22,.55);letter-spacing:.3px;border:1px solid #ea580c;animation:km-wiggle 2.2s ease-in-out infinite}
+@keyframes km-wiggle{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
+.km-badge-sm{display:inline-block;padding:2px 8px;border-radius:10px;font-family:'Comic Sans MS','Marker Felt',cursive,sans-serif;font-weight:800;font-size:9px;color:#7c2d12;background:linear-gradient(135deg,#fde047,#f97316);transform:rotate(-2deg);vertical-align:middle;border:1px solid #ea580c}
+</style>
+</head>
+<body>
+
+<!-- Auth screen (hidden by default, shown by JS only on HTTPS) -->
+<div id="auth-screen" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);align-items:center;justify-content:center;z-index:9999">
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:16px;padding:40px 48px;width:360px;box-shadow:0 24px 48px rgba(0,0,0,.4)">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:32px;margin-bottom:10px">🏭</div>
+      <div style="font-size:18px;font-weight:700;color:#f1f5f9;letter-spacing:.3px">СУ — Метрики</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px">Производственный дашборд</div>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Пароль</label>
+      <input id="auth-pwd" type="password" placeholder="Введите пароль"
+        style="width:100%;padding:11px 14px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#f1f5f9;font-size:15px;outline:none;transition:border .2s"
+        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#334155'">
+    </div>
+    <div id="auth-error" style="display:none;color:#f87171;font-size:12px;margin-bottom:12px;text-align:center"></div>
+    <button id="auth-btn" onclick="authSubmit()"
+      style="width:100%;padding:12px;background:#3b82f6;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:background .2s;letter-spacing:.3px"
+      onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+      Войти
+    </button>
+  </div>
+</div>
+
+<div id="app">
+<div class="hdr">
+  <h1>Производственные метрики — СУ</h1>
+  <div class="hdr-row">
+    <div class="tabs">
+      <button class="tab active" onclick="go('loadv2',this)">Загрузка производства</button>
+      <button class="tab" onclick="go('quality',this)">КАЧЕСТВО</button>
+      <button class="tab" onclick="go('korpusm',this);kmEnsureLoaded();">Корпус</button>
+      <button class="tab" onclick="go('mmprod',this);mmpEnsureLoaded();">Выполнение ММ</button>
+    </div>
+    <div class="st"><span class="dot" id="dot"></span><span id="stxt">Загрузка…</span></div>
+  </div>
+</div>
+
+<div class="main">
+  <div id="loadv2" class="pane on">
+    <div class="qsubtabs">
+      <button class="qsubtab active" onclick="v2Go('korpus2',this)">Корпус</button>
+      <button class="qsubtab" onclick="v2Go('myagkaya2',this)">Мягкая</button>
+      <button class="qsubtab" onclick="v2Go('metall2',this)">Металл</button>
+    </div>
+    <div class="note" style="margin-bottom:10px">Источник: таблица «WOODCRAFT» — листы RUN (ТБУ/Мощность/Прогноз/Принятые) и PL 2026 / PL металл (Реализации). Мягкая мебель — отдельная таблица, тоже лист RUN.</div>
+    <div id="korpus2" class="qsubpane on"></div>
+    <div id="myagkaya2" class="qsubpane"></div>
+    <div id="metall2" class="qsubpane"></div>
+  </div>
+  <div id="quality" class="pane">
+    <div class="qsubtabs">
+      <button class="qsubtab active" onclick="qSubGo('shewhart',this)">Карты Шухарта</button>
+      <button class="qsubtab" onclick="qSubGo('percent',this)">% рекламаций</button>
+      <button class="qsubtab" onclick="qSubGo('defects',this)">Сводные дефекты</button>
+      <button class="qsubtab" onclick="qSubGo('complaints',this);qcEnsureLoaded();">Анализ рекламаций</button>
+    </div>
+    <div id="qsub-shewhart" class="qsubpane on"></div>
+    <div id="qsub-percent" class="qsubpane"></div>
+    <div id="qsub-defects" class="qsubpane"></div>
+    <div id="qsub-complaints" class="qsubpane"></div>
+  </div>
+  <div id="korpusm" class="pane">
+    <div class="qsubtabs" id="km-subtabs"></div>
+    <div class="note" style="margin-bottom:10px">Источник: таблица «Корпус» — помесячные листы, блок «ФИО мастера» (план/факт/% выполнения по сменам).</div>
+    <div id="km-panes"></div>
+    <div id="km-allmetrics"></div>
+  </div>
+
+  <div id="mmprod" class="pane">
+    <div class="filter-bar">
+      <span class="filter-label">Месяц:</span>
+      <select class="fsel" id="mmp-month-sel" onchange="mmpLoadMonth()"></select>
+      <span id="mmp-badge" class="fbadge" style="display:none"></span>
+    </div>
+    <div id="mmp-content"></div>
+  </div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────────────
+// WL/MONTHS остаются как дефолтные подписи недель/месяцев для build() —
+// конкретные секции («Загрузка производства») передают свои WL2/MONTHS2/WL_MYAG/MONTHS_MYAG.
+const WL = ['Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26'];
+// Indices after which to draw month separators (не используется активно — showSeps всегда false)
+const SEP_AFTER = [3,7,12,16];
+// Month definitions: wi = week array indices into WL, mi = index into месячный итог-массив
+const MONTHS = [
+  {n:'Февраль', wi:[0,1,2,3],       mi:0},
+  {n:'Март',    wi:[4,5,6,7],       mi:1},
+  {n:'Апрель',  wi:[8,9,10,11,12],  mi:2},
+  {n:'Май',     wi:[13,14,15,16],   mi:3},
+  {n:'Июнь',    wi:[17,18,19,20],   mi:4},
+];
+
+// ── «Загрузка v2»: тот же недельный шаблон + Январь (4 недели) впереди ───
+const WL2 = ['Н1-2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28','Н29','Н30','Н31'];
+const MONTHS2 = [
+  {n:'Январь',  wi:[0,1,2,3],         mi:0},
+  {n:'Февраль', wi:[4,5,6,7],         mi:1},
+  {n:'Март',    wi:[8,9,10,11],       mi:2},
+  {n:'Апрель',  wi:[12,13,14,15,16],  mi:3},
+  {n:'Май',     wi:[17,18,19,20],     mi:4},
+  {n:'Июнь',    wi:[21,22,23,24],     mi:5},
+  {n:'Июль',    wi:[25,26,27,28,29],  mi:6},
+];
+// Мягкая мебель (своя таблица) — другая раскладка недель по месяцам: 5/4/4/5/4/5 = 27 недель.
+const WL_MYAG = ['Н1','Н2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27'];
+const MONTHS_MYAG = [
+  {n:'Январь',  wi:[0,1,2,3,4],          mi:0},
+  {n:'Февраль', wi:[5,6,7,8],            mi:1},
+  {n:'Март',    wi:[9,10,11,12],         mi:2},
+  {n:'Апрель',  wi:[13,14,15,16,17],     mi:3},
+  {n:'Май',     wi:[18,19,20,21],        mi:4},
+  {n:'Июнь',    wi:[22,23,24,25,26],     mi:5},
+];
+
+// ── Deployment config ─────────────────────────────────────────────────
+const SHEET_ID2 = '1mUDUmLFqrhVyQMokAkSW0Zi0tgfA72pOzOZVMTp-KIE'; // Качество (карты Шухарта)
+const SHEET_ID3 = '1WY8ztx3ELBEYYYxikneGXLPP3L7UDkMNsYIYaJ7nuqs'; // Загрузка производства (WOODCRAFT: RUN, Металл, PL 2026, PL металл)
+const SHEET_ID4 = '1dNDp7c43dm5EionPGWkjIg5Z4YlWZpyI8gpTlH6wviQ'; // Загрузка производства — Мягкая мебель (RUN)
+// Вставьте API-ключ Google Sheets для автономной работы (без Cowork).
+// Без ключа дашборд работает через Cowork MCP, а при его отсутствии — офлайн.
+const GOOGLE_API_KEY = 'AIzaSyB0tAXsudgrIZozIWifqDiUBLasMy_GznU';
+
+function ratio(n,d){return n.map((v,i)=>v!=null&&d[i]?v/d[i]*100:null);}
+function build(s,wl,months){
+  return {
+    WL:wl||WL, MONTHS:months||MONTHS,
+    awBreakdown:s.awBreakdown, rwBreakdown:s.rwBreakdown,
+    tw:s.tw,cw:s.cw,fw:s.fw,aw:s.aw,rw:s.rw,
+    aw_dt:s.aw_dt,aw_mn:s.aw_mn,aw_pr:s.aw_pr,
+    rw_dt:s.rw_dt,rw_mn:s.rw_mn,rw_pr:s.rw_pr,
+    tm:s.tm,cm:s.cm,fm:s.fm,am:s.am,rm:s.rm,
+    am_dt:s.am_dt,am_mn:s.am_mn,am_pr:s.am_pr,
+    rm_dt:s.rm_dt,rm_mn:s.rm_mn,rm_pr:s.rm_pr,
+    pAP_w:ratio(s.aw,s.fw),pAC_w:ratio(s.aw,s.cw),pRC_w:ratio(s.rw,s.cw),pRT_w:ratio(s.rw,s.tw),
+    pAP_m:ratio(s.am,s.fm),pAC_m:ratio(s.am,s.cm),pRC_m:ratio(s.rm,s.cm),pRT_m:ratio(s.rm,s.tm),
+    // Альтернативная база для «Реализации/ТБУ» — Прогноз продаж вместо ТБУ (переключатель на карточке).
+    pRT_w_alt:ratio(s.rw,s.fw), pRT_m_alt:ratio(s.rm,s.fm),
+  };
+}
+
+// ── Загрузка производства: набор метрик из таблицы WOODCRAFT (RUN/Металл/PL) ──
+// Колонки 0-based в соответствующих листах.
+const V2_WC_RUN    = [155,156,157,158, 160,161,162,163, 165,166,167,168, 170,171,172,173,174, 176,177,178,179, 181,182,183,184, 186,187,188,189,190];
+const V2_IC_RUN     = [159,164,169,175,180,185,191];
+const V2_WC_METALL  = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132, 134,135,136,137, 139,140,141,142, 145,146,147,148,149];
+const V2_IC_METALL  = [117,122,127,133,138,null,150]; // июнь — итог пока не подведён в таблице
+// «PL 2026» (Реализации) пока без июльских столбцов в источнике — добавляем null-плейсхолдеры,
+// чтобы длина массива осталась согласована с WL2/V2_WC_RUN (иначе сдвинутся недели на графике).
+const V2_WC_PL_KORPUS = [3,4,5,6, 13,14,15,16, 24,25,26,27, 32,33,34,35,36, 41,42,43,44, 49,50,51,52, null,null,null,null,null];
+const V2_IC_PL_KORPUS = [2,12,23,31,40,48,null];
+// Металл: Реализации — Фев-Апр из листа «Металл» (row 40, тыс.₽ как есть),
+// Май-Июнь из «PL металл» (свежее, в руб. → /1000), как указал заказчик.
+const V2_METALL_RW_JANAPR_WC = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132];
+const V2_METALL_RW_JANAPR_IC = [117,122,127,133];
+const V2_PL_METALL_MAY_WC=[3,4,5,6], V2_PL_METALL_MAY_IC=2;
+const V2_PL_METALL_JUN_WC=[11,12,13,14], V2_PL_METALL_JUN_IC=10;
+
+// Мягкая мебель: всё из её собственного листа RUN (другая таблица, SHEET_ID4).
+// 27 недель Янв-Июнь 2026; «Итого»-столбец есть только у января (остальное — сумма недель).
+const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218];
+const V2_IC_MYAG=[192,null,null,null,null,null];
+
+function v2Get(row,idx){
+  if(idx==null)return null;
+  let v=row?row[idx]:null;
+  if(v===''||v==null)return null;
+  if(typeof v==='string') v=v.replace(/[\s ]/g,'').replace(',','.'); // «19 642» → «19642»
+  const n=Number(v);
+  return isNaN(n)?null:n;
+}
+function v2SumRows(rows,idxList,cols){
+  return cols.map(c=>{
+    let sum=0, any=false;
+    idxList.forEach(i=>{ const v=v2Get(rows[i],c); if(v!=null){sum+=v;any=true;} });
+    return any?sum:null;
+  });
+}
+function v2Row(rows,i){ return (rows&&rows[i]&&rows[i].values&&rows[i].values[0])||[]; }
+
+function buildV2(batches){
+  // batches.valueRanges порядок строго как в fetchV2(): см. ranges[] там же.
+  const vr=batches.valueRanges;
+  const [runTbu,runMoshch,runProgn,runPrin, metTbu,metMoshch,metProgn,metPrin,metReal, plKorp, plMetal] =
+    vr.slice(0,11).map(r=>(r.values&&r.values[0])||[]);
+  const runBd = vr[11].values||[];      // RUN!A34:GZ42 — 9 строк, idx0..8 (см. ниже)
+  const plBd  = vr[12].values||[];      // 'PL 2026'!A4:BB9 — 6 строк, idx0..5
+
+  const korpus = {
+    tw: V2_WC_RUN.map(c=>v2Get(runTbu,c)),    tm: V2_IC_RUN.map(c=>v2Get(runTbu,c)),
+    cw: V2_WC_RUN.map(c=>v2Get(runMoshch,c)), cm: V2_IC_RUN.map(c=>v2Get(runMoshch,c)),
+    fw: V2_WC_RUN.map(c=>v2Get(runProgn,c)),  fm: V2_IC_RUN.map(c=>v2Get(runProgn,c)),
+    aw: V2_WC_RUN.map(c=>v2Get(runPrin,c)),   am: V2_IC_RUN.map(c=>v2Get(runPrin,c)),
+    rw: V2_WC_PL_KORPUS.map(c=>{const v=v2Get(plKorp,c);return v==null?null:v/1000;}),
+    rm: V2_IC_PL_KORPUS.map(c=>{const v=v2Get(plKorp,c);return v==null?null:v/1000;}),
+  };
+
+  // Принятые по контрагентам (RUN, строки 34-42, idx0..8):
+  // 0 Диван.ру клиентские, 1 Диван.ру складские, 2 Диван.by, 3 Маркетплейс, 4 МП фабрика,
+  // 5 Вереск ИМ, 6 Гудмебель, 7 DG-Home, 8 Прочие заказы.
+  // Месячный итог не берём из таблицы (там % от плана, не тыс.₽) — mFall сам посчитает сумму недель.
+  korpus.awBreakdown = [
+    {label:'Диван.ру',  w:v2SumRows(runBd,[0,1],V2_WC_RUN), m:V2_IC_RUN.map(()=>null)},
+    {label:'Диван.by',  w:v2SumRows(runBd,[2],V2_WC_RUN),   m:V2_IC_RUN.map(()=>null)},
+    {label:'МП',        w:v2SumRows(runBd,[3,4],V2_WC_RUN), m:V2_IC_RUN.map(()=>null)},
+    {label:'Гудмебель', w:v2SumRows(runBd,[6],V2_WC_RUN),   m:V2_IC_RUN.map(()=>null)},
+    {label:'Прочие',    w:v2SumRows(runBd,[5,7,8],V2_WC_RUN), m:V2_IC_RUN.map(()=>null)},
+  ];
+  // Реализации по контрагентам (PL 2026, строки 4-9, idx0..5):
+  // 0 Внутренняя выручка, 1 Сторонние покупатели, 2 ДиванТрейд (= Диван.ру), 3 ДиванБай (= Диван.by),
+  // 4 МП, 5 Прочая выручка. В рублях → /1000.
+  const plW=c=>{ return cols=>cols.map(cc=>{const v=v2Get(plBd[c],cc);return v==null?null:v/1000;}); };
+  korpus.rwBreakdown = [
+    {label:'Диван.ру (ДТ)', w:plW(2)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
+    {label:'Диван.by (ДБ)', w:plW(3)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
+    {label:'МП',            w:plW(4)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
+    {label:'Прочие',        w:V2_WC_PL_KORPUS.map(c=>{
+        const a=v2Get(plBd[0],c),b=v2Get(plBd[1],c),e=v2Get(plBd[5],c);
+        const vals=[a,b,e].filter(v=>v!=null);
+        return vals.length?vals.reduce((x,y)=>x+y,0)/1000:null;
+      }), m:V2_IC_PL_KORPUS.map(()=>null)},
+  ];
+
+  // Реализации Металл: Январь-Апрель из листа «Металл» (как есть, тыс.₽),
+  // Май-Июнь из «PL металл» (свежее, в руб. → /1000) — по указанию заказчика.
+  const metallRwJanApr = V2_METALL_RW_JANAPR_WC.map(c=>v2Get(metReal,c));
+  const metallRmJanApr = V2_METALL_RW_JANAPR_IC.map(c=>v2Get(metReal,c));
+  const plMetalMayW = V2_PL_METALL_MAY_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
+  const plMetalJunW = V2_PL_METALL_JUN_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
+  const plMetalMayM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_MAY_IC);return v==null?null:v/1000;})();
+  const plMetalJunM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUN_IC);return v==null?null:v/1000;})();
+
+  const metall = {
+    tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
+    cw: V2_WC_METALL.map(c=>v2Get(metMoshch,c)), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
+    fw: V2_WC_METALL.map(c=>v2Get(metProgn,c)),  fm: V2_IC_METALL.map(c=>v2Get(metProgn,c)),
+    aw: V2_WC_METALL.map(c=>v2Get(metPrin,c)),   am: V2_IC_METALL.map(c=>v2Get(metPrin,c)),
+    // «PL металл» пока без июльских столбцов — 5 null-плейсхолдеров (выровнено с V2_WC_METALL).
+    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, null,null,null,null,null],
+    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, null],
+  };
+
+  return {korpus2:build(korpus,WL2,MONTHS2), metall2:build(metall,WL2,MONTHS2)};
+}
+
+function buildV2Myag(batches){
+  const vr=batches.valueRanges;
+  const tbuMoshch = (vr[0].values)||[];   // 'RUN '!A20:HZ21 — idx0=ТБУ(20), idx1=Мощность(21)
+  const prinBd    = (vr[1].values)||[];   // 'RUN '!A28:HZ33 — idx0..5 (28..33)
+  const planFact = (vr[2].values)||[]; // 'RUN '!A40:HZ41 — idx0=Реализации план(40), idx1=Реализации факт(41)
+
+  // «Принятые заказы всего с НДС» — а Прогноз/Реализации здесь без НДС, поэтому для
+  // сопоставимости снимаем НДС с Принятых (÷1.22). Это особенность только этой таблицы.
+  const noVat=v=>v==null?null:v/1.22;
+  const myagkaya = {
+    tw: V2_WC_MYAG.map(c=>v2Get(tbuMoshch[0],c)), tm: V2_IC_MYAG.map(c=>v2Get(tbuMoshch[0],c)),
+    cw: V2_WC_MYAG.map(c=>v2Get(tbuMoshch[1],c)), cm: V2_IC_MYAG.map(c=>v2Get(tbuMoshch[1],c)),
+    // «Прогноз продаж» в этой таблице называется «Реализации план, без НДС» (строка 40).
+    fw: V2_WC_MYAG.map(c=>v2Get(planFact[0],c)), fm: V2_IC_MYAG.map(c=>v2Get(planFact[0],c)),
+    aw: V2_WC_MYAG.map(c=>noVat(v2Get(prinBd[0],c))), am: V2_IC_MYAG.map(c=>noVat(v2Get(prinBd[0],c))),
+    rw: V2_WC_MYAG.map(c=>v2Get(planFact[1],c)),  rm: V2_IC_MYAG.map(c=>v2Get(planFact[1],c)),
+  };
+  // Принятые по контрагентам (строки 29-33, idx1..5 относительно prinBd), тоже без НДС:
+  // 1 Диван.ру клиентские, 2 Диван.ру складские, 3 Диван.by, 4 Прочее, 5 Маркетплейс.
+  myagkaya.awBreakdown = [
+    {label:'Диван.ру',     w:v2SumRows(prinBd,[1,2],V2_WC_MYAG).map(noVat), m:V2_IC_MYAG.map(()=>null)},
+    {label:'Диван.by',     w:v2SumRows(prinBd,[3],V2_WC_MYAG).map(noVat),   m:V2_IC_MYAG.map(()=>null)},
+    {label:'Маркетплейс',  w:v2SumRows(prinBd,[5],V2_WC_MYAG).map(noVat),   m:V2_IC_MYAG.map(()=>null)},
+    {label:'Прочее',       w:v2SumRows(prinBd,[4],V2_WC_MYAG).map(noVat),   m:V2_IC_MYAG.map(()=>null)},
+  ];
+  // Разбивки по контрагентам для Реализаций в этой таблице нет — показываем одной серией.
+  myagkaya.rwBreakdown = [
+    {label:'Реализации', w:myagkaya.rw, m:myagkaya.rm},
+  ];
+
+  return {myagkaya2:build(myagkaya,WL_MYAG,MONTHS_MYAG)};
+}
+
+function v2Fallback(){
+  const S={
+    korpus2:{
+      tw:[39032,24839,24839,21290, 31429,27500,27500,23571, 28387,24839,24839,31935, 18333,25667,25667,25667,18333, 35484,24839,24839,24839, 36867,36867,36867,47400],
+      cw:[42581,27097,27097,23226, 34286,30000,30000,25714, 33548,29355,29355,37742, 21667,30333,30333,30333,21667, 48387,33871,33871,33871, 35000,35000,35000,45000],
+      fw:[37781,24043,24043,20608, 32735,28643,28643,24551, 35280,30870,30870,39689, 24013,33619,33619,33619,24013, 52824,36977,36977,36977, 36211,36211,36211,46557],
+      aw:[31259,32607,27460,24173, 35111,30489,37047,33819, 32414,34312,29103,38394, 23084,25507,32919,35004,20991, 48376,34028,40241,31471, 39229,40674,39573,42712],
+      rw:[26979,36242,27882,25366, 33116,30717,34324,0, 38707,31328,33456,30646, 20975,29726,33030,33755,0, 41910,30532,54787,32115, 46913,38621,0,0],
+      tm:[110000,110000,110000,110000,110000,158000],
+      cm:[120000,120000,130000,130000,150000,150000],
+      fm:[106475,114573,136708,144081,163753,155189],
+      am:[115499,136466,134224,116514,154116,162188],
+      rm:[116762,130389,134137,134400,159344,85534],
+      awBreakdown:[
+        {label:'Диван.ру',  w:[17940.3,20585.6,17359.5,15355.3, 21034.5,17942.3,15843.9,14596.6, 17217.5,15934.7,13792.6,18984.4, 11388.4,13764.8,14449.2,15290.0,9374.2, 24462.9,15650.5,17800.9,17292.1, 17527.4,18466.0,17702.9,21401.2], m:[null,null,null,null,null,null]},
+        {label:'Диван.by',  w:[962.3,573.4,890.8,1077.1, 1063.9,1282.5,942.8,940.0, 1121.3,1044.7,1021.5,1004.9, 887.7,702.9,774.9,901.6,1061.2, 1407.9,550.3,1018.3,818.1, 583.8,554.9,889.5,960.1], m:[null,null,null,null,null,null]},
+        {label:'МП',        w:[12169.9,11209.3,8977.6,7596.2, 12463.2,11059.5,20054.7,18139.5, 13913.7,17000.4,14011.7,17960.7, 10368.6,10745.6,17496.7,18736.9,10430.8, 22325.0,17531.3,21142.0,13240.0, 20989.1,21531.6,20914.2,20279.1], m:[null,null,null,null,null,null]},
+        {label:'Гудмебель', w:[88.7,192.0,37.1,53.7, 111.0,117.4,92.4,72.4, 132.6,214.0,126.4,250.1, 408.9,191.6,43.3,0,0, 0,0,4.6,37.1, 18.5,0,0,0], m:[null,null,null,null,null,null]},
+        {label:'Прочие',    w:[97.9,46.3,195.4,90.3, 438.9,87.0,112.9,71.0, 29.2,118.2,151.1,19836.1, 30.3,102.3,154.8,75.3,125.4, 180.3,295.5,275.1,83.7, 110.2,121.1,66.4,71.8], m:[null,null,null,null,null,null]},
+      ],
+      rwBreakdown:[
+        {label:'Диван.ру (ДТ)', w:[17726.6,21337.0,16844.5,16202.6, 21115.1,17605.6,16238.4,0, 19030.7,17208.0,13626.2,14967.1, 10939.2,14543.1,13828.5,16185.0,0, 22436.1,14012.6,19185.2,17679.1, 17721.0,18264.3,0,0], m:[null,null,null,null,null,null]},
+        {label:'Диван.by (ДБ)', w:[1464.7,867.9,1824.5,1438.2, 0,2659.3,1147.9,0, 925.7,1119.7,1153.5,2387.1, 1155.1,664.1,799.9,1268.1,0, 1303.3,0,2316.6,2571.3, 633.9,932.9,0,0], m:[null,null,null,null,null,null]},
+        {label:'МП',            w:[7654.1,13466.9,8876.0,7433.0, 11677.9,9907.2,16641.1,0, 18478.2,12710.1,18132.1,12867.9, 8211.7,13584.7,17483.1,15588.9,0, 17265.4,15590.2,31536.5,10828.6, 27607.4,17915.0,0,0], m:[null,null,null,null,null,null]},
+        {label:'Прочие',        w:[133.3,570.6,336.7,291.9, 323.2,545.1,296.3,0, 272.8,290.2,544.2,423.6, 669.1,933.8,918.5,712.9,0, 904.9,929.0,1749.0,1036.1, 951.0,1508.4,0,0], m:[null,null,null,null,null,null]},
+      ],
+    },
+    metall2:{
+      tw:[null,null,null,null, null,null,null,null, null,null,null,null, null,null,null,null,null, null,null,null,null, null,null,null,null],
+      cw:[null,null,null,null, null,null,null,null, null,null,null,null, null,null,null,null,null, null,null,null,null, null,null,null,null],
+      fw:[0,1327,1327,1847, 1306,1143,1143,979, 1135,993,993,1276, 1018,1425,1425,1425,814, 1752,1226,1226,1226, 1772,1781,1772,2287],
+      aw:[5,681,838,838, 692,923,1253,1311, 517,1124,297,1855, 127,904,755,1349,1891, 896,1406,399,1600, 1198,267,2241,0],
+      rw:[673,1279,1118,955, 539,798,530,764, 839,666,1365,901, 497,814,721,1268,747, 1515,1162,1588,1662, 1056,769,1741,0],
+      tm:[7632,7392,7571,7941,7620,null],
+      cm:[6000,6000,null,null,6000,null],
+      fm:[4500,4571,4397,6108,5430,7612],
+      am:[2362,4178,3794,3136,4303,3706],
+      rm:[4025,2630,3770,4047,5927,3565],
+    },
+  };
+  return Object.fromEntries(Object.entries(S).map(([k,s])=>[k,build(s,WL2,MONTHS2)]));
+}
+
+function v2MyagFallback(){
+  const tw=[null,null,null,null,null, null,null,null,null, null,null,null,null, 47667,66733,66733,66733,37785, 92258,64581,64581,64581, 66733,66733,66733,66733,18893];
+  const cw=[null,null,null,null,null, null,null,null,null, null,null,null,null, 47667,66733,66733,66733,38133, 92258,64581,64581,64581, 66733,66733,66733,66733,19067];
+  const noVat=v=>v==null?null:v/1.22;
+  // «Принятые заказы всего с НДС» в этой таблице — снимаем НДС (÷1.22), Прогноз/Реализации уже без НДС.
+  const aw=[67943,45611,79371,59693,62720, 68238,75960,59571,72854, 70195,59062,64073,53244, 63824,57887,90275,74445,60971, 68520,57230,67950,65497, 84479,73930,60684,0,0].map(noVat);
+  const rw=[11221,56039,61414,60327,54044, 60251,61306,63902,55155, 69529,58376,48353,72532, 35074,47219,48659,59141, 57530,49223,61703,65274, 64159,58630,66432,null,null];
+  // «Прогноз продаж» = «Реализации план, без НДС» (строка 40 в RUN).
+  const fw=[15884,55595,55595,55595,47653, 68553,59984,59984,51414, 61810,54084,54084,69536, 41218,57705,57705,57705,32975, 48988,58786,68584,68584, 61789,61789,61789,61789,17654];
+  const s={
+    tw, cw, fw,
+    aw, rw,
+    tm:[null,null,null,null,null,null], cm:[null,null,null,null,null,null],
+    fm:[null,null,null,null,null,null],
+    am:[null,null,null,null,null,null], rm:[null,null,null,null,null,null],
+    awBreakdown:[
+      {label:'Диван.ру',    w:[39218,43020,47503,40715,42082, 38300,35523,35391,35214, 36856,36982,32743,38361, 40612,39961,38303,42709,46462, 37218,40385,38225,39959, 36566,42788,37634,0,0].map((v,i)=>v+([25135,0,24297,13899,11799, 25903,36957,19189,33734, 27693,18073,22896,7539, 18999,12215,44672,23334,6239, 25741,10130,23206,20706, 41710,26151,14867,0,0][i])).map(noVat), m:[null,null,null,null,null,null]},
+      {label:'Диван.by',    w:[3105,1929,6358,3638,4727, 3104,2642,3662,2867, 4122,2833,6881,2879, 3059,3518,4550,3496,3344, 3811,4950,4751,3364, 3278,2844,5062,0,0].map(noVat), m:[null,null,null,null,null,null]},
+      {label:'Маркетплейс', w:[0,427,318,332,3124, 135,126,209,112, 264,410,864,1325, 299,1173,1006,4266,4040, 741,1155,696,939, 1706,1347,1775,0,0].map(noVat), m:[null,null,null,null,null,null]},
+      {label:'Прочее',      w:[485,235,895,1109,988, 796,712,1120,927, 1260,764,689,3140, 855,1020,1744,640,892, 1009,610,1072,529, 1219,800,1346,0,0].map(noVat), m:[null,null,null,null,null,null]},
+    ],
+    rwBreakdown:[{label:'Реализации', w:rw, m:[null,null,null,null,null,null]}],
+  };
+  return {myagkaya2:build(s,WL_MYAG,MONTHS_MYAG)};
+}
+
+// ── Month separator plugin ────────────────────────────────────────────
+const sepPlugin={
+  id:'seps',
+  afterDraw(ch){
+    const x=ch.scales.x; if(!x)return;
+    const {ctx,chartArea:{top,bottom}}=ch;
+    ctx.save(); ctx.strokeStyle='rgba(100,116,139,.22)'; ctx.lineWidth=1; ctx.setLineDash([4,3]);
+    SEP_AFTER.forEach(i=>{
+      const px=(x.getPixelForValue(i)+x.getPixelForValue(i+1))/2;
+      ctx.beginPath(); ctx.moveTo(px,top); ctx.lineTo(px,bottom); ctx.stroke();
+    });
+    ctx.restore();
+  }
+};
+Chart.register(sepPlugin);
+
+// ── Chart factory ─────────────────────────────────────────────────────
+const CI={};
+function killChart(id){if(CI[id]){CI[id].destroy();delete CI[id];}}
+// Палитра для произвольной разбивки по контрагентам (awBreakdown/rwBreakdown)
+const QPAL=[
+  {bg:'rgba(59,130,246,.75)', br:'#3b82f6'},
+  {bg:'rgba(16,185,129,.75)', br:'#10b981'},
+  {bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
+  {bg:'rgba(139,92,246,.75)', br:'#8b5cf6'},
+  {bg:'rgba(239,68,68,.75)',  br:'#ef4444'},
+  {bg:'rgba(6,182,212,.75)',  br:'#06b6d4'},
+];
+function fillBreakdownLegend(elId,suffix,items){
+  const el=document.getElementById(`${elId}-${suffix}-leg`);
+  if(!el)return;
+  if(items){
+    el.innerHTML=items.map((it,i)=>`<div class="li"><div class="ld" style="background:${QPAL[i%QPAL.length].bg};border:1.5px solid ${QPAL[i%QPAL.length].br}"></div>${it.label}</div>`).join('');
+  } else {
+    el.innerHTML=`
+      <div class="li"><div class="ld" style="background:rgba(59,130,246,.75);border:1.5px solid #3b82f6"></div>ДТ</div>
+      <div class="li"><div class="ld" style="background:rgba(16,185,129,.75);border:1.5px solid #10b981"></div>МН / МП</div>
+      <div class="li"><div class="ld" style="background:rgba(245,158,11,.75);border:1.5px solid #f59e0b"></div>Прочие</div>`;
+  }
+}
+
+function fmtN(v){if(v==null)return'—';return Math.round(v).toLocaleString('ru-RU');}
+function fmtP(v){if(v==null)return'—';return v.toFixed(1)+'%';}
+function pillC(v,lo,hi){if(v==null)return'na';return v>=hi?'ok':v>=lo?'warn':'bad';}
+
+// ── Короткие выводы под КПИ-карточками: сразу понятно, норм или не норм ─
+function insightAP(val,isProjected){
+  const sfx=isProjected?' (по прогнозу на конец месяца)':'';
+  if(val==null) return {cls:'na',txt:'Нет данных'};
+  if(val>=100) return {cls:'ok',txt:'✓ План по принятым выполняется'+sfx};
+  if(val>=85)  return {cls:'warn',txt:'⚠ Небольшое отставание от плана продаж'+sfx};
+  return {cls:'bad',txt:'✗ Отставание от плана продаж по принятым'+sfx};
+}
+function insightRC(val){
+  if(val==null) return {cls:'na',txt:'Нет данных'};
+  if(val>115)  return {cls:'warn',txt:'⚠ Производство перегружено — риск срывов сроков'};
+  if(val>=95)  return {cls:'ok',txt:'✓ Производство загружено по плану'};
+  if(val>=75)  return {cls:'warn',txt:'⚠ Производство недозагружено'};
+  return {cls:'bad',txt:'✗ Производство сильно недозагружено'};
+}
+function insightRT(val,isForecastBase,isProjected){
+  const sfx=isProjected?' (по прогнозу на конец месяца)':'';
+  if(val==null) return {cls:'na',txt:'Нет данных'};
+  if(isForecastBase){
+    if(val>=100) return {cls:'ok',txt:'✓ Реализации опережают или идут по прогнозу'+sfx};
+    if(val>=90)  return {cls:'warn',txt:'⚠ Небольшое отставание от прогноза продаж'+sfx};
+    return {cls:'bad',txt:'✗ Существенное отставание от прогноза продаж'+sfx};
+  }
+  if(val>=100) return {cls:'ok',txt:'✓ Выше точки безубыточности'+sfx};
+  if(val>=90)  return {cls:'warn',txt:'⚠ Близко к точке безубыточности'+sfx};
+  return {cls:'bad',txt:'✗ Ниже точки безубыточности — убыточный период'+sfx};
+}
+function lastVal(a){for(let i=a.length-1;i>=0;i--)if(a[i]!=null)return a[i];return null;}
+
+function barChart(id,datasets,labels=WL,showSeps=true){
+  killChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  CI[id]=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:datasets.map(d=>({
+      label:d.l,data:d.d,backgroundColor:d.bg,borderColor:d.br,
+      borderWidth:1,borderRadius:2,skipNull:true,
+    }))},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{
+            title:([c])=>c.label,
+            label:c=>c.parsed.y!=null?' '+c.dataset.label+': '+fmtN(c.parsed.y)+' тыс.₽':null,
+          }
+        },
+        seps:showSeps?{}:false,
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',
+           callback:v=>fmtN(v)},title:{display:true,text:'тыс. ₽',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+function lineChart(id,datasets,ref100=true,labels=WL,showSeps=true){
+  killChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  const ds=datasets.map(d=>({
+    label:d.l,data:d.d,borderColor:d.c,backgroundColor:'transparent',
+    pointBackgroundColor:d.c,borderWidth:2,pointRadius:3,pointHoverRadius:5,
+    tension:.3,spanGaps:true,
+  }));
+  if(ref100) ds.push({label:'100%',data:labels.map(()=>100),borderColor:'rgba(148,163,184,.5)',
+    backgroundColor:'transparent',borderWidth:1,borderDash:[5,3],pointRadius:0,tension:0});
+  CI[id]=new Chart(ctx,{
+    type:'line',data:{labels,datasets:ds},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{
+            title:([c])=>c.label,
+            label:c=>c.dataset.label==='100%'?null:' '+c.dataset.label+': '+fmtP(c.parsed.y),
+          }
+        },
+        seps:showSeps?{}:false,
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>v+'%'},
+           title:{display:true,text:'%',font:{size:8},color:'#94a3b8'},min:0,suggestedMax:150}
+      }
+    }
+  });
+}
+
+function stackedBarChart(id,datasets,labels=WL,showSeps=true){
+  killChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  CI[id]=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:datasets.map(d=>({
+      label:d.l,data:d.d,backgroundColor:d.bg,borderColor:d.br,
+      borderWidth:1,borderRadius:2,skipNull:true,stack:'s0',
+    }))},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{
+            title:([c])=>c.label,
+            label:c=>c.parsed.y!=null&&c.parsed.y>0?' '+c.dataset.label+': '+fmtN(c.parsed.y)+' тыс.₽':null,
+            footer:items=>{const s=items.reduce((a,c)=>a+(c.parsed.y||0),0);return s>0?'Итого: '+fmtN(s)+' тыс.₽':'';}
+          }
+        },
+        seps:showSeps?{}:false,
+      },
+      scales:{
+        x:{stacked:true,grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{stacked:true,grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>fmtN(v)},
+           title:{display:true,text:'тыс. ₽',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+// Сгруппированные (не stacked) столбики по контрагентам — каждая категория своим столбиком
+// рядом, а не друг на друге. На общем баре маленькие доли (например, Гудмебель) визуально
+// тонут на фоне крупных (Диван.ру) — сгруппированный вид решает это, у каждой свой масштаб видим.
+// Подпись над каждым баром — % изменения к предыдущему периоду (месяц/неделя, смотря что выбрано)
+// по тому же каналу (датасету). Передаётся как plugins:[...] конкретного чарта (не Chart.register),
+// поэтому не затрагивает остальные графики дашборда.
+const pctChangePlugin={
+  id:'pctChange',
+  afterDatasetsDraw(chart){
+    const {ctx}=chart;
+    chart.data.datasets.forEach((ds,dsIdx)=>{
+      const meta=chart.getDatasetMeta(dsIdx);
+      if(meta.hidden) return;
+      ds.data.forEach((val,i)=>{
+        if(i===0||val==null) return;
+        const prev=ds.data[i-1];
+        if(prev==null||prev===0) return;
+        const bar=meta.data[i];
+        if(!bar) return;
+        const pct=(val-prev)/prev*100;
+        ctx.save();
+        ctx.font='9px sans-serif';
+        ctx.fillStyle=pct>=0?'#10b981':'#ef4444';
+        ctx.textAlign='center';
+        ctx.fillText((pct>=0?'+':'')+pct.toFixed(0)+'%', bar.x, bar.y-4);
+        ctx.restore();
+      });
+    });
+  }
+};
+function groupedBarChart(id,datasets,labels=WL,showSeps=true){
+  killChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  CI[id]=new Chart(ctx,{
+    type:'bar',
+    plugins:[pctChangePlugin],
+    data:{labels,datasets:datasets.map(d=>({
+      label:d.l,data:d.d,backgroundColor:d.bg,borderColor:d.br,
+      borderWidth:1,borderRadius:2,skipNull:true,
+    }))},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      layout:{padding:{top:14}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{
+            title:([c])=>c.label,
+            label:c=>c.parsed.y!=null&&c.parsed.y>0?' '+c.dataset.label+': '+fmtN(c.parsed.y)+' тыс.₽':null,
+          }
+        },
+        seps:showSeps?{}:false,
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>fmtN(v)},
+           title:{display:true,text:'тыс. ₽',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+// ── Forecast: project end-of-month total from current weekly pace ─────
+// isCurrent=true only for the latest/ongoing month (June).
+// Always shows projection for the current month regardless of how many weeks are filled.
+// For closed months → null (no forecast shown).
+function forecastMonth(wArr, mo, isCurrent){
+  if(!isCurrent) return null;
+  const vals=mo.wi.map(i=>wArr[i]);
+  // Будущие недели в источнике закодированы как 0 (не null) — исключаем их из расчёта
+  // среднего, иначе прогноз «размывается» нулями и совпадает с фактом за частичный месяц.
+  const known=vals.filter(v=>v!=null&&v>0);
+  if(known.length===0) return null;
+  const avg=known.reduce((a,b)=>a+b,0)/known.length;
+  return avg*mo.wi.length;
+}
+
+// ── Monthly value: prefer sum of weekly data; fall back to итого column only if no weekly data.
+// This avoids using cumulative/running-total итого formulas that exist in the spreadsheet.
+function mFall(marr, warr, months=MONTHS){
+  return months.map(mo=>{
+    const s=mo.wi.reduce((a,wi)=>a+(warr[wi]||0),0);
+    if(s>0) return s;          // weekly sum available → always use it
+    const v=marr[mo.mi];
+    return v!=null?v:null;     // no weekly data → fall back to итого column
+  });
+}
+// Monthly ratio with fallback
+function mRatio(narr,narW,darr,darW,months=MONTHS){
+  const n=mFall(narr,narW,months), d=mFall(darr,darW,months);
+  return n.map((v,i)=>v!=null&&d[i]?v/d[i]*100:null);
+}
+// «Реализации/Мощность»: считаем только за отработанные недели (где есть и факт Реализаций,
+// и план Мощности) — без прогноза до конца месяца. Для текущего месяца это даёт честный
+// процент загрузки за фактически прошедший период, а не недооценённый план на весь месяц.
+function elapsedSums(rwArr,cwArr,months=MONTHS){
+  // Будущие недели в источнике закодированы как 0 (не null) — находим последнюю реально
+  // заполненную неделю по всему ряду (значение >0) и не учитываем недели после неё.
+  let lastIdx=-1;
+  rwArr.forEach((v,i)=>{ if(v!=null&&v>0) lastIdx=i; });
+  const sumR=[], sumC=[];
+  months.forEach(mo=>{
+    const weeks=mo.wi.filter(wi=>wi<=lastIdx&&cwArr[wi]!=null);
+    if(weeks.length===0){sumR.push(null);sumC.push(null);return;}
+    sumR.push(weeks.reduce((a,wi)=>a+(rwArr[wi]||0),0));
+    sumC.push(weeks.reduce((a,wi)=>a+cwArr[wi],0));
+  });
+  return {sumR,sumC};
+}
+
+// ── Chart render by period ────────────────────────────────────────────
+function renderCharts(elId, d, mi, wi){
+  const MO=d.MONTHS||MONTHS, WLd=d.WL||WL;
+  if(wi===-1){
+    // Monthly view — N months (with итого fallback to weekly sums)
+    const lb=MO.map(m=>m.n);
+    const rtAlt=rtMode(elId)==='forecast';
+    const tBase_m=rtAlt?d.fm:d.tm, tBase_w=rtAlt?d.fw:d.tw, tLabel=rtAlt?'Прогноз':'ТБУ';
+    const fAM=mFall(d.am,d.aw,MO), fFM=mFall(d.fm,d.fw,MO), fTM=mFall(tBase_m,tBase_w,MO), fRM=mFall(d.rm,d.rw,MO);
+    const {sumR:fRM_done,sumC:fCM_done}=elapsedSums(d.rw,d.cw,MO); // только отработанные недели
+    barChart(elId+'-b1',[
+      {l:'Прогноз продаж',d:fFM,bg:'rgba(59,130,246,.25)',br:'#3b82f6'},
+      {l:'Принятые',      d:fAM,bg:'rgba(16,185,129,.35)',br:'#10b981'},
+    ],lb,false);
+    lineChart(elId+'-l1',[{l:'Принятые / Прогноз',d:mRatio(d.am,d.aw,d.fm,d.fw,MO),c:'#3b82f6'}],true,lb,false);
+    barChart(elId+'-b2',[
+      {l:'Мощность',  d:fCM_done,bg:'rgba(59,130,246,.25)',br:'#3b82f6'},
+      {l:'Реализации',d:fRM_done,bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
+    ],lb,false);
+    lineChart(elId+'-l2',[{l:'Реализации / Мощность',d:fRM_done.map((v,i)=>v!=null&&fCM_done[i]?v/fCM_done[i]*100:null),c:'#8b5cf6'}],true,lb,false);
+    barChart(elId+'-b3',[
+      {l:tLabel,      d:fTM,bg:'rgba(245,158,11,.25)',br:'#f59e0b'},
+      {l:'Реализации',d:fRM,bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
+    ],lb,false);
+    lineChart(elId+'-l3',[{l:'Реализации / '+tLabel,d:mRatio(d.rm,d.rw,tBase_m,tBase_w,MO),c:'#f59e0b'}],true,lb,false);
+    // Разрез по контрагентам — новая структура (d.awBreakdown/d.rwBreakdown), если задана,
+    // иначе старые 3 категории ДТ/МН/Прочие (v1, не трогаем).
+    groupedBarChart(elId+'-b4', d.awBreakdown
+      ? d.awBreakdown.map((it,i)=>({l:it.label,d:mFall(it.m,it.w,MO),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
+      : [
+        {l:'ДТ',    d:mFall(d.am_dt,d.aw_dt,MO),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
+        {l:'МН/МП', d:mFall(d.am_mn,d.aw_mn,MO),bg:'rgba(16,185,129,.75)',br:'#10b981'},
+        {l:'Прочие',d:mFall(d.am_pr,d.aw_pr,MO),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
+      ], lb,false);
+    groupedBarChart(elId+'-b5', d.rwBreakdown
+      ? d.rwBreakdown.map((it,i)=>({l:it.label,d:mFall(it.m,it.w,MO),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
+      : [
+        {l:'ДТ',    d:mFall(d.rm_dt,d.rw_dt,MO),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
+        {l:'МН/МП', d:mFall(d.rm_mn,d.rw_mn,MO),bg:'rgba(16,185,129,.75)',br:'#10b981'},
+        {l:'Прочие',d:mFall(d.rm_pr,d.rw_pr,MO),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
+      ], lb,false);
+  } else {
+    // Weekly view — weeks of selected month only
+    const mo=MO[mi];
+    const lb=mo.wi.map(i=>WLd[i]);
+    const sl=arr=>mo.wi.map(i=>arr[i]);
+    barChart(elId+'-b1',[
+      {l:'Прогноз продаж',d:sl(d.fw),bg:'rgba(59,130,246,.25)',br:'#3b82f6'},
+      {l:'Принятые',      d:sl(d.aw),bg:'rgba(16,185,129,.35)',br:'#10b981'},
+    ],lb,false);
+    lineChart(elId+'-l1',[{l:'Принятые / Прогноз',d:sl(d.pAP_w),c:'#3b82f6'}],true,lb,false);
+    barChart(elId+'-b2',[
+      {l:'Мощность',  d:sl(d.cw),bg:'rgba(59,130,246,.25)',br:'#3b82f6'},
+      {l:'Реализации',d:sl(d.rw),bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
+    ],lb,false);
+    lineChart(elId+'-l2',[{l:'Реализации / Мощность',d:sl(d.pRC_w),c:'#8b5cf6'}],true,lb,false);
+    const rtAlt=rtMode(elId)==='forecast';
+    const tBase_w=rtAlt?d.fw:d.tw, tLabel=rtAlt?'Прогноз':'ТБУ', pRT_w_src=rtAlt?d.pRT_w_alt:d.pRT_w;
+    barChart(elId+'-b3',[
+      {l:tLabel,      d:sl(tBase_w),bg:'rgba(245,158,11,.25)',br:'#f59e0b'},
+      {l:'Реализации',d:sl(d.rw),bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
+    ],lb,false);
+    lineChart(elId+'-l3',[{l:'Реализации / '+tLabel,d:sl(pRT_w_src),c:'#f59e0b'}],true,lb,false);
+    // Разрез по контрагентам (weekly)
+    groupedBarChart(elId+'-b4', d.awBreakdown
+      ? d.awBreakdown.map((it,i)=>({l:it.label,d:sl(it.w),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
+      : [
+        {l:'ДТ',    d:sl(d.aw_dt),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
+        {l:'МН/МП', d:sl(d.aw_mn),bg:'rgba(16,185,129,.75)',br:'#10b981'},
+        {l:'Прочие',d:sl(d.aw_pr),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
+      ], lb,false);
+    groupedBarChart(elId+'-b5', d.rwBreakdown
+      ? d.rwBreakdown.map((it,i)=>({l:it.label,d:sl(it.w),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
+      : [
+        {l:'ДТ',    d:sl(d.rw_dt),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
+        {l:'МН/МП', d:sl(d.rw_mn),bg:'rgba(16,185,129,.75)',br:'#10b981'},
+        {l:'Прочие',d:sl(d.rw_pr),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
+      ], lb,false);
+  }
+}
+
+// ── KPI update (period selector) ──────────────────────────────────────
+// DATA store so selectors can reference it
+const _data={};
+
+const _rtBase={}; // elId → 'tbu' | 'forecast' (база для «Реализации/ТБУ»: ТБУ или Прогноз продаж)
+function rtMode(elId){ return _rtBase[elId]||'tbu'; }
+function toggleRtBase(elId){
+  _rtBase[elId]=rtMode(elId)==='tbu'?'forecast':'tbu';
+  const msel=document.getElementById(elId+'-sel-month'), wsel=document.getElementById(elId+'-sel-week');
+  updateKPI(elId,_data[elId],+msel.value,+wsel.value);
+}
+function updateKPI(elId, d, mi, wi){
+  // mi = month index, wi = week index within d.WL (-1 = whole month)
+  const MO=d.MONTHS||MONTHS, WLd=d.WL||WL;
+  const rtAlt=rtMode(elId)==='forecast'; // true → база «Реализации/ТБУ» подменена на Прогноз продаж
+  const tBase_m=rtAlt?d.fm:d.tm, tBase_w=rtAlt?d.fw:d.tw;
+  const pRT_w_src=rtAlt?d.pRT_w_alt:d.pRT_w;
+  let pAP, pRC, pRT, badgeText;
+  let pAP_fc=null, pRT_fc=null; // forecast values (у «Реализации/Мощность» прогноза больше нет — только факт за отработанные недели)
+  const mo=MO[mi];
+  if(wi===-1){
+    // Use fallback monthly values (weekly sum when итого column is null)
+    const aM=mFall(d.am,d.aw,MO)[mi], fM=mFall(d.fm,d.fw,MO)[mi], rM=mFall(d.rm,d.rw,MO)[mi], tM=mFall(tBase_m,tBase_w,MO)[mi];
+    pAP=aM!=null&&fM?aM/fM*100:null; pRT=rM!=null&&tM?rM/tM*100:null;
+    // «Реализации/Мощность» — только за отработанные недели (где есть и факт, и план), без прогноза.
+    const {sumR,sumC}=elapsedSums(d.rw,d.cw,MO);
+    pRC=sumR[mi]!=null&&sumC[mi]?sumR[mi]/sumC[mi]*100:null;
+    badgeText=mo.n+' · итого';
+    // Forecast: extrapolate from partial weekly data (только для Принятые/Прогноз и Реализации/ТБУ)
+    const isCurrent=(mi===MO.length-1);
+    const aFC=forecastMonth(d.aw,mo,isCurrent), rFC=forecastMonth(d.rw,mo,isCurrent);
+    if(aFC!=null&&fM) pAP_fc=aFC/fM*100;
+    if(rFC!=null&&tM) pRT_fc=rFC/tM*100;
+  } else {
+    const wIdx=mo.wi[wi];
+    pAP=d.pAP_w[wIdx]; pRC=d.pRC_w[wIdx]; pRT=pRT_w_src[wIdx];
+    badgeText=mo.n+' · '+WLd[wIdx];
+  }
+  // update values & pills
+  const setCard=(suffix,val,lo,hi)=>{
+    const el=document.getElementById(elId+suffix);
+    if(!el)return;
+    el.textContent=fmtP(val);
+    const pill=el.closest('.card').querySelector('.pill');
+    if(pill){pill.textContent=fmtP(val);pill.className='pill '+pillC(val,lo,hi);}
+  };
+  setCard('-kp1',pAP,85,100);
+  setCard('-kp2',pRC,75,95);
+  setCard('-kp3',pRT,90,100);
+  // короткие выводы под карточками — сразу видно, норм или не норм
+  const setInsight=(suffix,info)=>{
+    const el=document.getElementById(elId+suffix);
+    if(!el)return;
+    el.textContent=info.txt;
+    el.className='cinsight '+info.cls;
+  };
+  // Для текущего (неполного) месяца ориентируемся на прогноз к концу месяца, а не на факт
+  // за неполный период — иначе вывод почти всегда «плохой» в начале месяца. Прогноза нет —
+  // используем факт (так и для завершённых месяцев, и для недельного режима).
+  setInsight('-ins1',insightAP(pAP_fc!=null?pAP_fc:pAP, pAP_fc!=null));
+  setInsight('-ins2',insightRC(pRC));
+  setInsight('-ins3',insightRT(pRT_fc!=null?pRT_fc:pRT,rtAlt, pRT_fc!=null));
+  // update forecast rows
+  const setForecast=(suffix,val)=>{
+    const el=document.getElementById(elId+suffix);
+    if(!el)return;
+    if(val!=null){
+      el.innerHTML=`<span class="arrow">↗</span> прогноз к концу месяца: <span class="fval">~${fmtP(val)}</span>`;
+      el.className='cfcast show';
+    } else {
+      el.className='cfcast';
+    }
+  };
+  setForecast('-fc1',pAP_fc);
+  setForecast('-fc3',pRT_fc);
+  // update badge
+  const badge=document.getElementById(elId+'-period-badge');
+  if(badge) badge.textContent=badgeText;
+  // update ТБУ/Прогноз toggle label
+  const rtBtn=document.getElementById(elId+'-rt-toggle');
+  if(rtBtn) rtBtn.textContent=rtMode(elId)==='forecast' ? 'база: Прогноз ⇄' : 'база: ТБУ ⇄';
+  const rtLbl=document.getElementById(elId+'-kp3-lbl');
+  if(rtLbl) rtLbl.textContent=rtMode(elId)==='forecast' ? 'Реализации / Прогноз' : 'Реализации / ТБУ';
+  const tLbl2=rtMode(elId)==='forecast'?'Прогноз':'ТБУ';
+  const setTxt=(suffix,txt)=>{ const el=document.getElementById(elId+suffix); if(el) el.textContent=txt; };
+  setTxt('-b3-hdr','Реализации vs '+tLbl2);
+  setTxt('-b3-leg1',tLbl2);
+  setTxt('-l3-title','% Реализации / '+tLbl2);
+  setTxt('-l3-leg1','% Реализации/'+tLbl2);
+  // update csub for card 1 & 2
+  const sub1=document.querySelector(`#${elId}-kp1`)?.closest('.card')?.querySelector('.csub');
+  const sub2=document.querySelector(`#${elId}-kp2`)?.closest('.card')?.querySelector('.csub');
+  if(sub1) sub1.textContent=badgeText;
+  if(sub2) sub2.textContent=badgeText+(wi===-1?' · только отработанные недели':'');
+  // refresh week selector options when month changes
+  const wsel=document.getElementById(elId+'-sel-week');
+  if(wsel&&wsel._mi!==mi){
+    wsel._mi=mi;
+    wsel.innerHTML='<option value="-1">Весь месяц</option>'+
+      mo.wi.map((wIdx,j)=>`<option value="${j}">${WLd[wIdx]}</option>`).join('');
+    wsel.value=wi>=0?String(wi):'-1';
+  }
+  // redraw charts for selected period
+  renderCharts(elId, d, mi, wi);
+}
+
+function onMonthChange(elId){
+  const msel=document.getElementById(elId+'-sel-month');
+  const wsel=document.getElementById(elId+'-sel-week');
+  wsel._mi=-1; // force week options refresh
+  updateKPI(elId,_data[elId],+msel.value,-1);
+  wsel.value='-1';
+}
+function onWeekChange(elId){
+  const msel=document.getElementById(elId+'-sel-month');
+  const wsel=document.getElementById(elId+'-sel-week');
+  updateKPI(elId,_data[elId],+msel.value,+wsel.value);
+}
+
+// ── Render subdivision ────────────────────────────────────────────────
+function renderSub(elId,d){
+  _data[elId]=d;
+  const MO=d.MONTHS||MONTHS, WLd=d.WL||WL;
+  // find last month with data for default selection
+  let defMi=MO.length-1;
+  for(let i=MO.length-1;i>=0;i--){if(d.pAP_m[MO[i].mi]!=null){defMi=i;break;}}
+  const pAP=d.pAP_m[MO[defMi].mi], pRC=d.pRC_m[MO[defMi].mi], pRT=d.pRT_m[MO[defMi].mi];
+  const defLabel=MO[defMi].n+', весь месяц';
+
+  document.getElementById(elId).innerHTML=`
+  <div class="filter-bar">
+    <span class="filter-label">Период:</span>
+    <select class="fsel" id="${elId}-sel-month" onchange="onMonthChange('${elId}')">
+      ${MO.map((m,i)=>`<option value="${i}"${i===defMi?' selected':''}>${m.n}</option>`).join('')}
+    </select>
+    <select class="fsel" id="${elId}-sel-week" onchange="onWeekChange('${elId}')">
+      <option value="-1" selected>Весь месяц</option>
+      ${MO[defMi].wi.map((wIdx,j)=>`<option value="${j}">${WLd[wIdx]}</option>`).join('')}
+    </select>
+    <span class="fbadge" id="${elId}-period-badge">${MO[defMi].n} · итого</span>
+  </div>
+  <div class="cards">
+    <div class="card c1">
+      <div class="clbl">Принятые / Прогноз продаж</div>
+      <div class="cval" id="${elId}-kp1">${fmtP(pAP)}</div>
+      <div class="cfcast" id="${elId}-fc1"></div>
+      <div class="csub">${defLabel}</div>
+      <span class="pill ${pillC(pAP,85,100)}">${fmtP(pAP)}</span>
+      <div class="cinsight" id="${elId}-ins1"></div>
+    </div>
+    <div class="card c2">
+      <div class="clbl">Реализации / Мощность</div>
+      <div class="cval" id="${elId}-kp2">${fmtP(pRC)}</div>
+      <div class="csub">${defLabel} · только отработанные недели</div>
+      <span class="pill ${pillC(pRC,75,95)}">${fmtP(pRC)}</span>
+      <div class="cinsight" id="${elId}-ins2"></div>
+    </div>
+    <div class="card c3">
+      <div class="clbl" id="${elId}-kp3-lbl">Реализации / ТБУ</div>
+      <div class="cval" id="${elId}-kp3">${fmtP(pRT)}</div>
+      <div class="cfcast" id="${elId}-fc3"></div>
+      <div class="csub">≥ 100% = выше точки окупаемости</div>
+      <span class="pill ${pillC(pRT,90,100)}">${fmtP(pRT)}</span>
+      <button class="qbtn" id="${elId}-rt-toggle" style="margin-top:6px;padding:3px 9px;font-size:9px" onclick="event.stopPropagation();toggleRtBase('${elId}')">база: ТБУ ⇄</button>
+      <div class="cinsight" id="${elId}-ins3"></div>
+    </div>
+  </div>
+
+  <div class="section-hdr">Принятые заказы vs Прогноз продаж</div>
+  <div class="chart-grid">
+    <div class="cbox">
+      <div class="ctitle">
+        <span>Объёмы, тыс. ₽ / неделя</span>
+      </div>
+      <div class="leg">
+        <div class="li"><div class="ld" style="background:rgba(59,130,246,.4);border:1.5px solid #3b82f6"></div>Прогноз продаж</div>
+        <div class="li"><div class="ld" style="background:rgba(16,185,129,.4);border:1.5px solid #10b981"></div>Принятые</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-b1"></canvas></div>
+    </div>
+    <div class="cbox">
+      <div class="ctitle">% Принятые / Прогноз продаж</div>
+      <div class="leg">
+        <div class="li"><div class="ll" style="background:#3b82f6"></div>% Принятые/Прогноз</div>
+        <div class="li"><div class="ll" style="background:#cbd5e1;height:1px"></div>100%</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-l1"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-hdr">Реализации vs Мощность</div>
+  <div class="chart-grid">
+    <div class="cbox">
+      <div class="ctitle">Объёмы, тыс. ₽ / неделя</div>
+      <div class="leg">
+        <div class="li"><div class="ld" style="background:rgba(59,130,246,.4);border:1.5px solid #3b82f6"></div>Мощность</div>
+        <div class="li"><div class="ld" style="background:rgba(139,92,246,.4);border:1.5px solid #8b5cf6"></div>Реализации</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-b2"></canvas></div>
+    </div>
+    <div class="cbox">
+      <div class="ctitle">% Реализации / Мощность</div>
+      <div class="leg">
+        <div class="li"><div class="ll" style="background:#8b5cf6"></div>% Реализации/Мощность</div>
+        <div class="li"><div class="ll" style="background:#cbd5e1;height:1px"></div>100%</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-l2"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-hdr" id="${elId}-b3-hdr">Реализации vs ТБУ</div>
+  <div class="chart-grid">
+    <div class="cbox">
+      <div class="ctitle">Объёмы, тыс. ₽ / неделя</div>
+      <div class="leg">
+        <div class="li"><div class="ld" style="background:rgba(245,158,11,.4);border:1.5px solid #f59e0b"></div><span id="${elId}-b3-leg1">ТБУ</span></div>
+        <div class="li"><div class="ld" style="background:rgba(139,92,246,.4);border:1.5px solid #8b5cf6"></div>Реализации</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-b3"></canvas></div>
+    </div>
+    <div class="cbox">
+      <div class="ctitle" id="${elId}-l3-title">% Реализации / ТБУ</div>
+      <div class="leg">
+        <div class="li"><div class="ll" style="background:#f59e0b"></div><span id="${elId}-l3-leg1">% Реализации/ТБУ</span></div>
+        <div class="li"><div class="ll" style="background:#cbd5e1;height:1px"></div>100%</div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-l3"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-hdr">Принятые заказы по контрагентам</div>
+  <div class="chart-single">
+    <div class="cbox">
+      <div class="ctitle">
+        Объёмы, тыс. ₽
+        <div class="leg" id="${elId}-b4-leg" style="margin:0 0 0 8px"></div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-b4"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-hdr">Реализации по контрагентам</div>
+  <div class="chart-single">
+    <div class="cbox">
+      <div class="ctitle">
+        Объёмы, тыс. ₽
+        <div class="leg" id="${elId}-b5-leg" style="margin:0 0 0 8px"></div>
+      </div>
+      <div class="cwrap"><canvas id="${elId}-b5"></canvas></div>
+    </div>
+  </div>
+
+  <div class="note">
+    Пунктирные линии на графиках = границы месяцев. * Июнь — данные за 3–4 недели из 5 (неделя 26 может быть неполной).
+    Принятые/Реализации = сумма всех контрагентов в разрезе ниже.
+  </div>`;
+
+  fillBreakdownLegend(elId,'b4',d.awBreakdown);
+  fillBreakdownLegend(elId,'b5',d.rwBreakdown);
+  requestAnimationFrame(()=>updateKPI(elId, d, defMi, -1));
+}
+
+// ── Quality (Shewhart control charts) ───────────────────────────────────
+const Q_SECTIONS = {
+  'КМ все виновники':    {dept:'korpus',   view:'all'},
+  'КМ ЦФО фабрика':      {dept:'korpus',   view:'factory'},
+  'ММ все виновники':    {dept:'myagkaya', view:'all'},
+  'ММ ЦФО фабрика':      {dept:'myagkaya', view:'factory'},
+};
+const Q_MONTH_NAMES=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const Q_MONTH_SHORT={'Январь':'Янв','Февраль':'Фев','Март':'Мар','Апрель':'Апр','Май':'Май','Июнь':'Июн','Июль':'Июл','Август':'Авг','Сентябрь':'Сен','Октябрь':'Окт','Ноябрь':'Ноя','Декабрь':'Дек'};
+// Коэффициент D2 карты Шухарта (метод размаха) зависит от размера окна (n периодов) —
+// в исходной таблице «Диаграммы» он чуть меньше для более коротких рядов.
+// Значения взяты напрямую из формул заказчика (столбец D2 для n=13..17 точек).
+const Q_D2_TABLE={13:5.647,14:5.696,15:5.741,16:5.782,17:5.82};
+function qD2For(n){
+  const ns=Object.keys(Q_D2_TABLE).map(Number).sort((a,b)=>a-b);
+  if(Q_D2_TABLE[n]!=null) return Q_D2_TABLE[n];
+  if(n<ns[0]) return Q_D2_TABLE[ns[0]];
+  if(n>ns[ns.length-1]) return Q_D2_TABLE[ns[ns.length-1]];
+  return Q_D2_TABLE[ns[0]];
+}
+function qD2Sigma(knownVals){
+  const range=Math.max(...knownVals)-Math.min(...knownVals);
+  return range/qD2For(knownVals.length);
+}
+// Сигма «на конец периода»: пересчёт по тому же методу (размах/D2), но на данных,
+// известных на момент N, N-1, ... N-4 месяцев назад (5 точек, как в листе «Диаграммы») —
+// так в исходной таблице отслеживают стабильность системы (рост сигмы = менее стабильна).
+function qHistSigmas(vals,months){
+  const res=[];
+  for(let k=0;k<5;k++){
+    const slice=vals.slice(0,vals.length-k);
+    const known=slice.filter(v=>v!=null);
+    if(known.length<2){res.push(null);continue;}
+    res.push({sigma:qD2Sigma(known),label:months[months.length-1-k],n:known.length,d2:qD2For(known.length)});
+  }
+  return res; // [текущая, пред.месяц, позапред.месяц]
+}
+
+function parseQualityRows(rows){
+  // Row 1 (index0): sparse year markers at the first column of each year block.
+  // Row 2 (index1): month names starting at column C (index2) until a non-month label.
+  const yearRow=rows[0]||[], headerRow=rows[1]||[];
+  const yearCols={};
+  yearRow.forEach((v,i)=>{ if(typeof v==='number') yearCols[i]=v; });
+  const months=[]; let curYear=null;
+  for(let i=2;i<headerRow.length;i++){
+    const v=headerRow[i];
+    if(yearCols[i]!=null) curYear=yearCols[i];
+    if(!Q_MONTH_NAMES.includes(v)) break;
+    months.push((Q_MONTH_SHORT[v]||v)+"'"+String(curYear).slice(2));
+  }
+  const n=months.length;
+  const out={};
+  let sec=null;
+  for(const row of rows){
+    const lb=(row[1]||'').toString().trim();
+    if(Q_SECTIONS[lb]){ sec=lb; continue; }
+    if(sec && lb==='Количество рекламаций'){
+      const vals=row.slice(2,2+n).map(v=>v===''||v==null?null:Number(v));
+      const known=vals.filter(v=>v!=null);
+      const mean=known.reduce((a,b)=>a+b,0)/known.length;
+      const sigma=qD2Sigma(known);
+      const sigmaHist=qHistSigmas(vals,months);
+      const {dept,view}=Q_SECTIONS[sec];
+      out[dept]=out[dept]||{};
+      out[dept][view]={vals,mean,sigma,sigmaHist,months};
+    }
+    // «%% рекламаций ...» — процент от реализации диван.ру, идёт чуть ниже «Количество рекламаций»
+    // внутри той же секции (sec остаётся выставленным до следующего заголовка секции).
+    if(sec && lb.startsWith('%% рекламаций')){
+      const pctVals=row.slice(2,2+n).map(v=>v===''||v==null?null:Number(v)*100);
+      const {dept,view}=Q_SECTIONS[sec];
+      if(out[dept] && out[dept][view]) out[dept][view].pct=pctVals;
+    }
+  }
+  return out;
+}
+
+function qualityFallback(){
+  const months=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26'];
+  const mk=(vals,mean,sigma,pct)=>({vals,mean,sigma,sigmaHist:qHistSigmas(vals,months),months,pct:pct.map(p=>p*100)});
+  return {
+    korpus:{
+      all:    mk([745,828,983,976,757,722,853,938,811,1037,1015,888,742,695,688,628,630], 819.7647058823529, 70.27491408934708,
+                 [0.09053347915907158,0.10757437962842666,0.11336639372621382,0.12509612919764163,0.09634720631284205,0.09743589743589744,0.10745779793398841,0.10795258372655081,0.08851779087535473,0.10837078064583551,0.11219188681330827,0.08941697714228175,0.09696811291165708,0.09090909090909091,0.08810347035471891,0.08082368082368083,0.0812]),
+      factory:mk([200,230,307,319,273,248,332,304,271,361,368,301,221,226,184,174,223],   267.1764705882353, 33.33333333333333,
+                 [0.02430428970713331,0.029881772119007406,0.03540537423595894,0.04088695206357344,0.034746086292478044,0.03346828609986505,0.0418241370622323,0.03498676487512947,0.029578694608164157,0.037725990176611976,0.04067646733723886,0.030309133017822978,0.028881338212232096,0.029561805101373448,0.023562556025099244,0.022393822393822392,0.0287]),
+    },
+    myagkaya:{
+      all:    mk([927,935,953,902,852,860,878,924,1002,1114,1041,1179,1049,885,931,876,757], 945, 72.5085910652921,
+                 [0.07019536574284416,0.06227520980418276,0.06442236192793889,0.06344963421496905,0.06546292739147137,0.06832989035436199,0.06201440881480435,0.0659481835700521,0.06718069057995307,0.06978638100607655,0.06655584681286363,0.06198738170347003,0.08318134961541511,0.06896820448877805,0.0672202166064982,0.06319890339802323,0.0519]),
+      factory:mk([262,256,252,292,301,280,281,316,376,374,363,407,364,308,332,301,342],     318.05882352941177, 26.63230240549828,
+                 [0.019839466908980766,0.01705075263087785,0.017035084161427703,0.020540236353404615,0.023127160968113715,0.02224694104560623,0.019847436078542165,0.02255370780101349,0.025209520616828695,0.023429179978700747,0.02320823476759798,0.02139852786540484,0.028863690428990563,0.024002493765586035,0.02397111913357401,0.021715604934708897,0.0234]),
+    },
+  };
+}
+
+// ── Сводные дефекты (лист «Сводная ММ+Корпус») ──────────────────────────
+function parseDefectRows(rows,months){
+  const n=months.length;
+  const out={};
+  let sec=null, collecting=false;
+  for(const row of rows){
+    const c0=row[0], c1=(row[1]||'').toString().trim();
+    if((c0===''||c0==null) && Q_SECTIONS[c1]){ sec=Q_SECTIONS[c1]; collecting=false; continue; }
+    if(c1==='Причина обращения'){ collecting=true; continue; }
+    if(!sec)continue;
+    if(c1==='ИТОГО рекламаций'){ collecting=false; sec=null; continue; }
+    if(collecting && c1){
+      const vals=row.slice(2,2+n).map(v=>v===''||v==null?0:Number(v));
+      const {dept,view}=sec;
+      out[dept]=out[dept]||{};
+      out[dept][view]=out[dept][view]||[];
+      out[dept][view].push({label:c1,vals});
+    }
+  }
+  return out;
+}
+function qMedian(arr){
+  const s=[...arr].sort((a,b)=>a-b);
+  const mid=Math.floor(s.length/2);
+  return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+// Цвет ячейки тепловой карты: медиана = нейтральный белый, выше медианы — краснее, ниже — зеленее.
+// Отклонение капается на ±100% от медианы, чтобы выбросы не «забивали» всю шкалу.
+function qHeatColor(value,median){
+  const GREEN=[16,185,129], WHITE=[255,255,255], RED=[239,68,68];
+  const lerp=(a,b,t)=>a.map((c,i)=>Math.round(c+(b[i]-c)*t));
+  let ratio;
+  if(median>0) ratio=value/median;
+  else ratio = value>0?2:1;
+  const capped=Math.max(0,Math.min(2,ratio));
+  const rgb = capped<=1 ? lerp(GREEN,WHITE,capped) : lerp(WHITE,RED,capped-1);
+  return `rgb(${rgb.join(',')})`;
+}
+function qDefectsFallback(){
+  // Минимальный офлайн-набор (если живой fetch недоступен) — реальные данные из листа
+  // «Сводная ММ+Корпус», для отображения структуры таблицы.
+  const months=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26'];
+  const D=(label,vals)=>({label,vals});
+  return {months,data:{
+    korpus:{
+      all:[D('Механическое повреждение',[344,422,496,422,335,326,358,408,328,427,411,339,334,323,305,279,298]),
+           D('Некомплект/недовложение',[82,83,117,155,125,106,150,136,118,160,133,134,88,81,84,61,68])],
+      factory:[D('Механическое повреждение',[13,19,42,38,48,42,49,39,31,31,38,25,28,25,21,25,21])],
+    },
+    myagkaya:{
+      all:[D('Механическое повреждение',[325,290,339,274,260,235,267,340,298,355,312,325,286,263,250,227,231])],
+      factory:[D('Механическое повреждение',[34,19,31,29,37,27,31,51,48,35,43,40,29,37,39,41,41])],
+    },
+  }};
+}
+
+function zoneColor(v,mean,sigma){
+  // В пределах ±2σ — обычный разброс (синий), независимо от стороны.
+  // Выше +2σ/+3σ — плохое отклонение (оранжевый/красный).
+  // Ниже -2σ/-3σ — значимое улучшение (зелёный), т.к. меньше рекламаций — лучше.
+  if(v==null)return '#94a3b8';
+  const z=(v-mean)/sigma;
+  if(z>3) return '#ef4444';
+  if(z>2) return '#f59e0b';
+  if(z<-2) return '#10b981';
+  return '#3b82f6';
+}
+
+function controlChart(id,d){
+  killChart(id);
+  const {vals,mean,sigma,months}=d;
+  const flat=v=>months.map(()=>v);
+  const ctx=document.getElementById(id).getContext('2d');
+  CI[id]=new Chart(ctx,{
+    type:'line',
+    data:{labels:months,datasets:[
+      {label:'+3σ',data:flat(mean+3*sigma),borderColor:'#ef4444',borderWidth:1,borderDash:[5,3],pointRadius:0,tension:0},
+      {label:'+2σ',data:flat(mean+2*sigma),borderColor:'#f59e0b',borderWidth:1,borderDash:[5,3],pointRadius:0,tension:0},
+      {label:'+1σ',data:flat(mean+sigma),  borderColor:'#cbd5e1',borderWidth:1,borderDash:[3,3],pointRadius:0,tension:0},
+      {label:'ср.знач',data:flat(mean),    borderColor:'#64748b',borderWidth:1.5,pointRadius:0,tension:0},
+      {label:'-1σ',data:flat(mean-sigma),  borderColor:'#cbd5e1',borderWidth:1,borderDash:[3,3],pointRadius:0,tension:0},
+      {label:'-2σ',data:flat(mean-2*sigma),borderColor:'#10b981',borderWidth:1,borderDash:[5,3],pointRadius:0,tension:0},
+      {label:'-3σ',data:flat(mean-3*sigma),borderColor:'#10b981',borderWidth:1,borderDash:[5,3],pointRadius:0,tension:0},
+      {label:'Рекламации',data:vals,borderColor:'#1e3a5f',backgroundColor:'transparent',borderWidth:2,
+        pointBackgroundColor:vals.map(v=>zoneColor(v,mean,sigma)),pointBorderColor:vals.map(v=>zoneColor(v,mean,sigma)),
+        pointRadius:4,pointHoverRadius:6,tension:.15,spanGaps:true,order:0},
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          filter:item=>item.dataset.label==='Рекламации',
+          callbacks:{title:([c])=>c.label,label:c=>' Рекламаций: '+fmtN(c.parsed.y)},
+        },
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b'},
+           title:{display:true,text:'шт.',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+const _qState={dept:'korpus'};
+const Q_VIEW_LABEL={all:'Все виновники',factory:'Вина фабрики'};
+function qBlockHTML(view){
+  return `
+  <div class="section-hdr">${Q_VIEW_LABEL[view]}</div>
+  <div class="qcards">
+    <div class="card c1 qsigcard" onclick="qToggleMonthDrill('${view}')">
+      <div class="clbl" id="q-${view}-last-label">Месяц<span class="qcaret" id="q-${view}-last-caret">▾ все месяцы</span></div>
+      <div class="cval" id="q-${view}-last">—</div>
+      <div class="qdelta" id="q-${view}-last-delta"></div>
+    </div>
+    <div class="card c2"><div class="clbl">Среднее (ср.знач)</div><div class="cval" id="q-${view}-mean">—</div></div>
+    <div class="card c3 qsigcard" onclick="qToggleSigmaDrill('${view}')">
+      <div class="clbl">Сигма (σ)<span class="qcaret" id="q-${view}-sigma-caret">▾ динамика</span></div>
+      <div class="cval" id="q-${view}-sigma">—</div>
+      <div class="qdelta" id="q-${view}-sigma-delta"></div>
+    </div>
+    <div class="card c1">
+      <div class="clbl">Статус процесса<span class="qhelp" onclick="event.stopPropagation();qToggleHelp('${view}','status')">?</span></div>
+      <div class="cval" id="q-${view}-status" style="font-size:14px">—</div>
+    </div>
+  </div>
+  <div class="qdrill" id="q-${view}-last-drill"></div>
+  <div class="qdrill" id="q-${view}-sigma-drill"></div>
+  <div class="qhelpbox" id="q-${view}-status-help">
+    Показывает положение последней точки относительно среднего и границ ±2σ/±3σ:<br>
+    <b>В норме</b> — точка в пределах ±2σ от среднего (с любой стороны) — обычный разброс данных.<br>
+    <b>Хорошо</b> — точка ниже -2σ — значимое снижение рекламаций, действительное улучшение.<br>
+    <b>Отклонение</b> — точка выше +2σ — сигнал, стоит проверить причину.<br>
+    <b>Вне контроля</b> — точка выше +3σ — процесс нестабилен, нужно искать причину немедленно.
+  </div>
+  <span class="qpatlink" onclick="qToggleHelp('${view}','patterns')">ⓘ что значат паттерны ниже</span>
+  <div class="qhelpbox" id="q-${view}-patterns-help">
+    6 критериев нестабильности процесса (ГОСТ Р 50779.42 / ISO 8258) — каждый ищет неслучайную
+    закономерность в последних точках графика. Зелёный — закономерность в «хорошую» сторону
+    (рекламаций меньше); красный — в «плохую» (рекламаций больше, нужно разбираться); серый — норма.
+    <ul>
+      <li><b>1 точка &gt;3σ</b> — единичный резкий сбой/всплеск, точка вне контрольных границ.</li>
+      <li><b>9 точек подряд</b> — 9 точек подряд по одну сторону от среднего — устойчивый сдвиг уровня.</li>
+      <li><b>6 точек — тренд</b> — 6 точек подряд монотонно растут или падают — выраженный тренд.</li>
+      <li><b>14 точек зигзаг</b> — 14 точек подряд поочерёдно растут/падают — нетипичная цикличность.</li>
+      <li><b>2 из 3 за 2σ</b> — 2 из последних 3 точек дальше ±2σ с одной стороны — приближение к границе.</li>
+      <li><b>4 из 5 за 1σ</b> — 4 из последних 5 точек дальше ±1σ с одной стороны — небольшой, но устойчивый сдвиг.</li>
+    </ul>
+  </div>
+  <div class="qpatterns" id="q-${view}-patterns"></div>
+  <span class="qpatlink" id="q-${view}-ai-link" style="color:#7c3aed" onclick="qToggleHelp('${view}','ai')">✨ ИИ-анализ карты</span>
+  <div class="qhelpbox" id="q-${view}-ai-help"></div>
+  <div class="qbig">
+    <div class="ctitle">Карта Шухарта — количество рекламаций, шт.</div>
+    <div class="leg">
+      <div class="li"><div class="ll" style="background:#1e3a5f"></div>Факт</div>
+      <div class="li"><div class="ll" style="background:#64748b"></div>ср.знач</div>
+      <div class="li"><div class="ll" style="background:#cbd5e1;height:1px"></div>±1σ</div>
+      <div class="li"><div class="ll" style="background:#f59e0b"></div>+2σ</div>
+      <div class="li"><div class="ll" style="background:#ef4444"></div>+3σ</div>
+      <div class="li"><div class="ll" style="background:#10b981"></div>−2σ / −3σ</div>
+    </div>
+    <div class="qwrap"><canvas id="q-${view}-chart"></canvas></div>
+  </div>`;
+}
+function renderQuality(elId,data){
+  document.getElementById(elId).innerHTML=`
+  <div class="qtoggle">
+    <button class="qbtn" id="q-dept-korpus" onclick="qSetDept('korpus')">Корпусная мебель</button>
+    <button class="qbtn" id="q-dept-myagkaya" onclick="qSetDept('myagkaya')">Мягкая мебель</button>
+  </div>
+  ${qBlockHTML('all')}
+  ${qBlockHTML('factory')}
+  <div class="note">В пределах ±2σ (синий) — обычный разброс, независимо от стороны. Ниже -2σ (зелёный) — значимое улучшение. Выше +2σ (оранжевый) — сигнал ухудшения; выше +3σ (красный) — процесс вне контроля.</div>`;
+  window._qData=data;
+  qRefresh();
+}
+function qSetDept(dept){_qState.dept=dept;qRefresh();}
+function qRefresh(){
+  document.getElementById('q-dept-korpus').classList.toggle('on',_qState.dept==='korpus');
+  document.getElementById('q-dept-myagkaya').classList.toggle('on',_qState.dept==='myagkaya');
+  ['all','factory'].forEach(view=>{
+    const d=window._qData[_qState.dept][view];
+    const last=d.vals[d.vals.length-1];
+    const lastLabel=d.months[d.months.length-1];
+    document.getElementById(`q-${view}-last`).innerHTML=`${fmtN(last)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> рекламаций</span>`;
+    const labelEl=document.getElementById(`q-${view}-last-label`);
+    if(labelEl) labelEl.firstChild.textContent=lastLabel;
+    // Дельта рекламаций: текущий месяц vs предыдущий. Меньше — лучше (зелёная стрелка вниз),
+    // больше — хуже (красная стрелка вверх) — оформление как у карточки сигмы.
+    const prevMonthVal=d.vals[d.vals.length-2];
+    const lastDeltaEl=document.getElementById(`q-${view}-last-delta`);
+    if(lastDeltaEl && last!=null && prevMonthVal!=null){
+      const mdelta=last-prevMonthVal;
+      if(Math.abs(mdelta)<1){
+        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">0 без изменений</span>`;
+      } else if(mdelta>0){
+        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#ef4444">↑</span><span class="qnum" style="color:#ef4444">+${fmtN(mdelta)}</span>`;
+      } else {
+        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#10b981">↓</span><span class="qnum" style="color:#10b981">${fmtN(mdelta)}</span>`;
+      }
+    }
+    qRenderMonthDrill(view,d);
+    document.getElementById(`q-${view}-mean`).innerHTML=`${fmtN(d.mean)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> рекламаций</span>`;
+    document.getElementById(`q-${view}-sigma`).textContent=d.sigma.toFixed(1);
+    // Дельта: текущая сигма vs предыдущий период. Рост сигмы (хуже, менее стабильно) — крупная
+    // красная стрелка вверх; снижение (лучше, стабильнее) — крупная зелёная стрелка вниз.
+    const hist=d.sigmaHist||[];
+    const deltaEl=document.getElementById(`q-${view}-sigma-delta`);
+    if(deltaEl && hist[0] && hist[1]){
+      const delta=hist[0].sigma-hist[1].sigma;
+      if(Math.abs(delta)<0.05){
+        deltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">0.0 без изменений</span>`;
+      } else if(delta>0){
+        deltaEl.innerHTML=`<span class="qarrow" style="color:#ef4444">↑</span><span class="qnum" style="color:#ef4444">+${delta.toFixed(1)}</span>`;
+      } else {
+        deltaEl.innerHTML=`<span class="qarrow" style="color:#10b981">↓</span><span class="qnum" style="color:#10b981">${delta.toFixed(1)}</span>`;
+      }
+    }
+    qRenderSigmaDrill(view,hist);
+    // В пределах ±2σ — обычный разброс («В норме»), независимо от стороны.
+    // Существенное отклонение вверх (>2σ/>3σ) — плохо; существенное отклонение вниз (<-2σ) — хорошо.
+    const z=(last-d.mean)/d.sigma;
+    const statusEl=document.getElementById(`q-${view}-status`);
+    if(z>3){statusEl.innerHTML='Вне контроля <span class="qstat bad">&gt;3σ</span>';}
+    else if(z>2){statusEl.innerHTML='Отклонение <span class="qstat warn">&gt;2σ</span>';}
+    else if(z<-2){statusEl.innerHTML='Хорошо <span class="qstat ok">&lt;-2σ</span>';}
+    else {statusEl.innerHTML='В норме <span class="qstat ok">±2σ</span>';}
+    qRenderPatterns(view,d);
+    qRenderAIAnalysis(view,d,z);
+    controlChart(`q-${view}-chart`,d);
+  });
+}
+
+// Раскрывающийся список по клику на карточку месяца: значения за все месяцы, новые сверху.
+function qRenderMonthDrill(view,d){
+  const el=document.getElementById(`q-${view}-last-drill`);
+  if(!el)return;
+  const rows=[];
+  for(let i=d.vals.length-1;i>=0;i--){
+    const v=d.vals[i];
+    const prev=i>0?d.vals[i-1]:null;
+    let arrowHtml='<span class="qd-arrow" style="color:#94a3b8">—</span>';
+    if(v!=null&&prev!=null){
+      const delta=v-prev;
+      if(Math.abs(delta)>=1){
+        arrowHtml=delta>0
+          ? `<span class="qd-arrow" style="color:#ef4444">↑ +${fmtN(delta)}</span>`
+          : `<span class="qd-arrow" style="color:#10b981">↓ ${fmtN(delta)}</span>`;
+      }
+    }
+    rows.push(`<tr><td>${d.months[i]}</td><td>${fmtN(v)}</td><td>${arrowHtml}</td></tr>`);
+  }
+  el.innerHTML=`<table><tbody>${rows.join('')}</tbody></table>`;
+}
+function qToggleMonthDrill(view){
+  const el=document.getElementById(`q-${view}-last-drill`);
+  const caret=document.getElementById(`q-${view}-last-caret`);
+  if(!el)return;
+  const show=!el.classList.contains('show');
+  el.classList.toggle('show',show);
+  if(caret) caret.textContent=show?'▴ скрыть':'▾ все месяцы';
+}
+// Кликабельная подсказка (вместо hover-тултипа, который не открывался) —
+// открывает/закрывает блок-пояснение под карточкой или блоком паттернов.
+function qToggleHelp(view,kind){
+  const el=document.getElementById(`q-${view}-${kind}-help`);
+  if(!el)return;
+  el.classList.toggle('show');
+}
+
+// ── Анализ паттернов (6 критериев нестабильности процесса, ГОСТ Р 50779.42 / ISO 8258) ──
+const Q_PATTERNS=[
+  {id:'r1',label:'1 точка >3σ',     desc:'Точка выходит за ±3σ — единичный резкий сбой/всплеск, процесс вне контроля.'},
+  {id:'r2',label:'9 точек подряд',  desc:'9 точек подряд по одну сторону от среднего — устойчивый сдвиг уровня процесса.'},
+  {id:'r3',label:'6 точек — тренд', desc:'6 точек подряд монотонно растут или падают — выраженный тренд.'},
+  {id:'r4',label:'14 точек зигзаг', desc:'14 точек подряд поочерёдно растут/падают — нетипичная цикличность, не случайность.'},
+  {id:'r5',label:'2 из 3 за 2σ',    desc:'2 из последних 3 точек выходят за ±2σ с одной стороны — приближение к границе контроля.'},
+  {id:'r6',label:'4 из 5 за 1σ',    desc:'4 из последних 5 точек выходят за ±1σ с одной стороны — небольшой, но устойчивый сдвиг.'},
+];
+function qDetectPatterns(vals,mean,sigma){
+  const n=vals.length, res={};
+  const last=vals[n-1];
+  res.r1={triggered:last!=null&&Math.abs(last-mean)>3*sigma, side: last>mean?'above':'below'};
+  const sameSideRun=(k)=>{
+    if(n<k)return{triggered:false};
+    const s=vals.slice(n-k);
+    if(s.some(x=>x==null))return{triggered:false};
+    const above=s.every(x=>x>mean), below=s.every(x=>x<mean);
+    return {triggered:above||below, side: above?'above':below?'below':null};
+  };
+  res.r2=sameSideRun(9);
+  (function(){
+    const k=6; if(n<k){res.r3={triggered:false};return;}
+    const s=vals.slice(n-k);
+    if(s.some(x=>x==null)){res.r3={triggered:false};return;}
+    let inc=true,dec=true;
+    for(let i=1;i<s.length;i++){ if(s[i]<=s[i-1])inc=false; if(s[i]>=s[i-1])dec=false; }
+    res.r3={triggered:inc||dec, side: inc?'above':dec?'below':null};
+  })();
+  (function(){
+    const k=14; if(n<k){res.r4={triggered:false};return;}
+    const s=vals.slice(n-k);
+    if(s.some(x=>x==null)){res.r4={triggered:false};return;}
+    let alt=true;
+    for(let i=2;i<s.length;i++){ if((s[i-1]-s[i-2])*(s[i]-s[i-1])>=0){alt=false;break;} }
+    res.r4={triggered:alt, side:null};
+  })();
+  const beyondCount=(k,mult)=>{
+    if(n<k)return{above:0,below:0};
+    const s=vals.slice(n-k);
+    return {
+      above:s.filter(x=>x!=null&&x-mean>mult*sigma).length,
+      below:s.filter(x=>x!=null&&mean-x>mult*sigma).length,
+    };
+  };
+  (function(){
+    const {above,below}=beyondCount(3,2);
+    res.r5={triggered:above>=2||below>=2, side:above>=2?'above':below>=2?'below':null};
+  })();
+  (function(){
+    const {above,below}=beyondCount(5,1);
+    res.r6={triggered:above>=4||below>=4, side:above>=4?'above':below>=4?'below':null};
+  })();
+  return res;
+}
+function qRenderPatterns(view,d){
+  const el=document.getElementById(`q-${view}-patterns`);
+  if(!el)return;
+  const det=qDetectPatterns(d.vals,d.mean,d.sigma);
+  el.innerHTML=Q_PATTERNS.map(p=>{
+    const r=det[p.id]||{triggered:false};
+    let cls='qp-ok', mark='○', note='норма';
+    if(r.triggered){
+      if(r.side==='below'){cls='qp-good';mark='✓';note='хорошо (ниже среднего)';}
+      else if(r.side==='above'){cls='qp-bad';mark='⚠';note='сигнал ухудшения';}
+      else {cls='qp-warn';mark='⚠';note='нетипичный паттерн';}
+    }
+    return `<div class="qpat ${cls}" onclick="qToggleHelp('${view}','patterns')"><span class="qp-mark">${mark}</span>${p.label}<div style="font-weight:400;margin-top:2px">${note}</div></div>`;
+  }).join('');
+}
+
+// ── «ИИ-анализ» карты Шухарта ────────────────────────────────────────────
+// Без вызова модели: связный текстовый вывод, собранный по правилам из тех же данных,
+// что уже считаются на странице (сигма, её история, статус точки, 6 паттернов).
+// Отвечает на: устойчива ли система, улучшается/ухудшается, ухудшается ли контроль
+// (растёт ли сигма), какие конкретно закономерности обнаружены.
+function qSigmaTrendInfo(sigmaHist){
+  const chron=(sigmaHist||[]).filter(Boolean).slice().reverse(); // от старого к новому
+  if(chron.length<2) return {dir:'na',text:'недостаточно истории, чтобы оценить тренд сигмы'};
+  const first=chron[0].sigma, last=chron[chron.length-1].sigma;
+  const delta=last-first, pct=first?(delta/first*100):0;
+  if(Math.abs(delta)<0.05*first || Math.abs(delta)<0.5){
+    return {dir:'flat',text:`сигма держится стабильно (${first.toFixed(1)} → ${last.toFixed(1)}) за последние ${chron.length} периодов`};
+  }
+  if(delta>0){
+    return {dir:'up',text:`сигма выросла с ${first.toFixed(1)} до ${last.toFixed(1)} (${pct>=0?'+':''}${pct.toFixed(0)}%) за последние ${chron.length} периодов — разброс увеличивается, контроль слабеет`};
+  }
+  return {dir:'down',text:`сигма снизилась с ${first.toFixed(1)} до ${last.toFixed(1)} (${pct.toFixed(0)}%) за последние ${chron.length} периодов — разброс уменьшается, контроль усиливается`};
+}
+// Практическая интерпретация каждого из 6 критериев (не статистика, а производственный смысл):
+// что значит, насколько серьёзно, и что обычно является причиной.
+const Q_PATTERN_INTERP={
+  r1:{meaning:'Один период ушёл далеко за пределы нормального разброса — резкий единичный скачок.',
+      severity:'Высокая — особая причина, требует немедленной реакции.',
+      causes:'Обычно разовое событие: сбой партии материала, авария оборудования, ошибка измерения/учёта, форс-мажор у клиента.'},
+  r2:{meaning:'Девять периодов подряд держатся по одну сторону от среднего — уровень процесса сместился, а не просто колеблется.',
+      severity:'Средняя-высокая — это не случайность, а устойчивый сдвиг уровня.',
+      causes:'Системная причина: изменился ассортимент/спрос, новый персонал, изменение нормативов, новый поставщик материала.'},
+  r3:{meaning:'Шесть периодов подряд непрерывно растут или падают — выраженный направленный тренд, а не колебания.',
+      severity:'Средняя — если тренд в плохую сторону, скоро выйдет за контрольные границы.',
+      causes:'Постепенный процесс: износ оборудования, накопление проблем с качеством материала, сезонный эффект, постепенное изменение спроса.'},
+  r4:{meaning:'14 периодов подряд чередуются вверх-вниз — нетипичная цикличность, не похожая на случайный шум.',
+      severity:'Средняя — обычно сигнал о скрытом регулярном факторе.',
+      causes:'Чередование двух смен/партий/поставщиков, систематическая ошибка измерения или учёта, сезонность внутри ряда.'},
+  r5:{meaning:'2 из последних 3 точек оказались далеко (за ±2σ) от среднего с одной стороны — процесс приближается к выходу из-под контроля.',
+      severity:'Высокая — на грани перехода в нестабильное состояние.',
+      causes:'Начинающийся системный сдвиг или серия похожих особых причин подряд.'},
+  r6:{meaning:'4 из последних 5 точек ушли за ±1σ с одной стороны — небольшой, но устойчивый сдвиг уровня.',
+      severity:'Низкая-средняя — пока не критично, но тенденция явная.',
+      causes:'Слабый, но постоянный фактор: небольшое изменение в работе персонала, чуть другая партия материала, погрешность настройки оборудования.'},
+};
+function qRenderAIAnalysis(view,d,z){
+  const el=document.getElementById(`q-${view}-ai-help`);
+  if(!el)return;
+  const det=qDetectPatterns(d.vals,d.mean,d.sigma);
+  const active=Q_PATTERNS.map(p=>({...p,r:det[p.id]})).filter(p=>p.r&&p.r.triggered);
+  const badActive=active.filter(p=>p.r.side==='above'||p.r.side==null);
+  const sigmaInfo=qSigmaTrendInfo(d.sigmaHist);
+  const last=d.vals[d.vals.length-1];
+  const lastLabel=d.months[d.months.length-1];
+  const ucl=d.mean+3*d.sigma, lcl=Math.max(0,d.mean-3*d.sigma);
+  const critical=badActive.some(p=>p.id==='r1'||p.id==='r5')||z>3; // основания для немедленных действий
+  const warning=badActive.some(p=>p.id==='r2'||p.id==='r3'||p.id==='r4'||p.id==='r6');
+
+  // 1. Вердикт устойчивости
+  let verdictCls,verdictTxt;
+  if(critical){verdictCls='bad';verdictTxt=`✗ Процесс статистически неустойчив. Точка ${fmtN(last)} шт. (${lastLabel}) либо выходит за ±3σ, либо подтверждена сработавшим критическим правилом (${badActive.map(p=>p.label).join(', ')}) — это не случайный разброс, а сигнал особой причины.`;}
+  else if(warning){verdictCls='warn';verdictTxt=`⚠ Процесс пограничный. Резкого выброса за ±3σ нет, но сработали правила (${badActive.map(p=>p.label).join(', ')}), указывающие на неслучайный сдвиг — формально процесс уже не «чисто случайный».`;}
+  else {verdictCls='ok';verdictTxt='✓ Процесс статистически устойчив — все точки укладываются в случайный разброс относительно контрольных границ, неслучайных закономерностей не обнаружено.';}
+
+  // 2. Интерпретация паттернов
+  const patternsHtml=active.length
+    ? active.map(p=>{
+        const info=Q_PATTERN_INTERP[p.id];
+        const sideTxt=p.r.side==='below'?'в хорошую сторону (снижение)':p.r.side==='above'?'в плохую сторону (рост)':'цикличность без явного знака';
+        return `<div style="margin-bottom:8px"><b>${p.label}</b> (${sideTxt})<br>
+          <span style="color:#475569">${info.meaning}</span><br>
+          <b>Серьёзность:</b> ${info.severity}<br>
+          <b>Типичная причина:</b> ${info.causes}</div>`;
+      }).join('')
+    : '<div>Ни один из 6 критериев не сработал — поведение точек статистически случайно, отдельных причин искать не требуется.</div>';
+
+  // 3. Тренд сигмы
+  const sigmaDirTxt=sigmaInfo.dir==='up'?'растёт':sigmaInfo.dir==='down'?'снижается':'почти не меняется';
+  const sigmaMeaning=sigmaInfo.dir==='up'
+    ? 'Это значит, что контроль над вариабельностью слабеет: процесс становится менее предсказуемым, разброс значений вокруг среднего увеличивается.'
+    : sigmaInfo.dir==='down'
+    ? 'Это значит, что контроль над вариабельностью усиливается: процесс становится более предсказуемым, разброс значений сужается.'
+    : 'Вариабельность процесса не меняется — уровень контроля стабилен.';
+
+  // 4. Последняя точка
+  const distToEdge = z>=0 ? ucl-last : last-lcl;
+  const pointKind = active.some(p=>['r2','r3','r4','r6'].includes(p.id)) ? 'часть выявленного паттерна, а не разовый выброс' : (Math.abs(z)>3?'похоже на разовый выброс (выходит за контрольные границы)':'обычное случайное колебание');
+
+  // 5. Производственный диагноз
+  const goodActive=active.filter(p=>p.r.side==='below');
+  const hasSpecial=badActive.some(p=>p.id==='r1'||p.id==='r5');
+  const hasSystemic=badActive.some(p=>p.id==='r2'||p.id==='r3'||p.id==='r4'||p.id==='r6');
+  let diagnosisTxt;
+  if(hasSpecial&&hasSystemic) diagnosisTxt='Картина смешанная: есть признаки и разовых сбоев (особые причины), и устойчивого системного сдвига. Стоит сначала разобраться с резкими выбросами, затем — с системной причиной тренда/сдвига.';
+  else if(hasSpecial) diagnosisTxt='Похоже на особую (специальную) причину — резкое отклонение, не связанное с обычным ходом процесса. Системные изменения процесса при этом необязательны.';
+  else if(hasSystemic) diagnosisTxt='Похоже на системную (общую) причину вариации — устойчивый сдвиг или тренд, встроенный в сам процесс (а не разовая случайность).';
+  else if(goodActive.length>0) diagnosisTxt=`Сработавшие закономерности (${goodActive.map(p=>p.label).join(', ')}) — в хорошую сторону: устойчивое и неслучайное снижение рекламаций, а не проблема процесса. Особой или системной причины для тревоги не зафиксировано.`;
+  else diagnosisTxt='Особых причин для диагноза нет — характер точек не отличается от обычной случайной вариации процесса.';
+
+  // 6. Рекомендации
+  let recoHtml;
+  if(critical){
+    recoHtml=`<b>Немедленно:</b> найти и устранить причину выброса/критического сигнала по ${lastLabel} (${badActive.map(p=>p.label).join(', ')}) — проверить смену/партию материала/оборудование за этот период.<br>
+      <b>В ближайшие недели:</b> ${warning?'дополнительно разобрать причины менее критичных паттернов ('+badActive.filter(p=>p.id!=='r1'&&p.id!=='r5').map(p=>p.label).join(', ')+').':'проследить, не повторится ли отклонение в следующем периоде.'}`;
+  } else if(warning){
+    recoHtml=`<b>Немедленно:</b> явных критических сигналов нет, срочных действий не требуется.<br>
+      <b>В ближайшие недели:</b> разобраться в причине сработавших правил (${badActive.map(p=>p.label).join(', ')}) — это не случайность, и без вмешательства точки могут выйти за контрольные границы.`;
+  } else if(goodActive.length>0){
+    recoHtml=`<b>Ничего</b> — процесс стабилен, и закономерность (${goodActive.map(p=>p.label).join(', ')}) говорит об улучшении. Стоит зафиксировать, что изменилось в этот период, как лучшую практику.`;
+  } else {
+    recoHtml='<b>Ничего</b> — процесс стабилен, особых действий не требуется. Продолжайте обычный мониторинг.';
+  }
+
+  el.innerHTML=`
+    <div style="margin-bottom:10px"><b>1. Вердикт устойчивости</b><br><span class="cinsight ${verdictCls}" style="display:block;margin-top:3px">${verdictTxt}</span></div>
+    <div style="margin-bottom:10px"><b>2. Интерпретация паттернов</b><div style="margin-top:4px">${patternsHtml}</div></div>
+    <div style="margin-bottom:10px"><b>3. Тренд сигмы</b><br>σ ${sigmaDirTxt}: ${sigmaInfo.text}. ${sigmaMeaning}</div>
+    <div style="margin-bottom:10px"><b>4. Последняя точка</b><br>${lastLabel}: ${fmtN(last)} шт. — ${z>=0?'выше':'ниже'} среднего (${fmtN(d.mean)}) на ${Math.abs(z).toFixed(1)}σ, до ${z>=0?'верхней':'нижней'} границы (${fmtN(z>=0?ucl:lcl)}) ещё ${fmtN(Math.abs(distToEdge))} шт. Это ${pointKind}.</div>
+    <div style="margin-bottom:10px"><b>5. Производственный диагноз</b><br>${diagnosisTxt}</div>
+    <div><b>6. Рекомендации</b><br>${recoHtml}</div>`;
+}
+
+// Раскрывающаяся история сигмы по клику на карточку: все доступные периоды
+// (как в листе «Диаграммы»), новые сверху, с дельтой к предыдущему периоду.
+function qRenderSigmaDrill(view,hist){
+  const el=document.getElementById(`q-${view}-sigma-drill`);
+  if(!el)return;
+  const rows=hist.filter(Boolean).map((h,i)=>{
+    const prev=hist[i+1];
+    let arrowHtml='<span class="qd-arrow" style="color:#94a3b8">—</span>';
+    if(prev){
+      const delta=h.sigma-prev.sigma;
+      if(Math.abs(delta)>=0.05){
+        arrowHtml=delta>0
+          ? `<span class="qd-arrow" style="color:#ef4444">↑ +${delta.toFixed(1)}</span>`
+          : `<span class="qd-arrow" style="color:#10b981">↓ ${delta.toFixed(1)}</span>`;
+      }
+    }
+    return `<tr><td>${h.label}</td><td>${h.sigma.toFixed(1)}</td><td style="color:#94a3b8">D2=${h.d2}</td><td>${arrowHtml}</td></tr>`;
+  }).join('');
+  el.innerHTML=`<table><tbody>${rows}</tbody></table>`;
+}
+function qToggleSigmaDrill(view){
+  const el=document.getElementById(`q-${view}-sigma-drill`);
+  const caret=document.getElementById(`q-${view}-sigma-caret`);
+  if(!el)return;
+  const show=!el.classList.contains('show');
+  el.classList.toggle('show',show);
+  if(caret) caret.textContent=show?'▴ скрыть':'▾ динамика';
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────
+function go(id,btn){
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('on');
+  btn.classList.add('active');
+}
+
+// ── Подвкладки внутри «Качество» ────────────────────────────────────────
+function qSubGo(id,btn){
+  const scope=btn.closest('.pane')||document; // обобщили: работает для любой вкладки с .qsubtabs
+  scope.querySelectorAll('.qsubpane').forEach(p=>p.classList.remove('on'));
+  scope.querySelectorAll('.qsubtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('qsub-'+id).classList.add('on');
+  btn.classList.add('active');
+}
+function v2Go(id,btn){
+  document.querySelectorAll('#loadv2 .qsubpane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('#loadv2 .qsubtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('on');
+  btn.classList.add('active');
+}
+
+// ── % рекламаций: все виновники vs вина фабрики, % от реализации ───────
+function qPercentChart(id,pctAll,pctFactory,months){
+  killChart(id);
+  const ctx=document.getElementById(id).getContext('2d');
+  CI[id]=new Chart(ctx,{
+    type:'line',
+    data:{labels:months,datasets:[
+      {label:'Все виновники, %',  data:pctAll,    borderColor:'#3b82f6',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.2,spanGaps:true},
+      {label:'Вина фабрики, %',   data:pctFactory,borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:2,pointRadius:3,pointHoverRadius:5,tension:.2,spanGaps:true},
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{title:([c])=>c.label,label:c=>' '+c.dataset.label+': '+c.parsed.y.toFixed(2)+'%'}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>v+'%'},
+           title:{display:true,text:'% от реализации',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+const _qpState={dept:'korpus'};
+function renderPercent(elId,data){
+  document.getElementById(elId).innerHTML=`
+  <div class="qtoggle">
+    <button class="qbtn" id="qp-dept-korpus" onclick="qpSetDept('korpus')">Корпусная мебель</button>
+    <button class="qbtn" id="qp-dept-myagkaya" onclick="qpSetDept('myagkaya')">Мягкая мебель</button>
+  </div>
+  <div class="qbig">
+    <div class="ctitle">% рекламаций от реализации — все виновники vs вина фабрики</div>
+    <div class="leg">
+      <div class="li"><div class="ll" style="background:#3b82f6"></div>Все виновники, %</div>
+      <div class="li"><div class="ll" style="background:#f59e0b"></div>Вина фабрики, %</div>
+    </div>
+    <div class="qwrap"><canvas id="qp-chart"></canvas></div>
+  </div>
+  <div class="note">Процент считается от «Реализации диван.ру» (как в исходной таблице). «Все виновники» — все рекламации; «Вина фабрики» — только рекламации по вине фабрики (подмножество первого).</div>`;
+  window._qpData=data;
+  qpRefresh();
+}
+function qpSetDept(dept){_qpState.dept=dept;qpRefresh();}
+function qpRefresh(){
+  document.getElementById('qp-dept-korpus').classList.toggle('on',_qpState.dept==='korpus');
+  document.getElementById('qp-dept-myagkaya').classList.toggle('on',_qpState.dept==='myagkaya');
+  const d=window._qpData[_qpState.dept];
+  qPercentChart('qp-chart', d.all.pct, d.factory.pct, d.all.months);
+}
+
+// ── Сводные дефекты: тепловая карта по медиане строки ───────────────────
+// sortCol: null|'label'|'median'|номер месяца(0-based). selected: выделенные строки (по label).
+const _qdState={dept:'korpus',view:'all',sortCol:null,sortDir:1,selected:new Set()};
+function renderDefects(elId,res){
+  document.getElementById(elId).innerHTML=`
+  <div class="qtoggle">
+    <button class="qbtn" id="qd-dept-korpus" onclick="qdSetDept('korpus')">Корпусная мебель</button>
+    <button class="qbtn" id="qd-dept-myagkaya" onclick="qdSetDept('myagkaya')">Мягкая мебель</button>
+  </div>
+  <div class="qtoggle">
+    <button class="qbtn" id="qd-view-all" onclick="qdSetView('all')">Все виновники</button>
+    <button class="qbtn" id="qd-view-factory" onclick="qdSetView('factory')">Вина фабрики</button>
+    <span class="qpatlink" id="qd-clear-sel" style="margin:0;align-self:center" onclick="qdClearSelection()">Очистить выделение (<span id="qd-sel-count">0</span>)</span>
+  </div>
+  <div class="qheatwrap"><div id="qd-table"></div></div>
+  <div class="note">Цвет ячейки — относительно медианы своей строки (вид дефекта) за весь период: белый = медиана, краснее — выше медианы (рост дефекта), зеленее — ниже медианы (улучшение). Дефекты приведены как есть из таблицы. Клик по заголовку столбца — сортировка; клик по строке — выделить.</div>`;
+  window._qdRes=res;
+  qdRefresh();
+}
+function qdSetDept(dept){_qdState.dept=dept;_qdState.selected=new Set();qdRefresh();}
+function qdSetView(view){_qdState.view=view;_qdState.selected=new Set();qdRefresh();}
+function qdSort(col){
+  if(_qdState.sortCol===col){ _qdState.sortDir*=-1; } else { _qdState.sortCol=col; _qdState.sortDir=1; }
+  qdRefresh();
+}
+function qdToggleRowIdx(idx){
+  const r=_qdCurrentRows&&_qdCurrentRows[idx];
+  if(!r) return;
+  if(_qdState.selected.has(r.label)) _qdState.selected.delete(r.label); else _qdState.selected.add(r.label);
+  qdRefresh();
+}
+function qdClearSelection(){ _qdState.selected=new Set(); qdRefresh(); }
+let _qdCurrentRows=null;
+function qdRefresh(){
+  document.getElementById('qd-dept-korpus').classList.toggle('on',_qdState.dept==='korpus');
+  document.getElementById('qd-dept-myagkaya').classList.toggle('on',_qdState.dept==='myagkaya');
+  document.getElementById('qd-view-all').classList.toggle('on',_qdState.view==='all');
+  document.getElementById('qd-view-factory').classList.toggle('on',_qdState.view==='factory');
+  const selCountEl=document.getElementById('qd-sel-count');
+  if(selCountEl) selCountEl.textContent=_qdState.selected.size;
+  const res=window._qdRes;
+  const rows=((res.data[_qdState.dept]&&res.data[_qdState.dept][_qdState.view])||[]).map(r=>({...r,median:qMedian(r.vals)}));
+  const months=res.months;
+  const {sortCol,sortDir}=_qdState;
+  if(sortCol!=null){
+    rows.sort((a,b)=>{
+      let av,bv;
+      if(sortCol==='label'){ return sortDir*String(a.label).localeCompare(String(b.label)); }
+      if(sortCol==='median'){ av=a.median; bv=b.median; }
+      else { av=a.vals[sortCol]||0; bv=b.vals[sortCol]||0; }
+      return sortDir*(av-bv);
+    });
+  }
+  _qdCurrentRows=rows;
+  const arrow=col=>sortCol===col?(sortDir>0?' ▲':' ▼'):'';
+  let html='<table class="qheat"><thead><tr>';
+  html+=`<th style="cursor:pointer" onclick="qdSort('label')">Причина обращения${arrow('label')}</th>`;
+  months.forEach((m,i)=>html+=`<th style="cursor:pointer" onclick="qdSort(${i})">${m}${arrow(i)}</th>`);
+  html+=`<th style="cursor:pointer" onclick="qdSort('median')">Медиана${arrow('median')}</th></tr></thead><tbody>`;
+  rows.forEach((r,idx)=>{
+    const sel=_qdState.selected.has(r.label);
+    html+=`<tr class="${sel?'qd-selected':''}" style="cursor:pointer" onclick="qdToggleRowIdx(${idx})"><td class="qheat-label">${r.label}</td>`;
+    r.vals.forEach(v=>{ html+=`<td style="background:${qHeatColor(v,r.median)}">${v}</td>`; });
+    html+=`<td class="qheat-median">${r.median.toFixed(1)}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('qd-table').innerHTML=html;
+}
+
+// ── Анализ рекламаций: построчная выгрузка (лист на каждый месяц) ───────
+// Фильтруем по «Поставщик»: ЛофтКорпус → Корпус, ЛофтМягкая → Мягкая, остальное (другие
+// заводы/субподрядчики) не относится к нам и отбрасывается. Последние 6 месяцев, подгрузка
+// по требованию (только когда открыли вкладку) — данных слишком много для автозагрузки.
+const QC_MONTHS=['Январь 2025','Февраль 2025','Март 2025','Апрель 2025','Май 2025','Июнь 2025','Июль 2025','Август 2025','Сентябрь 2025','Октябрь 2025','Ноябрь 2025','Декабрь 2025','Январь 2026','Февраль 2026','Март 2026','Апрель 2026','Май 2026'];
+const QC_MONTH_SHORT=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26'];
+const QC_SUPPLIER_DEPT={'ЛофтКорпус':'korpus','ЛофтМягкая':'myagkaya'};
+let _qcRecords=null; // кэш после первой загрузки
+const _qcState={dept:'korpus',month:-1}; // month:-1 = «Все месяцы»
+
+function qcParseSheet(rows,monthIdx){
+  if(!rows||!rows.length) return [];
+  const header=rows[0];
+  const idx={};
+  header.forEach((h,i)=>{idx[h]=i;});
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    const supplier=r[idx['Поставщик']];
+    const dept=QC_SUPPLIER_DEPT[supplier];
+    if(!dept) continue;
+    out.push({
+      monthIdx, dept,
+      category:(r[idx['Категория']]||'(не указано)').trim(),
+      model:(r[idx['Модель']]||'(не указано)').trim(),
+      blame:(r[idx['Претензия к подразделению']]||'(не указано)').trim(),
+      resolution:(r[idx['Решение']]||'(не указано)').trim(),
+      cause:(r[idx['Причина по претензии']]||'(не указано)').trim(),
+    });
+  }
+  return out;
+}
+async function qcEnsureLoaded(){
+  if(_qcRecords){ qcRefresh(); return; }
+  const el=document.getElementById('qsub-complaints');
+  el.innerHTML='<div class="note">Загрузка данных по рекламациям за последние 6 месяцев… это разовая загрузка, может занять несколько секунд.</div>';
+  try{
+    if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
+    const ranges=QC_MONTHS.map(m=>`'${m}'!A1:L4000`);
+    const qs=ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values:batchGet?${qs}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error(`Sheets API ${resp.status}`);
+    const json=await resp.json();
+    let all=[];
+    json.valueRanges.forEach((vr,i)=>{ all=all.concat(qcParseSheet(vr.values||[],i)); });
+    _qcRecords=all;
+  }catch(e){
+    console.warn('complaints fetch failed:',e);
+    el.innerHTML=`<div class="note">Не удалось загрузить данные по рекламациям: ${String(e.message||e)}. Попробуйте переоткрыть вкладку.</div>`;
+    _qcRecords=null;
+    return;
+  }
+  qcRenderShell();
+  qcRefresh();
+}
+function qcSetDept(dept){_qcState.dept=dept;qcRefresh();}
+function qcSetMonth(v){_qcState.month=+v;qcRefresh();}
+// Бейдж сравнения: curr к base (предыдущий месяц / средний по остальным месяцам).
+// Рост рекламаций — плохо (красный), снижение — хорошо (зелёный).
+function qcDeltaBadge(curr,base,label){
+  // Показываем САМО значение базы (предыдущий месяц / среднее), а не текущее — иначе непонятно,
+  // с чем сравниваем. + отклонение в % с цветом (рост рекламаций — красный, снижение — зелёный).
+  if(base==null) return `<div style="color:#94a3b8">${label}: нет данных</div>`;
+  const baseTxt=Number.isInteger(base)?base:base.toFixed(1);
+  if(base===0){
+    if(curr===0) return `<div style="color:#94a3b8">${label}: 0</div>`;
+    return `<div style="color:#ef4444">${label}: 0 (рост с нуля)</div>`;
+  }
+  const pct=(curr-base)/base*100;
+  if(Math.abs(pct)<10) return `<div style="color:#94a3b8">${label}: ${baseTxt} (≈${pct>=0?'+':''}${pct.toFixed(0)}%)</div>`;
+  const sign=pct>0?'+':'';
+  const color=pct>0?'#ef4444':'#10b981';
+  const arrow=pct>0?'↑':'↓';
+  return `<div style="color:${color}">${label}: ${baseTxt} (${arrow}${sign}${pct.toFixed(0)}%)</div>`;
+}
+
+function qcGroupCount(records,field){
+  const m=new Map();
+  records.forEach(r=>{ m.set(r[field],(m.get(r[field])||0)+1); });
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]);
+}
+function qcMonthlyCount(records,field,label){
+  const arr=QC_MONTHS.map(()=>0);
+  records.forEach(r=>{ if(r[field]===label) arr[r.monthIdx]++; });
+  return arr;
+}
+// Тренд: сравниваем последний месяц со средним по предыдущим — выявляет «растущие проблемы».
+// refIdx — относительно какого месяца считаем тренд (по умолчанию — последний месяц периода).
+// Сравниваем именно этот месяц со средним по месяцам ДО него — чтобы при выборе конкретного
+// месяца в фильтре «Растущие проблемы» показывали картину именно на этот месяц, а не всегда
+// на самый последний.
+function qcTrendArrow(monthly,refIdx){
+  const idx=refIdx==null?monthly.length-1:refIdx;
+  if(idx<=0) return {cls:'na',html:'<span style="color:#94a3b8">—</span>'};
+  const last=monthly[idx];
+  const prev=monthly.slice(0,idx).filter(v=>v>0);
+  if(prev.length===0) return {cls:'na',html:'<span style="color:#94a3b8">—</span>'};
+  const avgPrev=prev.reduce((a,b)=>a+b,0)/prev.length;
+  if(avgPrev===0) return {cls:'na',html:'<span style="color:#94a3b8">—</span>'};
+  const pct=(last-avgPrev)/avgPrev*100;
+  if(Math.abs(pct)<15) return {cls:'na',html:'<span style="color:#94a3b8">→ стабильно</span>'};
+  if(pct>0) return {cls:'bad',html:`<span style="color:#ef4444">↑ +${pct.toFixed(0)}%</span>`};
+  return {cls:'ok',html:`<span style="color:#10b981">↓ ${pct.toFixed(0)}%</span>`};
+}
+// fullRecords — все месяцы выбранного подразделения (для расчёта сравнений);
+// scopedRecords — то, что реально показываем (весь период, либо один месяц);
+// monthIdx===-1 → режим «Все месяцы» (старое поведение, колонка «Тренд»),
+// иначе — три сравнения: к пред. месяцу, к среднему по остальным, доля от всего периода.
+function qcTopTable(fullRecords,scopedRecords,field,title,limit,monthIdx){
+  const total=scopedRecords.length;
+  const groups=qcGroupCount(scopedRecords,field).slice(0,limit||8);
+  let rows='';
+  groups.forEach(([label,count])=>{
+    const pct=total?count/total*100:0;
+    const monthly=qcMonthlyCount(fullRecords,field,label);
+    let cmpHtml;
+    if(monthIdx===-1){
+      cmpHtml=qcTrendArrow(monthly).html;
+    } else {
+      const curr=monthly[monthIdx];
+      const prev=monthIdx>0?monthly[monthIdx-1]:null;
+      const others=monthly.filter((v,i)=>i!==monthIdx);
+      const avgOthers=others.length?others.reduce((a,b)=>a+b,0)/others.length:null;
+      const totalAll=monthly.reduce((a,b)=>a+b,0);
+      const shareOfAll=totalAll?curr/totalAll*100:0;
+      cmpHtml=`${qcDeltaBadge(curr,prev,'к пред.мес')}${qcDeltaBadge(curr,avgOthers,'к среднему')}<div style="color:#64748b">из всех: ${shareOfAll.toFixed(0)}%</div>`;
+    }
+    rows+=`<tr>
+      <td>${label}</td>
+      <td style="text-align:right;font-weight:700">${count}</td>
+      <td style="width:110px"><div class="qcbar-wrap"><div class="qcbar" style="width:${Math.min(100,pct).toFixed(0)}%"></div></div></td>
+      <td style="text-align:right;color:#64748b">${pct.toFixed(1)}%</td>
+      <td class="qctrend">${cmpHtml}</td>
+    </tr>`;
+  });
+  return `<div class="qccard">
+    <div class="ctitle">${title}</div>
+    <table class="qctable"><thead><tr><th>Значение</th><th style="text-align:right">Кол-во</th><th>Доля</th><th></th><th>${monthIdx===-1?'Тренд':'Сравнение'}</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="5" style="color:#94a3b8">Нет данных</td></tr>'}</tbody></table>
+  </div>`;
+}
+function qcParetoTable(records,field,title){
+  const total=records.length;
+  const groups=qcGroupCount(records,field);
+  let cum=0, rows='';
+  groups.slice(0,12).forEach(([label,count])=>{
+    const pct=total?count/total*100:0;
+    cum+=pct;
+    const reached80=cum>=80&&cum-pct<80;
+    rows+=`<tr${reached80?' style="border-top:2px solid #f59e0b"':''}>
+      <td>${label}</td>
+      <td style="text-align:right;font-weight:700">${count}</td>
+      <td style="width:120px"><div class="qcbar-wrap"><div class="qcbar pareto" style="width:${Math.min(100,pct).toFixed(0)}%"></div></div></td>
+      <td style="text-align:right;color:#64748b">${pct.toFixed(1)}%</td>
+      <td style="text-align:right;font-weight:700;color:${cum<=80?'#854d0e':'#94a3b8'}">${cum.toFixed(0)}%</td>
+    </tr>`;
+  });
+  return `<div class="qccard">
+    <div class="ctitle">${title} — Парето-анализ</div>
+    <div class="note" style="margin:0 0 8px 0">Оранжевая линия — где накопленная доля переходит порог 80%. Причины выше неё формируют основную массу проблем.</div>
+    <table class="qctable"><thead><tr><th>Причина</th><th style="text-align:right">Кол-во</th><th>Доля</th><th></th><th style="text-align:right">Накоп. %</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+function qcCrossTab(records,fieldRow,fieldCol,limitRow,limitCol){
+  const rowLabels=qcGroupCount(records,fieldRow).slice(0,limitRow||6).map(x=>x[0]);
+  const colLabels=qcGroupCount(records,fieldCol).slice(0,limitCol||6).map(x=>x[0]);
+  const maxCount=Math.max(1,...rowLabels.map(rl=>colLabels.map(cl=>records.filter(r=>r[fieldRow]===rl&&r[fieldCol]===cl).length)).flat());
+  let html=`<div class="qccard"><div class="ctitle">Категория × Причина претензии</div>
+    <div class="qheatwrap" style="margin:0;box-shadow:none;padding:0"><table class="qheat"><thead><tr><th>Категория \\ Причина</th>`;
+  colLabels.forEach(cl=>html+=`<th>${cl}</th>`);
+  html+='</tr></thead><tbody>';
+  rowLabels.forEach(rl=>{
+    html+=`<tr><td class="qheat-label">${rl}</td>`;
+    colLabels.forEach(cl=>{
+      const count=records.filter(r=>r[fieldRow]===rl&&r[fieldCol]===cl).length;
+      const t=count/maxCount;
+      const bg=count===0?'#fff':`rgba(239,68,68,${(0.08+0.55*t).toFixed(2)})`;
+      html+=`<td style="background:${bg}">${count||''}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+// Автопоиск растущих проблем: для каждого значения каждого поля сравниваем последний месяц
+// со средним по предыдущим — флагуем заметный устойчивый рост (не разовый шум).
+// records — ВСЕ месяцы выбранного подразделения (полная история, не урезанная фильтром месяца);
+// refIdx — относительно какого месяца считаем тренд (выбранный в фильтре месяц, либо последний).
+// Возвращает 2 категории: растущие проблемы (плохо, красный) и улучшения (хорошо, зелёный).
+function qcGrowingProblems(records,refIdx){
+  const fields=[['cause','Причина претензии'],['blame','Подразделение/виновник'],['category','Категория']];
+  const growing=[], improving=[];
+  fields.forEach(([field,fieldLabel])=>{
+    qcGroupCount(records,field).forEach(([label,count])=>{
+      if(count<5) return; // отсекаем редкие, чтобы не плодить шум
+      const monthly=qcMonthlyCount(records,field,label);
+      const trend=qcTrendArrow(monthly,refIdx);
+      if(trend.cls==='bad') growing.push({field:fieldLabel,label,count,pct:trend.html});
+      else if(trend.cls==='ok') improving.push({field:fieldLabel,label,count,pct:trend.html});
+    });
+  });
+  return {
+    growing: growing.sort((a,b)=>b.count-a.count).slice(0,8),
+    improving: improving.sort((a,b)=>b.count-a.count).slice(0,8),
+  };
+}
+function qcRenderShell(){
+  document.getElementById('qsub-complaints').innerHTML=`
+  <div class="qtoggle">
+    <button class="qbtn" id="qc-dept-korpus" onclick="qcSetDept('korpus')">Корпусная мебель</button>
+    <button class="qbtn" id="qc-dept-myagkaya" onclick="qcSetDept('myagkaya')">Мягкая мебель</button>
+  </div>
+  <div class="filter-bar">
+    <span class="filter-label">Месяц:</span>
+    <select class="fsel" id="qc-sel-month" onchange="qcSetMonth(this.value)">
+      <option value="-1" selected>Все месяцы</option>
+      ${QC_MONTH_SHORT.map((m,i)=>`<option value="${i}">${m}</option>`).join('')}
+    </select>
+  </div>
+  <div class="note" style="margin-bottom:10px">Источник — построчная выгрузка рекламаций (листы по месяцам), отфильтровано по «Поставщик» = ЛофтКорпус/ЛофтМягкая. Период: ${QC_MONTH_SHORT[0]} — ${QC_MONTH_SHORT[QC_MONTH_SHORT.length-1]}.</div>
+  <div id="qc-kpis" class="qcards"></div>
+  <div id="qc-grow"></div>
+  <div id="qc-pareto" style="margin-bottom:14px"></div>
+  <div class="qcgrid" id="qc-top4"></div>
+  <div id="qc-cross"></div>`;
+}
+function qcRefresh(){
+  if(!_qcRecords) return;
+  document.getElementById('qc-dept-korpus').classList.toggle('on',_qcState.dept==='korpus');
+  document.getElementById('qc-dept-myagkaya').classList.toggle('on',_qcState.dept==='myagkaya');
+  const monthIdx=_qcState.month;
+  const fullRecords=_qcRecords.filter(r=>r.dept===_qcState.dept); // весь период — база для сравнений
+  const records=monthIdx===-1?fullRecords:fullRecords.filter(r=>r.monthIdx===monthIdx); // то, что показываем
+  const total=records.length;
+  const totalAll=fullRecords.length;
+
+  // KPI: всего + топ-1 по трём ключевым полям (считаются на показанном срезе — месяц или весь период)
+  const topOf=field=>{ const g=qcGroupCount(records,field); return g.length?g[0]:['—',0]; };
+  const [topCause,topCauseN]=topOf('cause');
+  const [topBlame,topBlameN]=topOf('blame');
+  const [topCat,topCatN]=topOf('category');
+  let totalSub;
+  if(monthIdx===-1){
+    totalSub=`за ${QC_MONTH_SHORT.length} месяцев`;
+  } else {
+    const allMonthly=QC_MONTHS.map((_,i)=>fullRecords.filter(r=>r.monthIdx===i).length);
+    const prev=monthIdx>0?allMonthly[monthIdx-1]:null;
+    const others=allMonthly.filter((v,i)=>i!==monthIdx);
+    const avgOthers=others.length?others.reduce((a,b)=>a+b,0)/others.length:null;
+    totalSub=`${qcDeltaBadge(total,prev,'к пред.мес')}${qcDeltaBadge(total,avgOthers,'к среднему')}<div style="color:#64748b">из всех ${totalAll} за период: ${totalAll?(total/totalAll*100).toFixed(0):0}%</div>`;
+  }
+  document.getElementById('qc-kpis').innerHTML=`
+    <div class="card c1"><div class="clbl">${monthIdx===-1?'Всего рекламаций':'Рекламаций за '+QC_MONTH_SHORT[monthIdx]}</div><div class="cval">${total}</div><div class="csub">${totalSub}</div></div>
+    <div class="card c2"><div class="clbl">Главная причина</div><div class="cval" style="font-size:16px">${topCause}</div><div class="csub">${topCauseN} (${total?(topCauseN/total*100).toFixed(0):0}%)</div></div>
+    <div class="card c3"><div class="clbl">Главный виновник</div><div class="cval" style="font-size:16px">${topBlame}</div><div class="csub">${topBlameN} (${total?(topBlameN/total*100).toFixed(0):0}%)</div></div>
+    <div class="card c1"><div class="clbl">Топ категория</div><div class="cval" style="font-size:16px">${topCat}</div><div class="csub">${topCatN} (${total?(topCatN/total*100).toFixed(0):0}%)</div></div>`;
+
+  // Растущие проблемы / улучшения — относительно выбранного месяца (или последнего, если «Все месяцы»).
+  // Считаем всегда по полной истории (fullRecords), но точка отсчёта — выбранный месяц.
+  const refIdx=monthIdx===-1?QC_MONTHS.length-1:monthIdx;
+  const refLabel=QC_MONTH_SHORT[refIdx];
+  const {growing,improving}=qcGrowingProblems(fullRecords,refIdx);
+  document.getElementById('qc-grow').innerHTML = `
+    <div class="qcgrid" style="margin-bottom:14px">
+      <div class="qccard qcgrowlist"><div class="ctitle">⚠ Растущие проблемы (${refLabel} заметно выше среднего по предыдущим)</div>
+        ${growing.length?growing.map(g=>`<div class="qcgrow-item" style="background:#fee2e2"><b>${g.label}</b> <span style="color:#64748b">(${g.field})</span> — ${g.count} за период, ${refLabel} ${g.pct}</div>`).join(''):'<div class="note" style="margin:0">Заметно растущих проблем не обнаружено.</div>'}
+      </div>
+      <div class="qccard qcgrowlist"><div class="ctitle">✓ Улучшения (${refLabel} заметно ниже среднего по предыдущим)</div>
+        ${improving.length?improving.map(g=>`<div class="qcgrow-item" style="background:#dcfce7"><b>${g.label}</b> <span style="color:#64748b">(${g.field})</span> — ${g.count} за период, ${refLabel} ${g.pct}</div>`).join(''):'<div class="note" style="margin:0">Заметных улучшений не обнаружено.</div>'}
+      </div>
+    </div>`;
+
+  document.getElementById('qc-pareto').innerHTML = qcParetoTable(records,'cause','Причина претензии');
+  document.getElementById('qc-top4').innerHTML =
+    qcTopTable(fullRecords,records,'category','Категория мебели',8,monthIdx) +
+    qcTopTable(fullRecords,records,'model','Модель',8,monthIdx) +
+    qcTopTable(fullRecords,records,'blame','Подразделение / виновник',8,monthIdx) +
+    qcTopTable(fullRecords,records,'resolution','Решение',8,monthIdx);
+  document.getElementById('qc-cross').innerHTML = qcCrossTab(records,'category','cause',6,6);
+}
+
+// ── Корпус: производительность мастеров по месяцам ──────────────────────
+const SHEET_ID_KORPUS='1fFEQNetLzvQpljCAR7VZRE8zGWlDasJju9F9lTbeGik';
+const KM_MONTHS=[
+  {key:'okt25',sheet:'Корпус Октябрь ',label:'Окт 25'},
+  {key:'noy25',sheet:'Корпус Ноябрь',label:'Ноя 25'},
+  {key:'dek25',sheet:'Корпус Декабрь',label:'Дек 25'},
+  {key:'yan26',sheet:'Корпус Январь',label:'Янв 26'},
+  {key:'fev26',sheet:'Корпус Февраль',label:'Фев 26'},
+  {key:'mar26',sheet:'Корпус Март 26',label:'Мар 26'},
+  {key:'apr26',sheet:'Корпус Апрель 26',label:'Апр 26'},
+  {key:'may26',sheet:'Корпус Май 2026',label:'Май 26'},
+  {key:'iun26',sheet:'Корпус Июнь 2026 ',label:'Июн 26'},
+  {key:'iul26',sheet:'Корпус Июль 2026',label:'Июл 26'},
+];
+const KM_COLORS=['#3b82f6','#f59e0b','#8b5cf6','#10b981','#ef4444','#06b6d4','#ec4899','#84cc16'];
+let _kmLoaded=false;
+// В таблице два плана: «план » (AM) — план актуальный (фикс. ставка/смену × кол-во смен, совпадает
+// с тем, от чего считается «% Выполнения» в самой таблице), и «План» (X) — план из 1С (другие цифры
+// на каждый день). Переключаемо.
+let kmPlanSrc='1c'; // '1c' (план актуальный) | 'calc' (план из 1С)
+function kmNormName(s){ return String(s||'').replace(/\./g,'').trim(); }
+function kmPlanLabel(){ return kmPlanSrc==='1c'?'актуальный':'из 1С'; }
+function kmPlan(r){ return kmPlanSrc==='1c'?r.plan1c:r.planCalc; }
+function kmPct(r){ const p=kmPlan(r); return p?r.fact/p:0; }
+function kmDelta(r){ return r.fact-kmPlan(r); }
+
+async function kmEnsureLoaded(){
+  if(_kmLoaded) return;
+  const panesEl=document.getElementById('km-panes');
+  panesEl.innerHTML='<div class="note">Загрузка данных по мастерам…</div>';
+  try{
+    if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
+    const qs=KM_MONTHS.map(m=>`ranges=${encodeURIComponent("'"+m.sheet+"'!V1:AN8")}`).join('&');
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_KORPUS}/values:batchGet?${qs}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const json=await resp.json();
+    window._kmData=KM_MONTHS.map((m,i)=>{
+      const vals=(json.valueRanges[i]&&json.valueRanges[i].values)||[];
+      const rows=[];
+      for(let r=2;r<vals.length;r++){
+        const row=vals[r]; if(!row||!row[0]) continue;
+        const fio=String(row[0]).trim();
+        if(fio==='Итого') continue;
+        rows.push({
+          fio, norm:kmNormName(fio), shift:row[1]||'',
+          planCalc:+row[2]||0, fact:+row[3]||0, smen:+row[4]||0,
+          srznach:+row[5]||0, pct1c:+row[7]||0, factKgSmena:+row[9]||0,
+          vd:+row[10]||0, vdPct:+row[11]||0, chelChas:+row[12]||0, itogoChel:+row[13]||0,
+          srKolChel:+row[14]||0, srProUe:+row[15]||0, srProKg:+row[16]||0, plan1c:+row[17]||0,
+        });
+      }
+      return {...m, rows};
+    });
+    _kmLoaded=true;
+    kmBuildSubtabs();
+  }catch(e){
+    console.warn('km load failed',e);
+    panesEl.innerHTML=`<div class="note">Не удалось загрузить данные «Корпус»: ${String(e.message||e)}</div>`;
+  }
+}
+
+function kmTogglePlan(){
+  kmPlanSrc = kmPlanSrc==='1c'?'calc':'1c';
+  const btn=document.getElementById('km-plan-toggle');
+  if(btn) btn.textContent='план: '+kmPlanLabel()+' ⇄';
+  window._kmData.forEach(kmRenderMonth);
+  kmRenderDynamics();
+  kmRenderAllMetrics();
+}
+
+function kmBuildSubtabs(){
+  const tabsEl=document.getElementById('km-subtabs');
+  const panesEl=document.getElementById('km-panes');
+  const data=window._kmData;
+  const lastKey=data[data.length-1].key;
+  tabsEl.innerHTML = data.map(m=>
+    `<button class="qsubtab${m.key===lastKey?' active':''}" onclick="kmGo('${m.key}',this)">${m.label}</button>`
+  ).join('') + `<button class="qsubtab" onclick="kmGo('dynamics',this)">⭐ Динамика по мастерам</button>`
+  + `<button id="km-plan-toggle" class="qsubtab" style="margin-left:auto;background:#fff;color:#0f172a" onclick="kmTogglePlan()">план: ${kmPlanLabel()} ⇄</button>`;
+  panesEl.innerHTML = data.map(m=>
+    `<div class="qsubpane${m.key===lastKey?' on':''}" id="km-pane-${m.key}"></div>`
+  ).join('') + `<div class="qsubpane" id="km-pane-dynamics"></div>`;
+  data.forEach(kmRenderMonth);
+  kmRenderDynamics();
+  kmRenderAllMetrics();
+}
+
+function kmGo(key,btn){
+  document.querySelectorAll('#korpusm .qsubpane').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('#korpusm .qsubtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('km-pane-'+key).classList.add('on');
+  btn.classList.add('active');
+}
+
+function kmRenderMonth(m){
+  const el=document.getElementById('km-pane-'+m.key);
+  const rows=m.rows;
+  const maxPct=Math.max(...rows.map(kmPct));
+  const cardsHtml=rows.map((r,i)=>{
+    const pct=kmPct(r), delta=kmDelta(r);
+    const color=pct>=1?'#10b981':(pct>=0.95?'#f59e0b':'#ef4444');
+    const isLeader=pct===maxPct;
+    return `<div class="card c${(i%3)+1}${isLeader?' km-leader':''}" style="position:relative">
+      ${isLeader?'<div class="km-trophy">🏆</div>':''}
+      <div class="clbl">${r.fio} · ${r.shift}</div>
+      <div class="cval" style="color:${color}">${(pct*100).toFixed(1)}%</div>
+      <div class="csub">план ${fmtN(kmPlan(r))} уе · факт ${fmtN(r.fact)} уе · дельта ${delta>=0?'+':''}${fmtN(delta)}</div>
+      ${pct>=1?'<div class="km-badge">Молодец! 🎉</div>':''}
+    </div>`;
+  }).join('');
+  const tableRows=rows.map(r=>{
+    const pct=kmPct(r), delta=kmDelta(r);
+    const isLeader=pct===maxPct;
+    return `<tr>
+    <td>${isLeader?'🏆 ':''}${r.fio}</td><td>${r.shift}</td><td style="text-align:right">${fmtN(kmPlan(r))}</td>
+    <td style="text-align:right">${fmtN(r.fact)}</td><td style="text-align:right">${delta>=0?'+':''}${fmtN(delta)}</td>
+    <td style="text-align:right">${(pct*100).toFixed(1)}%${pct>=1?' <span class="km-badge-sm">молодец</span>':''}</td><td style="text-align:right">${r.smen}</td>
+    <td style="text-align:right">${fmtN(r.srznach)}</td><td style="text-align:right">${r.srProUe.toFixed(2)}</td>
+  </tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="qcards">${cardsHtml}</div>
+    <div class="qbig">
+      <div class="ctitle">План vs факт по мастерам — ${m.label} <span style="font-weight:400;color:#94a3b8">(план: ${kmPlanLabel()})</span></div>
+      <div class="qwrap" style="height:280px"><canvas id="km-bar-${m.key}"></canvas></div>
+    </div>
+    <div class="qccard">
+      <div class="ctitle">Детальная таблица — ${m.label}</div>
+      <table class="qctable"><thead><tr>
+        <th>Мастер</th><th>Смена</th><th style="text-align:right">План,уе</th><th style="text-align:right">Факт,уе</th>
+        <th style="text-align:right">Дельта</th><th style="text-align:right">% выполн.</th><th style="text-align:right">Смен</th>
+        <th style="text-align:right">Ср/смену</th><th style="text-align:right">уе/чел-час</th>
+      </tr></thead><tbody>${tableRows}</tbody></table>
+    </div>`;
+  kmBarChart('km-bar-'+m.key, rows);
+}
+
+function kmBarChart(canvasId, rows){
+  killChart(canvasId);
+  const ctx=document.getElementById(canvasId).getContext('2d');
+  CI[canvasId]=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:rows.map(r=>r.fio),
+      datasets:[
+        {label:'План',data:rows.map(r=>kmPlan(r)),backgroundColor:'#cbd5e1',borderRadius:4},
+        {label:'Факт',data:rows.map(r=>r.fact),backgroundColor:'#3b82f6',borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{font:{size:10},boxWidth:10}},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b'}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b'},title:{display:true,text:'уе',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+function kmRenderDynamics(){
+  const el=document.getElementById('km-pane-dynamics');
+  const data=window._kmData;
+  const byName={};
+  data.forEach(m=>m.rows.forEach(r=>{
+    if(!byName[r.norm]) byName[r.norm]={fio:r.fio, vals:{}};
+    byName[r.norm].vals[m.key]={pct:kmPct(r), plan:kmPlan(r), fact:r.fact};
+  }));
+  const names=Object.keys(byName);
+  names.forEach((n,i)=>byName[n].color=KM_COLORS[i%KM_COLORS.length]);
+  const checkboxLeg=names.map((n,i)=>`
+    <label class="li" style="cursor:pointer">
+      <input type="checkbox" checked value="${n}" style="margin:0 2px 0 0;accent-color:${byName[n].color}" onchange="kmRefreshDynamics()">
+      <div class="ll" style="background:${byName[n].color}"></div>${byName[n].fio}
+    </label>`).join('');
+  const matrixRows=names.map(n=>{
+    const cells=data.map(m=>{
+      const v=byName[n].vals[m.key];
+      return `<td style="text-align:right">${v?(v.pct*100).toFixed(1)+'%':'—'}</td>`;
+    }).join('');
+    const vals=data.map(m=>byName[n].vals[m.key]).filter(Boolean);
+    const avg=vals.length?vals.reduce((s,v)=>s+v.pct,0)/vals.length*100:0;
+    return `<tr><td>${byName[n].fio}</td>${cells}<td style="text-align:right;font-weight:700">${avg.toFixed(1)}%</td></tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="note" style="margin-bottom:10px">% выполнения плана по каждому мастеру за весь период (план: ${kmPlanLabel()}) — отметьте, кого сравнить на графике.</div>
+    <div class="qccard" id="km-dyn-checks" style="margin-bottom:14px"><div class="leg">${checkboxLeg}</div></div>
+    <div class="qbig">
+      <div class="ctitle">Динамика % выполнения плана по месяцам</div>
+      <div class="qwrap" style="height:320px"><canvas id="km-dyn-chart"></canvas></div>
+    </div>
+    <div class="qccard">
+      <div class="ctitle">Сравнение по месяцам и за весь период</div>
+      <table class="qctable"><thead><tr><th>Мастер</th>${data.map(m=>`<th style="text-align:right">${m.label}</th>`).join('')}<th style="text-align:right">Средн.</th></tr></thead>
+      <tbody>${matrixRows}</tbody></table>
+    </div>`;
+  window._kmByName=byName; window._kmNames=names;
+  kmRefreshDynamics();
+}
+
+function kmRefreshDynamics(){
+  const checksEl=document.getElementById('km-dyn-checks');
+  const checked=checksEl?[...checksEl.querySelectorAll('input:checked')].map(i=>i.value):window._kmNames;
+  const data=window._kmData, byName=window._kmByName;
+  killChart('km-dyn-chart');
+  const ctx=document.getElementById('km-dyn-chart').getContext('2d');
+  const datasets=checked.map(n=>({
+    label:byName[n].fio, borderColor:byName[n].color, backgroundColor:'transparent', borderWidth:2,
+    pointRadius:2, pointHoverRadius:5, tension:.15, spanGaps:true,
+    data:data.map(m=>{ const v=byName[n].vals[m.key]; return v?v.pct*100:null; }),
+  }));
+  CI['km-dyn-chart']=new Chart(ctx,{
+    type:'line',
+    data:{labels:data.map(m=>m.label),datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{label:c=>c.parsed.y!=null?' '+c.dataset.label+': '+c.parsed.y.toFixed(1)+'%':null}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b'}},
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b'},title:{display:true,text:'% выполнения плана',font:{size:8},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+// ── Все метрики: одна большая таблица (мастер × месяц), выбор столбцов + сортировка по клику ──
+const KM_ALL_COLS=[
+  {key:'fio', label:'Мастер', get:r=>r.fio, def:true},
+  {key:'shift', label:'Смена', get:r=>r.shift, def:true},
+  {key:'months', label:'Месяцев', get:r=>r.months, def:false},
+  {key:'plan', label:'План,уе', get:r=>kmPlan(r), fmt:fmtN, def:true},
+  {key:'fact', label:'Факт,уе', get:r=>r.fact, fmt:fmtN, def:true},
+  {key:'delta', label:'Дельта', get:r=>kmDelta(r), fmt:v=>(v>=0?'+':'')+fmtN(v), def:true},
+  {key:'pct', label:'% выполн.', get:r=>kmPct(r)*100, fmt:v=>v.toFixed(1)+'%', def:true},
+  {key:'smen', label:'Кол-во смен', get:r=>r.smen, def:true},
+  {key:'srznach', label:'Ср/смену', get:r=>r.srznach, fmt:fmtN, def:false},
+  {key:'factKgSmena', label:'Факт кг', get:r=>r.factKgSmena, fmt:fmtN, def:false},
+  {key:'vd', label:'ВД, шт', get:r=>r.vd, def:false},
+  {key:'vdPct', label:'% ВД к выпуску', get:r=>r.vdPct*100, fmt:v=>v.toFixed(1)+'%', def:false},
+  {key:'chelChas', label:'Итого чел/час', get:r=>r.chelChas, fmt:fmtN, def:false},
+  {key:'itogoChel', label:'Итого чел', get:r=>r.itogoChel, fmt:v=>v.toFixed(1), def:false},
+  {key:'srKolChel', label:'Ср.кол-во чел/см', get:r=>r.srKolChel, fmt:v=>v.toFixed(1), def:false},
+  {key:'srProUe', label:'уе/чел-час', get:r=>r.srProUe, fmt:v=>v.toFixed(2), def:true},
+  {key:'srProKg', label:'кг/чел-час', get:r=>r.srProKg, fmt:v=>v.toFixed(1), def:true},
+];
+let kmAllSort={key:'pct',dir:-1};
+let kmAllVisible=new Set(KM_ALL_COLS.filter(c=>c.def).map(c=>c.key));
+
+function kmFlatRows(){
+  return window._kmData.flatMap(m=>m.rows.map(r=>({...r, month:m.label, monthKey:m.key})));
+}
+
+// Месяцы выбираются вкладками сверху — здесь всегда итог по мастеру за весь период (суммы план/факт,
+// пересчитанные через суммы соотношения вместо усреднения средних).
+function kmAggregatedRows(){
+  const byName={};
+  kmFlatRows().forEach(r=>{
+    if(!byName[r.norm]) byName[r.norm]={fio:r.fio, shifts:new Set(), planCalc:0, plan1c:0, fact:0, smen:0,
+      factKgSmena:0, vd:0, chelChas:0, itogoChelSum:0, srKolChelSum:0, months:0};
+    const a=byName[r.norm];
+    a.shifts.add(r.shift); a.planCalc+=r.planCalc; a.plan1c+=r.plan1c; a.fact+=r.fact; a.smen+=r.smen;
+    a.factKgSmena+=r.factKgSmena; a.vd+=r.vd; a.chelChas+=r.chelChas;
+    a.itogoChelSum+=r.itogoChel; a.srKolChelSum+=r.srKolChel; a.months+=1;
+  });
+  return Object.values(byName).map(a=>({
+    fio:a.fio, shift:[...a.shifts].join(', '), months:a.months,
+    planCalc:a.planCalc, plan1c:a.plan1c, fact:a.fact, smen:a.smen,
+    srznach:a.smen?a.fact/a.smen:0, factKgSmena:a.factKgSmena, vd:a.vd,
+    vdPct:a.fact?a.vd/a.fact*100:0, chelChas:a.chelChas,
+    itogoChel:a.months?a.itogoChelSum/a.months:0, srKolChel:a.months?a.srKolChelSum/a.months:0,
+    srProUe:a.chelChas?a.fact/a.chelChas:0, srProKg:a.chelChas?a.factKgSmena/a.chelChas:0,
+  }));
+}
+
+function kmAllMetricsSort(key){
+  if(kmAllSort.key===key) kmAllSort.dir*=-1; else kmAllSort={key,dir:1};
+  kmRenderAllMetrics();
+}
+
+function kmAllMetricsToggleCol(key){
+  if(kmAllVisible.has(key)) kmAllVisible.delete(key); else kmAllVisible.add(key);
+  kmRenderAllMetrics();
+}
+
+function kmAllMetricsShowAll(show){
+  kmAllVisible = new Set(show?KM_ALL_COLS.map(c=>c.key):KM_ALL_COLS.filter(c=>c.def).map(c=>c.key));
+  kmRenderAllMetrics();
+}
+
+function kmRenderAllMetrics(){
+  const el=document.getElementById('km-allmetrics');
+  if(!window._kmData) return;
+  const rows=kmAggregatedRows();
+  const sortCol=KM_ALL_COLS.find(c=>c.key===kmAllSort.key);
+  rows.sort((a,b)=>{
+    const va=sortCol.get(a), vb=sortCol.get(b);
+    if(typeof va==='number' && typeof vb==='number') return (va-vb)*kmAllSort.dir;
+    return String(va).localeCompare(String(vb),'ru')*kmAllSort.dir;
+  });
+  const cols=KM_ALL_COLS.filter(c=>kmAllVisible.has(c.key));
+  const checksHtml=KM_ALL_COLS.map(c=>`
+    <label class="li" style="cursor:pointer">
+      <input type="checkbox" ${kmAllVisible.has(c.key)?'checked':''} onchange="kmAllMetricsToggleCol('${c.key}')">
+      ${c.label}
+    </label>`).join('');
+  const headHtml=cols.map(c=>{
+    const arrow=kmAllSort.key===c.key?(kmAllSort.dir===1?' ▲':' ▼'):'';
+    return `<th style="cursor:pointer;user-select:none" onclick="kmAllMetricsSort('${c.key}')">${c.label}${arrow}</th>`;
+  }).join('');
+  const bodyHtml=rows.map(r=>{
+    const tds=cols.map(c=>{
+      const v=c.get(r);
+      return `<td style="text-align:${typeof v==='number'?'right':'left'}">${c.fmt?c.fmt(v):v}</td>`;
+    }).join('');
+    return `<tr>${tds}</tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="qccard" style="margin-top:14px">
+      <div class="ctitle">Все метрики по мастерам — итог за весь период <span style="font-weight:400;color:#94a3b8">(план: ${kmPlanLabel()})</span></div>
+      <div class="note" style="margin-bottom:10px">Суммарно по всем месяцам (Окт 25 – Июн 26), отдельный месяц смотрите во вкладках выше. Отметьте нужные столбцы, кликните по заголовку — отсортирует по этому столбцу (повторный клик — в обратном порядке).</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="qsubtab" style="padding:5px 10px;font-size:10px" onclick="kmAllMetricsShowAll(true)">Показать все столбцы</button>
+        <button class="qsubtab" style="padding:5px 10px;font-size:10px" onclick="kmAllMetricsShowAll(false)">Только основные</button>
+      </div>
+      <div class="leg" style="margin-bottom:12px">${checksHtml}</div>
+      <div style="overflow-x:auto"><table class="qctable"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>
+    </div>`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+async function init(){
+  const dot=document.getElementById('dot');
+  const stxt=document.getElementById('stxt');
+  let live=false, errMsg='неизвестная ошибка';
+
+  // ── Загрузка производства: источник — таблица WOODCRAFT ──────────────
+  let v2Data;
+  try{
+    if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
+    const ranges=[
+      'RUN!A21:GZ21','RUN!A22:GZ22','RUN!A23:GZ23','RUN!A33:GZ33',
+      "'Металл'!A18:GZ18","'Металл'!A20:GZ20","'Металл'!A21:GZ21","'Металл'!A28:GZ28","'Металл'!A40:GZ40",
+      "'PL 2026'!A10:BB10","'PL металл'!A12:O12",
+      'RUN!A34:GZ42', "'PL 2026'!A4:BB9",
+    ];
+    const qs=ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
+    const url4=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID3}/values:batchGet?${qs}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp4=await fetch(url4);
+    if(!resp4.ok) throw new Error(`Sheets API ${resp4.status}`);
+    const json4=await resp4.json();
+    v2Data=buildV2(json4);
+    live=true;
+  }catch(e){
+    console.warn('v2 fetch failed, using fallback:',e);
+    errMsg=String(e.message||e).slice(0,120);
+    v2Data=v2Fallback();
+  }
+  if(live){stxt.textContent='Данные актуальны из Google Sheets';}
+  else{dot.className='dot err';stxt.textContent='Офлайн: '+errMsg;}
+  renderSub('korpus2',v2Data.korpus2);
+  renderSub('metall2',v2Data.metall2);
+
+  // ── Загрузка производства — Мягкая мебель: отдельная таблица, свой RUN ──
+  let v2Myag;
+  try{
+    if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
+    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A40:HZ41"];
+    const qsMyag=rangesMyag.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
+    const url5=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID4}/values:batchGet?${qsMyag}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp5=await fetch(url5);
+    if(!resp5.ok) throw new Error(`Sheets API ${resp5.status}`);
+    const json5=await resp5.json();
+    v2Myag=buildV2Myag(json5);
+  }catch(e){
+    console.warn('v2 myagkaya fetch failed, using fallback:',e);
+    v2Myag=v2MyagFallback();
+  }
+  renderSub('myagkaya2',v2Myag.myagkaya2);
+
+  // ── Качество: отдельная таблица, грузим независимо ───────────────────
+  let qData;
+  try{
+    if(GOOGLE_API_KEY){
+      const url2=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Диаграммы")}!A1:AB80?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+      const resp2=await fetch(url2);
+      if(!resp2.ok) throw new Error(`Sheets API ${resp2.status}`);
+      const json2=await resp2.json();
+      qData=parseQualityRows(json2.values||[]);
+    } else {
+      const r2=await window.cowork.callMcpTool(
+        'mcp__2418a2dd-c8d0-4e44-8827-34165fb3738e__download_file_content',
+        {fileId:SHEET_ID2, exportMimeType:'text/csv'}
+      );
+      // Cowork-режим экспортирует CSV всей первой видимой вкладки; для листа «Диаграммы»
+      // используем серверный экспорт конкретного листа через gid не поддерживается в этом MCP,
+      // поэтому в Cowork-режиме «Качество» использует офлайн-данные ниже.
+      throw new Error('Cowork CSV export не поддерживает выбор листа «Диаграммы»');
+    }
+  }catch(e){
+    console.warn('quality fetch failed, using fallback:',e);
+    qData=qualityFallback();
+  }
+  renderQuality('qsub-shewhart',qData);
+  renderPercent('qsub-percent',qData);
+
+  // ── Сводные дефекты: отдельный лист «Сводная ММ+Корпус» ───────────────
+  let qDefects;
+  try{
+    if(GOOGLE_API_KEY){
+      const url3=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:U90?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+      const resp3=await fetch(url3);
+      if(!resp3.ok) throw new Error(`Sheets API ${resp3.status}`);
+      const json3=await resp3.json();
+      const months=qData.korpus.all.months;
+      qDefects={months,data:parseDefectRows(json3.values||[],months)};
+    } else {
+      throw new Error('Cowork CSV export не поддерживает выбор листа «Сводная ММ+Корпус»');
+    }
+  }catch(e){
+    console.warn('defects fetch failed, using fallback:',e);
+    qDefects=qDefectsFallback();
+  }
+  renderDefects('qsub-defects',qDefects);
+}
+
+// ── Выполнение плана производства ММ ─────────────────────────────────
+const SHEET_ID_MM='1wRtjakiS7lQsQzAV34KsFz03UV8fiIqQSsLcTDyY7es';
+const MMP_MONTHS=[
+  {key:'yan26',label:'Январь 2026',sheet:'Январь 2026',days:31},
+  {key:'fev26',label:'Февраль 2026',sheet:'Февраль 2026',days:28},
+  {key:'mar26',label:'Март 2026',sheet:'Март 2026',days:31},
+  {key:'apr26',label:'Апрель 2026',sheet:'Апрель 2026',days:30},
+  {key:'may26',label:'Май 2026',sheet:'Май 2026',days:31},
+  {key:'iun26',label:'Июнь 2026',sheet:'Июнь 2026',days:30},
+  {key:'iul26',label:'Июль 2026',sheet:'Июль 2026',days:31},
+];
+let mmpLoaded=false;
+let mmpChartInst={};
+
+function mmpKillChart(id){if(mmpChartInst[id]){mmpChartInst[id].destroy();delete mmpChartInst[id];}}
+
+function mmpEnsureLoaded(){
+  if(mmpLoaded) return;
+  mmpLoaded=true;
+  const sel=document.getElementById('mmp-month-sel');
+  MMP_MONTHS.forEach((m,i)=>{
+    const o=document.createElement('option');
+    o.value=m.key; o.textContent=m.label;
+    sel.appendChild(o);
+  });
+  // default to current: june 2026 (index 5)
+  sel.value='iun26';
+  mmpLoadMonth();
+}
+
+async function mmpLoadMonth(){
+  const key=document.getElementById('mmp-month-sel').value;
+  const m=MMP_MONTHS.find(x=>x.key===key);
+  if(!m) return;
+  const badge=document.getElementById('mmp-badge');
+  badge.style.display='inline';
+  badge.textContent='Загрузка…';
+  document.getElementById('mmp-content').innerHTML='<div style="padding:20px;color:#94a3b8;font-size:12px">Загрузка данных…</div>';
+  try{
+    const range=encodeURIComponent(m.sheet)+'!A1:U45';
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_MM}/values/${range}?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json=await resp.json();
+    const rows=json.values||[];
+    mmpRender(rows, m.label, m.days);
+    badge.textContent='OK ✓';
+    badge.style.background='#dcfce7';badge.style.color='#15803d';badge.style.borderColor='#86efac';
+  }catch(e){
+    badge.textContent='Ошибка';
+    badge.style.background='#fee2e2';badge.style.color='#991b1b';badge.style.borderColor='#fca5a5';
+    document.getElementById('mmp-content').innerHTML=`<div style="padding:20px;color:#ef4444;font-size:12px">Ошибка загрузки: ${e.message}</div>`;
+  }
+}
+
+function mmpSplitCard(color,title,fact,proj,plan,planToDate,fmtFn,unit){
+  const pctFact=planToDate?fact/planToDate:0;
+  const pctProj=plan?proj/plan:0;
+  return `<div class="card" style="border-top-color:${color};padding:10px 12px">
+    <div class="clbl" style="margin-bottom:6px">${title}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid #f1f5f9;padding-top:8px">
+      <div style="padding-right:10px;border-right:1px solid #f1f5f9">
+        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Факт сейчас</div>
+        <div style="font-size:17px;font-weight:800;line-height:1;color:#0f172a">${fmtFn(fact)}</div>
+        <div style="font-size:9px;color:#94a3b8;margin-top:2px">план на дату: ${fmtFn(planToDate)} ${unit}</div>
+        ${mmpPill(pctFact)}
+      </div>
+      <div style="padding-left:10px">
+        <div style="font-size:8px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Прогноз на месяц</div>
+        <div style="font-size:17px;font-weight:800;line-height:1;color:${pctProj>=1?'#15803d':pctProj>=0.9?'#854d0e':'#991b1b'}">${fmtFn(proj)}</div>
+        <div style="font-size:9px;color:#94a3b8;margin-top:2px">план месяц: ${fmtFn(plan)} ${unit}</div>
+        ${mmpPill(pctProj)}
+      </div>
+    </div>
+  </div>`;
+}
+function mmpFmt(n,dec=0){
+  if(n==null||isNaN(n)) return '—';
+  return n.toLocaleString('ru-RU',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function mmpFmtM(rub_tys){return (rub_tys/1000).toFixed(1)+' млн';}
+function mmpPill(pct){
+  if(pct>=0.98) return `<span class="pill ok">✓ ${(pct*100).toFixed(1)}%</span>`;
+  if(pct>=0.90) return `<span class="pill warn">⚠ ${(pct*100).toFixed(1)}%</span>`;
+  return `<span class="pill bad">✗ ${(pct*100).toFixed(1)}%</span>`;
+}
+function mmpHint(fact,plan,unit){
+  const delta=fact-plan;
+  const pct=plan?Math.abs(delta/plan)*100:0;
+  if(delta>=0) return `<span style="color:#15803d;font-size:10px">▲ перевыполнение +${mmpFmt(delta,1)} ${unit} (+${pct.toFixed(1)}%)</span>`;
+  return `<span style="color:#dc2626;font-size:10px">▼ отставание ${mmpFmt(delta,1)} ${unit} (${pct.toFixed(1)}%)</span>`;
+}
+
+function mmpStatusBar(pct,factVal,planVal,unit,lbl){
+  const w=Math.min(pct*100,100).toFixed(1);
+  const color=pct>=1?'#22c55e':pct>=0.90?'#f59e0b':'#ef4444';
+  return `<div style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b;margin-bottom:3px">
+      <span><b>${lbl}</b></span>
+      <span>факт ${unit==='УЕ'?mmpFmt(factVal,1):mmpFmtM(factVal)} / план ${unit==='УЕ'?mmpFmt(planVal,1):mmpFmtM(planVal)} ${unit}</span>
+    </div>
+    <div style="background:#e2e8f0;border-radius:6px;height:14px;overflow:hidden">
+      <div style="background:${color};width:${w}%;height:100%;border-radius:6px;transition:width .5s"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:9px;margin-top:2px">
+      ${mmpHint(factVal,planVal,unit)}
+      <span style="color:#64748b">${(pct*100).toFixed(1)}%</span>
+    </div>
+  </div>`;
+}
+
+function mmpRender(rows, label, monthDays){
+  const hdr5=rows[4]||[];
+  const hasNorma=typeof hdr5[6]==='string'&&hdr5[6].includes('Норм');
+  const co=hasNorma?1:0;
+
+  const planRow=rows[2]||[];
+  const totalPlanRub=(+(planRow[2]||0))/1000;
+  const totalPlanUE=+(planRow[3]||0);
+  const sheetDays=+(planRow[5]||0);
+  // Use config days as authoritative; sheet value is fallback (unreliable if month not fully set up)
+  const workingDays=monthDays||(sheetDays>=20?sheetDays:31);
+
+  const planUEcol=17+co;
+  const mmPlanUE=+(rows[3]?.[planUEcol]||0);
+  const seriaPlanUE=totalPlanUE-mmPlanUE;
+  const mmPlanRub=totalPlanUE?totalPlanRub*(mmPlanUE/totalPlanUE):0;
+  const seriaPlanRub=totalPlanRub-mmPlanRub;
+
+  const daily=[];
+  for(let i=6;i<rows.length;i++){
+    const r=rows[i]||[];
+    const day=r[1];
+    if(!day&&day!==0) continue;
+    if(typeof day==='string') continue;
+    daily.push({
+      day:+day,
+      // принятые
+      mmRub:+(r[2]||0), seriaRub:+(r[3]||0),
+      mmUE:+(r[4]||0), seriaUE:+(r[5]||0),
+      totalRub:+(r[6+co]||0), totalUE:+(r[7+co]||0),
+      // выпущенные (col M/N offset by co)
+      vmmUE:+(r[12+co]||0), vseriaUE:+(r[14+co]||0), vtotalRub:+(r[16+co]||0),
+    });
+  }
+
+  const sumRow=rows.find(r=>r&&r[1]==='Сумма')||[];
+  // Count only days with actual production (non-zero) to avoid weekends skewing projection
+  const daysWithData=daily.filter(d=>d.mmUE>0||d.seriaUE>0||d.mmRub>0).length||1;
+  const daysWithDataV=daily.filter(d=>d.vmmUE>0||d.vseriaUE>0||d.vtotalRub>0).length||1;
+  const dayLabels=daily.map(d=>d.day);
+
+  // принятые facts
+  const pFacts={
+    mmUE:+(sumRow[4]||0), seriaUE:+(sumRow[5]||0),
+    totalUE:+(sumRow[7+co]||0),
+    mmRub:+(sumRow[2]||0), seriaRub:+(sumRow[3]||0),
+    totalRub:+(sumRow[6+co]||0),
+  };
+  pFacts.totalUE=pFacts.totalUE||pFacts.mmUE+pFacts.seriaUE;
+  pFacts.totalRub=pFacts.totalRub||pFacts.mmRub+pFacts.seriaRub;
+
+  // выпущенные facts
+  const vFacts={
+    mmUE:+(sumRow[12+co]||0), seriaUE:+(sumRow[14+co]||0),
+    totalUE:+(sumRow[15+co]||0),
+    mmRub:0, seriaRub:0,
+    totalRub:+(sumRow[16+co]||0),
+  };
+  vFacts.totalUE=vFacts.totalUE||vFacts.mmUE+vFacts.seriaUE;
+
+  mmpCurrentData={
+    daily, dayLabels, daysWithData, daysWithDataV, workingDays,
+    totalPlanUE, totalPlanRub, mmPlanUE, seriaPlanUE, mmPlanRub, seriaPlanRub,
+    label,
+    priniat: pFacts, vypush: vFacts,
+  };
+
+  const el=document.getElementById('mmp-content');
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:700;color:#1e293b">${label} — выполнение плана</span>
+      <div style="display:flex;gap:6px">
+        <button id="mmp-dtog-priniat" class="qbtn on" onclick="mmpToggleData('priniat')" style="min-width:130px;padding:6px 20px;font-size:12px;font-weight:700">Принятые</button>
+        <button id="mmp-dtog-vypush" class="qbtn" onclick="mmpToggleData('vypush')" style="min-width:130px;padding:6px 20px;font-size:12px;font-weight:700">Выпущенные</button>
+      </div>
+    </div>
+
+    <!-- KPI section -->
+    <div id="mmp-kpi-section"></div>
+
+    <!-- Progress bars section -->
+    <div id="mmp-pb-section"></div>
+
+    <!-- Общий график выполнения -->
+    <div class="section-hdr" id="mmp-total-hdr">Общее выполнение — по дням</div>
+    <div class="chart-grid" style="margin-bottom:10px">
+      <div class="cbox">
+        <div class="ctitle">Итого УЕ по дням</div>
+        <div class="cwrap" style="height:190px"><canvas id="mmp-chart-total-ue"></canvas></div>
+      </div>
+      <div class="cbox">
+        <div class="ctitle">Итого руб. по дням</div>
+        <div class="cwrap" style="height:190px"><canvas id="mmp-chart-total-rub"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Загрузка по цехам -->
+    <div class="section-hdr">Загрузка по цехам — по дням</div>
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:12px">
+      <button id="mmp-tog-ue" class="qbtn on" onclick="mmpToggleSplit('ue')" style="min-width:120px;padding:7px 24px;font-size:13px;font-weight:700">УЕ</button>
+      <button id="mmp-tog-rub" class="qbtn" onclick="mmpToggleSplit('rub')" style="min-width:120px;padding:7px 24px;font-size:13px;font-weight:700">Руб.</button>
+    </div>
+    <div class="chart-grid" style="margin-bottom:10px">
+      <div class="cbox">
+        <div class="ctitle" id="mmp-split-mm-title">Цех ММ</div>
+        <div style="font-size:9px;color:#64748b;margin-bottom:4px" id="mmp-split-mm-norm"></div>
+        <div class="cwrap" style="height:200px"><canvas id="mmp-split-mm"></canvas></div>
+      </div>
+      <div class="cbox">
+        <div class="ctitle" id="mmp-split-seria-title">Цех Серия</div>
+        <div style="font-size:9px;color:#64748b;margin-bottom:4px" id="mmp-split-seria-norm"></div>
+        <div class="cwrap" style="height:200px"><canvas id="mmp-split-seria"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Нарастающий итог -->
+    <div class="section-hdr">Нарастающий итог vs план</div>
+    <div class="chart-grid" style="margin-bottom:10px">
+      <div class="cbox">
+        <div class="ctitle">УЕ нарастающим итогом</div>
+        <div class="cwrap" style="height:190px"><canvas id="mmp-chart-cum"></canvas></div>
+      </div>
+      <div class="cbox">
+        <div class="ctitle">Руб. нарастающим итогом</div>
+        <div class="cwrap" style="height:190px"><canvas id="mmp-chart-cum-rub"></canvas></div>
+      </div>
+    </div>
+    <div class="note">Источник: таблица «Производственный план ММ» — лист «${label}». Принятые = заявки за день, Выпущенные = факт по табелю 4/4.</div>
+  `;
+
+  mmpDataMode='priniat';
+  mmpSplitMode='ue';
+  mmpRenderView();
+}
+
+let mmpCurrentData=null;
+let mmpSplitMode='ue';
+let mmpDataMode='priniat';
+
+function mmpToggleData(mode){
+  mmpDataMode=mode;
+  ['priniat','vypush'].forEach(m=>{
+    const b=document.getElementById('mmp-dtog-'+m);
+    if(b) b.classList.toggle('on',m===mode);
+  });
+  if(mmpCurrentData) mmpRenderView();
+}
+
+function mmpToggleSplit(mode){
+  mmpSplitMode=mode;
+  document.getElementById('mmp-tog-ue').classList.toggle('on',mode==='ue');
+  document.getElementById('mmp-tog-rub').classList.toggle('on',mode==='rub');
+  if(mmpCurrentData) mmpRenderSplitCharts();
+}
+
+function mmpRenderView(){
+  const d=mmpCurrentData;
+  const facts=d[mmpDataMode];
+  const dw=mmpDataMode==='vypush'?d.daysWithDataV:d.daysWithData;
+  const isV=mmpDataMode==='vypush';
+  const {totalPlanUE,totalPlanRub,mmPlanUE,seriaPlanUE,mmPlanRub,seriaPlanRub,workingDays,dayLabels,daily}=d;
+
+  // KPI cards
+  const proj=(v)=>dw?v/dw*workingDays:0;
+  // plan-to-date = monthly plan proportional to days elapsed
+  const ptd=(plan)=>workingDays?+(plan*dw/workingDays).toFixed(1):0;
+  const kpiEl=document.getElementById('mmp-kpi-section');
+  if(kpiEl) kpiEl.innerHTML=`
+    <div style="font-size:9px;color:#94a3b8;margin-bottom:6px">Прогноз на основе ${dw} из ${workingDays} раб. дней</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+      ${mmpSplitCard('#3b82f6','Итого УЕ',facts.totalUE,proj(facts.totalUE),totalPlanUE,ptd(totalPlanUE),v=>mmpFmt(v,1),'УЕ')}
+      ${mmpSplitCard('#8b5cf6','Цех ММ — УЕ',facts.mmUE,proj(facts.mmUE),mmPlanUE,ptd(mmPlanUE),v=>mmpFmt(v,1),'УЕ')}
+      ${mmpSplitCard('#10b981','Цех Серия — УЕ',facts.seriaUE,proj(facts.seriaUE),seriaPlanUE,ptd(seriaPlanUE),v=>mmpFmt(v,1),'УЕ')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      ${mmpSplitCard('#f59e0b','Итого руб.',facts.totalRub,proj(facts.totalRub),totalPlanRub,ptd(totalPlanRub),v=>mmpFmtM(v),'млн')}
+      ${isV
+        ?`<div class="card" style="border-top-color:#f97316;opacity:.45;padding:10px 12px"><div class="clbl">Цех ММ — руб.</div><div style="font-size:11px;color:#94a3b8;margin-top:8px">Нет данных в источнике</div></div>`
+        :mmpSplitCard('#f97316','Цех ММ — руб.',facts.mmRub,proj(facts.mmRub),mmPlanRub,ptd(mmPlanRub),v=>mmpFmtM(v),'млн')}
+      ${isV
+        ?`<div class="card" style="border-top-color:#06b6d4;opacity:.45;padding:10px 12px"><div class="clbl">Цех Серия — руб.</div><div style="font-size:11px;color:#94a3b8;margin-top:8px">Нет данных в источнике</div></div>`
+        :mmpSplitCard('#06b6d4','Цех Серия — руб.',facts.seriaRub,proj(facts.seriaRub),seriaPlanRub,ptd(seriaPlanRub),v=>mmpFmtM(v),'млн')}
+    </div>`;
+
+  // Progress bars
+  const pbEl=document.getElementById('mmp-pb-section');
+  if(pbEl) pbEl.innerHTML=`
+    <div style="background:#fff;border-radius:10px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:10px">Загрузка цехов — статус выполнения</div>
+      ${mmpStatusBar(mmPlanUE?facts.mmUE/mmPlanUE:0,facts.mmUE,mmPlanUE,'УЕ','ЦЕХ ММ — УЕ')}
+      ${mmpStatusBar(seriaPlanUE?facts.seriaUE/seriaPlanUE:0,facts.seriaUE,seriaPlanUE,'УЕ','ЦЕХ СЕРИЯ — УЕ')}
+      ${mmpStatusBar(totalPlanRub?facts.totalRub/totalPlanRub:0,facts.totalRub,totalPlanRub,'тыс.руб.','ИТОГО — деньги')}
+    </div>`;
+
+  // Charts
+  const totalUEData=daily.map(d=>isV?+(d.vmmUE+d.vseriaUE).toFixed(1):+(d.totalUE||0).toFixed(1));
+  const totalRubData=daily.map(d=>isV?+d.vtotalRub.toFixed(1):+(d.totalRub||d.mmRub+d.seriaRub).toFixed(1));
+  const planUEDay=+(totalPlanUE/workingDays).toFixed(1);
+  const planRubDay=+(totalPlanRub/workingDays).toFixed(1);
+  const barOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}}};
+
+  mmpKillChart('mmp-chart-total-ue');
+  mmpChartInst['mmp-chart-total-ue']=new Chart(document.getElementById('mmp-chart-total-ue').getContext('2d'),{
+    type:'bar',data:{labels:dayLabels,datasets:[
+      {label:'Итого УЕ',data:totalUEData,backgroundColor:'rgba(59,130,246,.7)',borderRadius:2},
+      {label:`План ${planUEDay} УЕ/день`,data:daily.map(()=>planUEDay),type:'line',borderColor:'#f59e0b',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,tension:0},
+    ]},options:barOpts});
+
+  mmpKillChart('mmp-chart-total-rub');
+  mmpChartInst['mmp-chart-total-rub']=new Chart(document.getElementById('mmp-chart-total-rub').getContext('2d'),{
+    type:'bar',data:{labels:dayLabels,datasets:[
+      {label:'Итого тыс.руб.',data:totalRubData,backgroundColor:'rgba(249,115,22,.7)',borderRadius:2},
+      {label:`План ${planRubDay} тыс.руб./день`,data:daily.map(()=>planRubDay),type:'line',borderColor:'#f59e0b',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,tension:0},
+    ]},options:barOpts});
+
+  mmpRenderSplitCharts();
+
+  // Cumulative UE
+  let cUE=0,cPlan=0;
+  const cUEArr=[],cPlanArr=[];
+  daily.forEach(d=>{cUE+=isV?(d.vmmUE+d.vseriaUE):(d.totalUE||0);cPlan+=totalPlanUE/workingDays;cUEArr.push(+cUE.toFixed(1));cPlanArr.push(+cPlan.toFixed(1));});
+  mmpKillChart('mmp-chart-cum');
+  mmpChartInst['mmp-chart-cum']=new Chart(document.getElementById('mmp-chart-cum').getContext('2d'),{
+    type:'line',data:{labels:dayLabels,datasets:[
+      {label:'Факт нараст.',data:cUEArr,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.1)',fill:true,tension:0.3,pointRadius:2,borderWidth:2},
+      {label:'План нараст.',data:cPlanArr,borderColor:'#f59e0b',borderDash:[5,4],fill:false,tension:0,pointRadius:0,borderWidth:2},
+    ]},options:barOpts});
+
+  // Cumulative Rub
+  let cR=0,cRP=0;
+  const cRArr=[],cRPArr=[];
+  daily.forEach(d=>{cR+=isV?d.vtotalRub:(d.totalRub||d.mmRub+d.seriaRub);cRP+=totalPlanRub/workingDays;cRArr.push(+cR.toFixed(1));cRPArr.push(+cRP.toFixed(1));});
+  mmpKillChart('mmp-chart-cum-rub');
+  mmpChartInst['mmp-chart-cum-rub']=new Chart(document.getElementById('mmp-chart-cum-rub').getContext('2d'),{
+    type:'line',data:{labels:dayLabels,datasets:[
+      {label:'Факт нараст.',data:cRArr,borderColor:'#f97316',backgroundColor:'rgba(249,115,22,.1)',fill:true,tension:0.3,pointRadius:2,borderWidth:2},
+      {label:'План нараст.',data:cRPArr,borderColor:'#f59e0b',borderDash:[5,4],fill:false,tension:0,pointRadius:0,borderWidth:2},
+    ]},options:barOpts});
+}
+
+function mmpRenderSplitCharts(){
+  const {daily,dayLabels,mmPlanUE,seriaPlanUE,mmPlanRub,seriaPlanRub,workingDays}=mmpCurrentData;
+  const isUE=mmpSplitMode==='ue';
+  const isV=mmpDataMode==='vypush';
+  const unit=isUE?'УЕ':'тыс.руб.';
+
+  const mmNorm=isUE?(mmPlanUE/workingDays):(mmPlanRub/workingDays);
+  const seriaNorm=isUE?(seriaPlanUE/workingDays):(seriaPlanRub/workingDays);
+
+  const mmVals=isUE
+    ?(isV?daily.map(d=>+d.vmmUE.toFixed(1)):daily.map(d=>+d.mmUE.toFixed(1)))
+    :(isV?daily.map(()=>0):daily.map(d=>+d.mmRub.toFixed(1)));
+  const seriaVals=isUE
+    ?(isV?daily.map(d=>+d.vseriaUE.toFixed(1)):daily.map(d=>+d.seriaUE.toFixed(1)))
+    :(isV?daily.map(()=>0):daily.map(d=>+d.seriaRub.toFixed(1)));
+
+  // Green = at/above norm, red = below norm
+  const mmColors='rgba(139,92,246,.75)';
+  const seriaColors='rgba(16,185,129,.75)';
+  const normArr=(n,len)=>Array(len).fill(+n.toFixed(1));
+
+  const chartOpts=(normVal,unit)=>({
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{font:{size:10},boxWidth:10}},
+      tooltip:{callbacks:{label:ctx=>{
+        const v=ctx.raw;
+        if(ctx.datasetIndex===1) return `Норма: ${normVal.toFixed(1)} ${unit}`;
+        const diff=v-normVal;
+        const sign=diff>=0?'+':'';
+        return `${ctx.dataset.label}: ${v} ${unit} (${sign}${diff.toFixed(1)})`;
+      }}}
+    },
+    scales:{x:{ticks:{font:{size:9}}},y:{ticks:{font:{size:9}}}}
+  });
+
+  // Подпись нормы
+  const setNormLabel=(id,norm,unit)=>{
+    const el=document.getElementById(id);
+    if(el) el.textContent=`Норма: ${norm.toFixed(1)} ${unit}/день`;
+  };
+  setNormLabel('mmp-split-mm-norm',mmNorm,unit);
+  setNormLabel('mmp-split-seria-norm',seriaNorm,unit);
+
+  // Заголовки
+  const mmTitle=document.getElementById('mmp-split-mm-title');
+  const seriaTitle=document.getElementById('mmp-split-seria-title');
+  if(mmTitle) mmTitle.textContent=`Цех ММ — по дням (${unit})`;
+  if(seriaTitle) seriaTitle.textContent=`Цех Серия — по дням (${unit})`;
+
+  // ММ chart
+  mmpKillChart('mmp-split-mm');
+  mmpChartInst['mmp-split-mm']=new Chart(
+    document.getElementById('mmp-split-mm').getContext('2d'),{
+      type:'bar',
+      data:{
+        labels:dayLabels,
+        datasets:[
+          {label:`ММ ${unit}`,data:mmVals,backgroundColor:mmColors,borderRadius:2},
+          {label:`Норма ${mmNorm.toFixed(0)} ${unit}`,data:normArr(mmNorm,daily.length),
+           type:'line',borderColor:'#f59e0b',borderWidth:2,borderDash:[5,4],
+           pointRadius:0,fill:false,tension:0,order:0},
+        ]
+      },
+      options:chartOpts(mmNorm,unit)
+    }
+  );
+
+  // Серия chart
+  mmpKillChart('mmp-split-seria');
+  mmpChartInst['mmp-split-seria']=new Chart(
+    document.getElementById('mmp-split-seria').getContext('2d'),{
+      type:'bar',
+      data:{
+        labels:dayLabels,
+        datasets:[
+          {label:`Серия ${unit}`,data:seriaVals,backgroundColor:seriaColors,borderRadius:2},
+          {label:`Норма ${seriaNorm.toFixed(0)} ${unit}`,data:normArr(seriaNorm,daily.length),
+           type:'line',borderColor:'#f59e0b',borderWidth:2,borderDash:[5,4],
+           pointRadius:0,fill:false,tension:0,order:0},
+        ]
+      },
+      options:chartOpts(seriaNorm,unit)
+    }
+  );
+}
+// ── end Выполнение плана ─────────────────────────────────────────────
+
+// ── Auth ─────────────────────────────────────────────────────────────
+const AUTH_HASH='f0c1234c5ba565a8bc3bfbc32af0d430b3c49f540b2256deaebe56c2ad5e9a4d';
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function authShowError(msg){
+  const el=document.getElementById('auth-error');
+  if(el){el.textContent=msg;el.style.display='block';}
+}
+async function authSubmit(){
+  const pwd=document.getElementById('auth-pwd').value;
+  if(!pwd) return;
+  const btn=document.getElementById('auth-btn');
+  btn.disabled=true; btn.textContent='Проверка...';
+  const hash=await sha256(pwd);
+  if(hash===AUTH_HASH){
+    sessionStorage.setItem('auth','1');
+    document.getElementById('auth-screen').remove();
+    document.getElementById('app').style.display='';
+    init();
+  } else {
+    authShowError('Неверный пароль');
+    btn.disabled=false; btn.textContent='Войти';
+    document.getElementById('auth-pwd').value='';
+    document.getElementById('auth-pwd').focus();
+  }
+}
+function authInit(){
+  const needsAuth=location.protocol==='https:'&&sessionStorage.getItem('auth')!=='1';
+  if(!needsAuth){
+    // local file or already authenticated — go straight in
+    document.getElementById('app').style.display='';
+    init();
+    return;
+  }
+  // Show auth screen
+  document.getElementById('app').style.display='none';
+  const scr=document.getElementById('auth-screen');
+  scr.style.display='flex';
+  document.getElementById('auth-pwd').addEventListener('keydown',e=>{if(e.key==='Enter')authSubmit();});
+  document.getElementById('auth-pwd').focus();
+}
+authInit();
+</script>
+</div><!-- /app -->
+</body>
+</html>
