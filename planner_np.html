@@ -1826,6 +1826,18 @@ function getActiveStageId(pid){
   for(const st of STAGES){const e=sched[st.id];if(e&&Object.values(e.days||{}).some(v=>v.status==='planned'))return st.id;}
   return null;
 }
+// Returns true if all stages before stageId are done (no remaining planned days)
+function isPrevStageDone(pid,stageId){
+  const sched=S.schedule[pid];if(!sched)return true;
+  const idx=STAGES.findIndex(s=>s.id===stageId);
+  if(idx<=0)return true;
+  for(let i=idx-1;i>=0;i--){
+    const e=sched[STAGES[i].id];
+    if(!e||e.skipped)continue; // skip absent/skipped stages
+    return!Object.values(e.days||{}).some(v=>v.status==='planned');
+  }
+  return true;
+}
 
 // ─── POINTS ───────────────────────────────────────────────────
 function calcPoints(cid,yr,mo){
@@ -4797,7 +4809,7 @@ function renderCalendar(){
             const isActiveSid=stage.id===activeSid;
             const canAct=session.role==='admin'||prod.constructorId===session.cid;
             const isKeyStage=KEY_STAGES.includes(stage.id);
-            const isPlannedClickable=status==='planned'&&(d<=td||isActiveSid||(session.role==='admin'&&isKeyStage));
+            const isPlannedClickable=status==='planned'&&isPrevStageDone(prod.id,stage.id);
             const isMarkedOwn=status!=='planned'&&canModify(mark);
             if(canAct&&(isPlannedClickable||isMarkedOwn)){
               cell.classList.add('clickable');
@@ -5057,7 +5069,7 @@ function openMarkModal(pid,sid,dateStr,mark,prodName,stageName,isActiveStage,pro
     `<b>Изделие:</b> ${prodName}<br><b>Дата:</b> ${d.getDate()} ${MONTHS_G[d.getMonth()]} ${d.getFullYear()}<br><b>Этап до:</b> ${fmtFull(entry.endDate)}`+
     (entry.failReason?`<br><b>Причина сдвига:</b> ${entry.failReason}`:'');
   const status=mark?mark.status:'planned';
-  document.getElementById('markStageSection').style.display=isActiveStage?'':'none';
+  document.getElementById('markStageSection').style.display=(isActiveStage||isPrevStageDone(pid,sid))?'':'none';
   document.getElementById('markDayBtns').style.display=status==='planned'?'flex':'none';
   document.getElementById('markRevertRow').style.display=(status!=='planned'&&canModify(mark))?'':'none';
   document.getElementById('markFailForm').style.display='none';
