@@ -1615,7 +1615,8 @@ function migrate(){
   if(!S.mm.absences)S.mm.absences={};
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
-  if(!S.mm.templates.length){
+  // Migrate: reset templates if stages don't have spec field yet
+  if(!S.mm.templates.length||!S.mm.templates[0].stages.length||!S.mm.templates[0].stages[0]?.spec){
     S.mm.templates=[
   {
     "id": "mmt1",
