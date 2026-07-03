@@ -6178,7 +6178,7 @@ function deleteMMStage(templateId,stageId){
 function moveMMStage(templateId,stageId,dir){
   const t=S.mm.templates.find(x=>x.id===templateId);if(!t)return;
   const idx=t.stages.findIndex(x=>x.id===stageId);
-  const ni=idx+dir;if(ni<0||ni>=t.stages.length)return;
+  const ni=idx+(dir==='up'?-1:1);if(ni<0||ni>=t.stages.length)return;
   [t.stages[idx],t.stages[ni]]=[t.stages[ni],t.stages[idx]];
   save();renderMMTemplates();
 }
