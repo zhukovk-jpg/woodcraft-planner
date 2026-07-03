@@ -6396,7 +6396,7 @@ function rebuildAllMM(){
     S.mm.schedule[prod.id]={};const sched=S.mm.schedule[prod.id];
     let cursorA=cidA?mmEnsureWork(prod.startDate,cidA):prod.startDate;
     let cursorB=cidB?mmEnsureWork(prod.startDate,cidB):prod.startDate;
-    for(const stage of tmpl.stages){
+    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
       const sv=saved[prod.id]?.[stage.id]||{};
       const spec=stage.spec||'both';
       const dur=stage.days||1;
@@ -6455,7 +6455,7 @@ function renderMMCalendar(){
   for(const prod of S.mm.products){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
     const sched=S.mm.schedule[prod.id]||{};
-    for(const stage of tmpl.stages){
+    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
       if(!stage.expWorkshop)continue;
       const e=sched[stage.id];if(!e)continue;
       const stageDays=[...Object.keys(e.days||{}),...Object.keys(e.track0?.days||{}),...Object.keys(e.track1?.days||{})];
@@ -6597,7 +6597,7 @@ function calcMMPoints(cid){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
     if(!tmpl)continue;
     const sched=S.mm.schedule[prod.id]||{};
-    for(const stage of tmpl.stages){
+    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
       const e=sched[stage.id];if(!e)continue;
       const dur=stage.days||1;
       if(stage.mode==='ctrl'){
