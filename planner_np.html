@@ -2563,10 +2563,9 @@ function isWorkDay(d,cid){
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
-// For ctrl stages: vacation/sick don't block — control continues
+// For ctrl stages: only weekends block — vacation/sick/off don't stop control
 function isCtrlWorkDay(d,cid){
   const pd=getPersonalDayType(d,cid);
-  if(pd==='off')return false;
   if(pd==='work')return true;
   return!isBaseWknd(d);
 }
