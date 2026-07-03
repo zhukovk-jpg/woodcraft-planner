@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer-when-downgrade">
 <title>СУ — Метрики</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 <style>
@@ -217,6 +218,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
 </div>
 
 <script>
+// Patch fetch to always send full Referer (needed for Google API key HTTP referrer restriction)
+(()=>{const _f=window.fetch;window.fetch=(u,o={})=>_f(u,{referrerPolicy:'unsafe-url',...o});})();
 // ── Constants ─────────────────────────────────────────────────────────
 // WL/MONTHS остаются как дефолтные подписи недель/месяцев для build() —
 // конкретные секции («Загрузка производства») передают свои WL2/MONTHS2/WL_MYAG/MONTHS_MYAG.
@@ -1847,8 +1850,8 @@ function qdRefresh(){
 // Фильтруем по «Поставщик»: ЛофтКорпус → Корпус, ЛофтМягкая → Мягкая, остальное (другие
 // заводы/субподрядчики) не относится к нам и отбрасывается. Последние 6 месяцев, подгрузка
 // по требованию (только когда открыли вкладку) — данных слишком много для автозагрузки.
-const QC_MONTHS=['Январь 2025','Февраль 2025','Март 2025','Апрель 2025','Май 2025','Июнь 2025','Июль 2025','Август 2025','Сентябрь 2025','Октябрь 2025','Ноябрь 2025','Декабрь 2025','Январь 2026','Февраль 2026','Март 2026','Апрель 2026','Май 2026'];
-const QC_MONTH_SHORT=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26'];
+const QC_MONTHS=['Январь 2025','Февраль 2025','Март 2025','Апрель 2025','Май 2025','Июнь 2025','Июль 2025','Август 2025','Сентябрь 2025','Октябрь 2025','Ноябрь 2025','Декабрь 2025','Январь 2026','Февраль 2026','Март 2026','Апрель 2026','Май 2026','Июнь 2026'];
+const QC_MONTH_SHORT=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26','Июн\'26'];
 const QC_SUPPLIER_DEPT={'ЛофтКорпус':'korpus','ЛофтМягкая':'myagkaya'};
 let _qcRecords=null; // кэш после первой загрузки
 const _qcState={dept:'korpus',month:-1}; // month:-1 = «Все месяцы»
@@ -2512,49 +2515,64 @@ async function init(){
   }
   renderSub('myagkaya2',v2Myag.myagkaya2);
 
-  // ── Качество: отдельная таблица, грузим независимо ───────────────────
+  // ── Качество: Диаграммы ───────────────────────────────────────────────
   let qData;
   try{
-    if(GOOGLE_API_KEY){
-      const url2=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Диаграммы")}!A1:AB80?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
-      const resp2=await fetch(url2);
-      if(!resp2.ok) throw new Error(`Sheets API ${resp2.status}`);
-      const json2=await resp2.json();
-      qData=parseQualityRows(json2.values||[]);
-    } else {
-      const r2=await window.cowork.callMcpTool(
-        'mcp__2418a2dd-c8d0-4e44-8827-34165fb3738e__download_file_content',
-        {fileId:SHEET_ID2, exportMimeType:'text/csv'}
-      );
-      // Cowork-режим экспортирует CSV всей первой видимой вкладки; для листа «Диаграммы»
-      // используем серверный экспорт конкретного листа через gid не поддерживается в этом MCP,
-      // поэтому в Cowork-режиме «Качество» использует офлайн-данные ниже.
-      throw new Error('Cowork CSV export не поддерживает выбор листа «Диаграммы»');
-    }
+    if(!GOOGLE_API_KEY) throw new Error('no key');
+    const resp2=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Диаграммы")}!A1:AB80?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
+    if(!resp2.ok) throw new Error(`Диаграммы ${resp2.status}`);
+    qData=parseQualityRows((await resp2.json()).values||[]);
   }catch(e){
-    console.warn('quality fetch failed, using fallback:',e);
+    console.warn('quality fetch failed:',e);
     qData=qualityFallback();
+  }
+
+  // ── Сводные дефекты + расширение Шухарт (Сводная ММ+Корпус) ─────────
+  let qDefects;
+  try{
+    if(!GOOGLE_API_KEY) throw new Error('no key');
+    const resp3=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:V90?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
+    if(!resp3.ok) throw new Error(`Сводная ${resp3.status}`);
+    const svdRows=(await resp3.json()).values||[];
+    const svdMonthCount=(svdRows[1]||[]).filter((v,i)=>i>=2&&Q_MONTH_NAMES.includes(String(v))).length;
+    const svdMonths=QC_MONTH_SHORT.slice(0,svdMonthCount);
+    // Extend Шухарт if Сводная has more months than Диаграммы
+    const baseMonthCount=(qData.korpus&&qData.korpus.all&&qData.korpus.all.months||[]).length;
+    if(svdMonthCount>baseMonthCount){
+      // Build ИТОГО map
+      const itogoMap={};
+      let curSec=null;
+      for(const row of svdRows){
+        const c0=row[0],c1=String(row[1]||'').trim();
+        if((c0===''||c0==null)&&Q_SECTIONS[c1]) curSec=Q_SECTIONS[c1];
+        if(c1==='ИТОГО рекламаций'&&curSec){itogoMap[`${curSec.dept}.${curSec.view}`]=row;curSec=null;}
+      }
+      // months is shared across all sections — extend it only once
+      const sharedMonths=qData.korpus.all.months;
+      for(let i=baseMonthCount;i<svdMonthCount;i++) sharedMonths.push(QC_MONTH_SHORT[i]||'');
+      // Extend each series' vals only
+      for(const [dept,view] of [['korpus','all'],['korpus','factory'],['myagkaya','all'],['myagkaya','factory']]){
+        const d=qData[dept]&&qData[dept][view];
+        const irow=itogoMap[`${dept}.${view}`];
+        if(!d||!irow) continue;
+        for(let i=baseMonthCount;i<svdMonthCount;i++){
+          const v=irow[2+i];
+          d.vals.push(v!=null&&v!==''?Number(v)||0:null);
+        }
+        const known=d.vals.filter(v=>v!=null);
+        d.mean=known.reduce((a,b)=>a+b,0)/known.length;
+        d.sigma=qD2Sigma(known);
+        d.sigmaHist=qHistSigmas(d.vals,d.months);
+        if(d.pct) for(let i=baseMonthCount;i<svdMonthCount;i++) d.pct.push(null);
+      }
+    }
+    qDefects={months:svdMonths,data:parseDefectRows(svdRows,svdMonths)};
+  }catch(e){
+    console.warn('defects fetch failed:',e);
+    qDefects=qDefectsFallback();
   }
   renderQuality('qsub-shewhart',qData);
   renderPercent('qsub-percent',qData);
-
-  // ── Сводные дефекты: отдельный лист «Сводная ММ+Корпус» ───────────────
-  let qDefects;
-  try{
-    if(GOOGLE_API_KEY){
-      const url3=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:U90?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
-      const resp3=await fetch(url3);
-      if(!resp3.ok) throw new Error(`Sheets API ${resp3.status}`);
-      const json3=await resp3.json();
-      const months=qData.korpus.all.months;
-      qDefects={months,data:parseDefectRows(json3.values||[],months)};
-    } else {
-      throw new Error('Cowork CSV export не поддерживает выбор листа «Сводная ММ+Корпус»');
-    }
-  }catch(e){
-    console.warn('defects fetch failed, using fallback:',e);
-    qDefects=qDefectsFallback();
-  }
   renderDefects('qsub-defects',qDefects);
 }
 
