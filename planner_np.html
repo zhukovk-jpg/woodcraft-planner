@@ -6097,10 +6097,10 @@ function mmPhaseHeaders(t){
       '<span style="background:'+SB[st.spec||'frame']+';color:'+SC[st.spec||'frame']+';border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700">'+SL[st.spec||'frame']+'</span>'+
       '<span style="background:'+(MC[st.mode]||'#888')+';color:#fff;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700">'+(ML[st.mode]||st.mode)+'</span>'+
       '<span style="font-size:11px;color:#555">'+st.days+'д</span>'+ew+
-      '<button class="btn btn-sm" style="padding:1px 7px;font-size:11px" onclick="openEditMMStage(\''+tid+'\'\',\''+sid+'\')">✏️</button>'+
-      '<button class="btn btn-sm" style="padding:1px 5px;font-size:11px" onclick="moveMMStage(\''+tid+'\',\''+sid+'\'\',\'up\')">↑</button>'+
-      '<button class="btn btn-sm" style="padding:1px 5px;font-size:11px" onclick="moveMMStage(\''+tid+'\',\''+sid+'\',\'down\')">↓</button>'+
-      '<button class="btn btn-sm btn-danger" style="padding:1px 7px;font-size:11px" onclick="deleteMMStage(\''+tid+'\',\''+sid+'\')">🗑</button>'+
+      '<button class="btn btn-sm" style="padding:1px 7px;font-size:11px" data-tid="'+tid+'" data-sid="'+sid+'" onclick="openEditMMStage(this.dataset.tid,this.dataset.sid)">✏️</button>'+
+      '<button class="btn btn-sm" style="padding:1px 5px;font-size:11px" data-tid="'+tid+'" data-sid="'+sid+'" onclick="moveMMStage(this.dataset.tid,this.dataset.sid,\'up\')">↑</button>'+
+      '<button class="btn btn-sm" style="padding:1px 5px;font-size:11px" data-tid="'+tid+'" data-sid="'+sid+'" onclick="moveMMStage(this.dataset.tid,this.dataset.sid,\'down\')">↓</button>'+
+      '<button class="btn btn-sm btn-danger" style="padding:1px 7px;font-size:11px" data-tid="'+tid+'" data-sid="'+sid+'" onclick="deleteMMStage(this.dataset.tid,this.dataset.sid)">🗑</button>'+
       '</div>';
   });
   return html;
