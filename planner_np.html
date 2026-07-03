@@ -4797,29 +4797,27 @@ function renderCalendar(){
           const isActiveSid=stage.id===activeSid;
           const mark=entry?.days?.[d];
           const status=mark?.status||'';
-          if(entry&&!entry.skipped){
-            if(mark){
-              const byAdmin=mark.setBy==='admin';
-              const isCtrl=stage.type==='ctrl';
-              if(status==='done')cell.classList.add(isCtrl?'s-ctrl-done':'s-doing-done');
-              else if(status==='fail')cell.classList.add(isCtrl?'s-ctrl-fail':'s-doing-fail');
-              else cell.classList.add(isCtrl?'s-ctrl':'s-doing');
-              if(byAdmin&&status!=='planned')cell.classList.add('s-admin-mark');
-              const div=document.createElement('div');div.className='dc-txt';
-              div.textContent=status==='done'?'✔':status==='fail'?'✖':stage.abbr;
-              cell.appendChild(div);
-              if(canAct&&status==='planned'){
-                const _pid2=prod.id,_sid2=stage.id;
-                cell.addEventListener('mouseenter',e=>{if(!e.buttons)showDurPopup(_pid2,_sid2,e.clientX,e.clientY);});
-                cell.addEventListener('mouseleave',()=>scheduleDurPopupHide());
-              }
+          // Render colored cell if mark exists
+          if(mark){
+            const byAdmin=mark.setBy==='admin';
+            const isCtrl=stage.type==='ctrl';
+            if(status==='done')cell.classList.add(isCtrl?'s-ctrl-done':'s-doing-done');
+            else if(status==='fail')cell.classList.add(isCtrl?'s-ctrl-fail':'s-doing-fail');
+            else cell.classList.add(isCtrl?'s-ctrl':'s-doing');
+            if(byAdmin&&status!=='planned')cell.classList.add('s-admin-mark');
+            const div=document.createElement('div');div.className='dc-txt';
+            div.textContent=status==='done'?'✔':status==='fail'?'✖':stage.abbr;
+            cell.appendChild(div);
+            if(canAct&&status==='planned'){
+              const _pid2=prod.id,_sid2=stage.id;
+              cell.addEventListener('mouseenter',e=>{if(!e.buttons)showDurPopup(_pid2,_sid2,e.clientX,e.clientY);});
+              cell.addEventListener('mouseleave',()=>scheduleDurPopupHide());
             }
-            // Clickable: past/today always, future only if prev stage done
+          }
+          // Clickable: past/today = always; future = only if prev stage done and has content
+          if(canAct){
             const isFuture=d>td;
-            const canClick=canAct&&(isFuture?isPrevStageDone(prod.id,stage.id):true);
-            // For future empty cells: skip (nothing to mark)
-            const hasContent=!!mark;
-            if(canClick&&(hasContent||!isFuture)){
+            if(!isFuture||(mark&&isPrevStageDone(prod.id,stage.id))){
               cell.classList.add('clickable');
               const _pid=prod.id,_sid=stage.id,_d=d,_m=mark||null,_pn=prod.name,_sn=stage.name,_ia=isActiveSid,_pcid=con.id;
               cell.onclick=()=>openMarkModal(_pid,_sid,_d,_m,_pn,_sn,_ia,_pcid);
