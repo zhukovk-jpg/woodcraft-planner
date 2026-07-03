@@ -4809,7 +4809,7 @@ function renderCalendar(){
             const isActiveSid=stage.id===activeSid;
             const canAct=session.role==='admin'||prod.constructorId===session.cid;
             const isKeyStage=KEY_STAGES.includes(stage.id);
-            const isPlannedClickable=status==='planned'&&isPrevStageDone(prod.id,stage.id);
+            const isPlannedClickable=status==='planned'&&(d<=td||isPrevStageDone(prod.id,stage.id));
             const isMarkedOwn=status!=='planned'&&canModify(mark);
             if(canAct&&(isPlannedClickable||isMarkedOwn)){
               cell.classList.add('clickable');
