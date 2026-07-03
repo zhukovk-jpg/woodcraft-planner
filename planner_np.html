@@ -4793,6 +4793,8 @@ function renderCalendar(){
           }
           else cell.className='dc';
 
+          const canAct=session.role==='admin'||prod.constructorId===session.cid;
+          const isActiveSid=stage.id===activeSid;
           if(entry&&entry.days&&entry.days[d]!==undefined){
             const mark=entry.days[d];
             const status=mark.status;
@@ -4805,10 +4807,6 @@ function renderCalendar(){
             const div=document.createElement('div');div.className='dc-txt';
             div.textContent=status==='done'?'✔':status==='fail'?'✖':stage.abbr;
             cell.appendChild(div);
-
-            const isActiveSid=stage.id===activeSid;
-            const canAct=session.role==='admin'||prod.constructorId===session.cid;
-            const isKeyStage=KEY_STAGES.includes(stage.id);
             const isPlannedClickable=status==='planned'&&(d<=td||isPrevStageDone(prod.id,stage.id));
             const isMarkedOwn=status!=='planned'&&canModify(mark);
             if(canAct&&(isPlannedClickable||isMarkedOwn)){
@@ -4822,6 +4820,11 @@ function renderCalendar(){
               cell.addEventListener('mouseenter',e=>{if(!e.buttons)showDurPopup(_pid2,_sid2,e.clientX,e.clientY);});
               cell.addEventListener('mouseleave',()=>scheduleDurPopupHide());
             }
+          } else if(canAct&&entry&&!entry.skipped&&d<=td){
+            // Past date with no planned entry: allow marking done (e.g. work done on vacation/shifted day)
+            cell.classList.add('clickable');
+            const _pid=prod.id,_sid=stage.id,_d=d,_pn=prod.name,_sn=stage.name,_pcid=con.id;
+            cell.onclick=()=>openMarkModal(_pid,_sid,_d,null,_pn,_sn,isActiveSid,_pcid);
           }
           sr.appendChild(cell);
         }
