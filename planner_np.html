@@ -1611,10 +1611,11 @@ function migrate(){
       for(const d in e.days){const v=e.days[d];nd[d]=typeof v==='string'?{status:v,setBy:'system'}:v;}
       e.days=nd;
     }
-  if(!S.mm)S.mm={constructors:[],products:[],schedule:{},templates:[],extraTaskDefs:[],extraAssignments:[],personalDays:{},absences:{},shiftsLog:[],acceptanceDates:[],acceptanceResults:{},individualAcceptDates:{}};
+  if(!S.mm)S.mm={constructors:[],products:[],schedule:{},templates:[],extraTaskDefs:[],extraAssignments:[],personalDays:{},absences:{},shiftsLog:[],acceptanceDates:[],acceptanceResults:{},individualAcceptDates:{},stageConstraints:{}};
   if(!S.mm.acceptanceDates)S.mm.acceptanceDates=[];
   if(!S.mm.acceptanceResults)S.mm.acceptanceResults={};
   if(!S.mm.individualAcceptDates)S.mm.individualAcceptDates={};
+  if(!S.mm.stageConstraints)S.mm.stageConstraints={};
   if(!S.mm.constructors)S.mm.constructors=[];
   if(!S.mm.products)S.mm.products=[];
   if(!S.mm.schedule)S.mm.schedule={};
@@ -6411,12 +6412,15 @@ function rebuildAllMM(){
       const isCtrl=stage.mode==='ctrl';
       sched[stage.id]={startDate:null,endDate:null,days:{},failReason:sv.failReason||null};
       const entry=sched[stage.id];
+      const constr=(S.mm.stageConstraints[prod.id]||{})[stage.id]||null;
       if(spec==='frame'){
+        if(constr&&constr>cursorA)cursorA=mmEnsureWork(constr,cidA);
         const pm=sv.marks0||sv.marks||{};
         const r=_mmSchedSingle(pm,dur,cursorA,cidA,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
         entry.track0={constructorId:cidA,days:r.days};entry.days=r.days;
         entry.startDate=r.startDate;entry.endDate=r.endDate;cursorA=r.nextCursor;
       }else if(spec==='sewing'){
+        if(constr&&constr>cursorB)cursorB=mmEnsureWork(constr,cidB);
         const pm=sv.marks1||sv.marks||{};
         const r=_mmSchedSingle(pm,dur,cursorB,cidB,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
         entry.track1={constructorId:cidB,days:r.days};entry.days=r.days;
@@ -6424,6 +6428,7 @@ function rebuildAllMM(){
       }else{
         // both or merge: start from max of both cursors
         let startFrom=cursorA>cursorB?cursorA:cursorB;
+        if(constr&&constr>startFrom)startFrom=constr;
         // acceptance stages jump to next scheduled acceptance date
         const acceptType=stage.abbr==='ПРМЧ'?'draft':stage.abbr==='ПРМЦ'?'clean':null;
         if(acceptType){
@@ -6558,24 +6563,6 @@ function renderMMCalendar(){
     html+=`<th class="gh-day${isWknd?' wknd':''}${isToday?' today-h':''}">${dd}<br><span style="font-size:9px;font-weight:400">${['вс','пн','вт','ср','чт','пт','сб'][dt.getDay()]}</span></th>`;
   }
   html+='</tr></thead><tbody>';
-  // Exp workshop load row
-  const expLoad={};
-  for(const prod of S.mm.products){
-    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
-    const sched=S.mm.schedule[prod.id]||{};
-    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
-      if(!stage.expWorkshop)continue;
-      const e=sched[stage.id];if(!e)continue;
-      const stageDays=[...Object.keys(e.days||{}),...Object.keys(e.track0?.days||{}),...Object.keys(e.track1?.days||{})];
-      for(const d of stageDays)if(days.includes(d))expLoad[d]=(expLoad[d]||0)+1;
-    }
-  }
-  html+='<tr><td class="gh-label" style="background:#e8f5e9;font-size:11px">🧪 ЭУ нагрузка</td>';
-  for(const d of days){
-    const cnt=expLoad[d]||0;
-    html+=`<td style="text-align:center;font-size:10px;font-weight:700;background:${cnt>0?'#c8e6c9':'#f4f6f9'};color:${cnt>0?'#1e8449':'#aaa'}">${cnt||''}</td>`;
-  }
-  html+='</tr>';
   const SPEC_ROW_BG={frame:'#fff8f5',sewing:'#fdf5ff',both:'#f5f9ff',merge:'#f0f7f0'};
   const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
   const PHASE_NAMES={'1':'Черновой образец','2':'Чистовой и расчёты','3':'КТД','4':'Производство'};
@@ -6642,6 +6629,38 @@ function renderMMCalendar(){
       }
     }
   }
+  // ── Experimental workshop load by operation (bottom) ──────────
+  const ewOps={}; // {abbr: {label, color, dayMap: {d: count}}}
+  const EW_COLORS={frame:'#6d3a2a',sewing:'#6a1b9a',merge:'#0d47a1',both:'#1b5e20'};
+  const EW_BG={frame:'#fff8f5',sewing:'#f3e5f5',merge:'#e3f2fd',both:'#e8f5e9'};
+  for(const prod of S.mm.products.filter(p=>p.status!=='closed')){
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+    const sched=S.mm.schedule[prod.id]||{};
+    for(const stage of tmpl.stages.filter(s=>s&&s.id&&s.expWorkshop)){
+      const e=sched[stage.id];if(!e)continue;
+      const ab=stage.abbr;const sp=stage.spec||'both';
+      if(!ewOps[ab])ewOps[ab]={label:stage.name,abbr:ab,spec:sp,dayMap:{}};
+      const stageDays=[...Object.keys(e.days||{}),...Object.keys(e.track0?.days||{}),...Object.keys(e.track1?.days||{})];
+      const unique=[...new Set(stageDays)];
+      for(const d of unique)if(days.includes(d))ewOps[ab].dayMap[d]=(ewOps[ab].dayMap[d]||0)+1;
+    }
+  }
+  if(Object.keys(ewOps).length){
+    html+=`<tr><td class="gc-stage" colspan="${days.length+1}" style="background:#e8f5e9;color:#1b5e20;font-weight:700;font-size:11px;letter-spacing:.5px;padding:5px 10px">🧪 ЭКСПЕРИМЕНТАЛЬНЫЙ УЧАСТОК</td></tr>`;
+    for(const op of Object.values(ewOps)){
+      const bg=EW_BG[op.spec]||'#f5f5f5';const fc=EW_COLORS[op.spec]||'#333';
+      html+=`<tr><td class="gc-stage" style="background:${bg};color:${fc};padding-left:18px;font-size:11px">`;
+      html+=`${op.abbr} <span style="font-weight:400">${op.label}</span></td>`;
+      for(const d of days){
+        const cnt=op.dayMap[d]||0;
+        const isWknd=isBaseWknd(d);
+        html+=`<td style="text-align:center;font-size:11px;font-weight:700;background:${cnt>0?bg:(isWknd?'#f0f0f0':'#fafafa')};color:${fc};border:1px solid #e8eaf0">`;
+        if(cnt>0)html+=`<div style="background:${fc};color:#fff;border-radius:4px;min-width:18px;height:18px;line-height:18px;display:inline-block;padding:0 4px">${cnt}</div>`;
+        html+='</td>';
+      }
+      html+='</tr>';
+    }
+  }
   html+='</tbody>';
   tbl.innerHTML=html;
 }
@@ -6670,6 +6689,18 @@ function openMMMarkDay(pid,stageId,trackIdx,date){
   document.getElementById('mmMarkTitle').textContent=`${prod?.name||'?'} / ${stage?.abbr||'?'} — ${fmtShort(date)}`;
   document.getElementById('mmMarkStatus').textContent=st==='done'?'✔ Выполнен':st==='fail'?'✖ Не выполнен':st==='planned'?'Запланирован':'Нет данных';
   document.getElementById('mmMarkRevertRow').style.display=(st==='done'||st==='fail')?'':'none';
+  // shift controls
+  const pinned=(S.mm.stageConstraints[pid]||{})[stageId]||null;
+  const shiftRow=document.getElementById('mmShiftRow');
+  const unpinBtn=document.getElementById('mmUnpinBtn');
+  const pinnedNote=document.getElementById('mmPinnedNote');
+  const shiftDate=document.getElementById('mmShiftDate');
+  const shiftReason=document.getElementById('mmShiftReason');
+  if(shiftRow)shiftRow.style.display=session.role==='admin'?'':'none';
+  if(pinned){unpinBtn&&(unpinBtn.style.display='');pinnedNote&&(pinnedNote.style.display='',pinnedNote.textContent='📌 Зафиксирован на '+fmtFull(pinned));}
+  else{unpinBtn&&(unpinBtn.style.display='none');pinnedNote&&(pinnedNote.style.display='none');}
+  if(shiftDate)shiftDate.value=pinned||date;
+  if(shiftReason)shiftReason.value='';
   openModal('mMMMarkDay');
 }
 function mmMarkDone(){
@@ -6692,6 +6723,35 @@ function mmMarkRevert(){
   setMMDayMark(pid,stageId,trackIdx,date,'planned');
   closeModal('mMMMarkDay');
   rebuildAllMM();save();renderMMCalendar();
+}
+function doMMPinStage(){
+  if(!_mmMarkCtx)return;
+  const{pid,stageId}=_mmMarkCtx;
+  const date=document.getElementById('mmShiftDate')?.value;
+  if(!date)return alert('Укажите дату');
+  const reason=document.getElementById('mmShiftReason')?.value.trim();
+  if(!reason)return alert('Укажите причину переноса');
+  if(!S.mm.stageConstraints[pid])S.mm.stageConstraints[pid]={};
+  S.mm.stageConstraints[pid][stageId]=date;
+  const prod=S.mm.products.find(p=>p.id===pid);
+  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
+  const stage=tmpl?.stages.find(s=>s.id===stageId);
+  S.mm.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
+    type:'pin',productId:pid,stageId,productName:prod?.name||'',stageName:stage?.name||'',
+    fromDate:date,reason});
+  rebuildAllMM();save();closeModal('mMMMarkDay');renderMMCalendar();
+}
+function doMMUnpinStage(){
+  if(!_mmMarkCtx)return;
+  const{pid,stageId}=_mmMarkCtx;
+  if(S.mm.stageConstraints[pid])delete S.mm.stageConstraints[pid][stageId];
+  const prod=S.mm.products.find(p=>p.id===pid);
+  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
+  const stage=tmpl?.stages.find(s=>s.id===stageId);
+  S.mm.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
+    type:'unpin',productId:pid,stageId,productName:prod?.name||'',stageName:stage?.name||'',
+    fromDate:todayStr(),reason:'Снят перенос — возврат в план'});
+  rebuildAllMM();save();closeModal('mMMMarkDay');renderMMCalendar();
 }
 function setMMDayMark(pid,stageId,trackIdx,date,status){
   if(!S.mm.schedule[pid])S.mm.schedule[pid]={};
@@ -6935,15 +6995,25 @@ function tryAutoLogin(){
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mMMStage')">Отмена</button><button class="btn btn-green" onclick="saveMMStage()">Сохранить</button></div>
 </div></div>
 
-<div class="overlay" id="mMMMarkDay"><div class="modal" style="width:380px">
+<div class="overlay" id="mMMMarkDay"><div class="modal" style="width:420px">
   <h2 id="mmMarkTitle"></h2>
   <div id="mmMarkStatus" style="background:#f4f6f9;border-radius:7px;padding:10px 14px;margin-bottom:14px;font-size:14px;text-align:center"></div>
   <div style="display:flex;gap:8px;margin-bottom:8px">
     <button class="btn btn-green" style="flex:1" onclick="mmMarkDone()">✔ Выполнен</button>
     <button class="btn btn-red" style="flex:1" onclick="mmMarkFail()">✖ Не выполнен</button>
   </div>
-  <div id="mmMarkRevertRow" style="display:none">
+  <div id="mmMarkRevertRow" style="display:none;margin-bottom:8px">
     <button class="btn btn-gray btn-sm" onclick="mmMarkRevert()" style="width:100%">↩ Отменить отметку</button>
+  </div>
+  <div id="mmShiftRow" style="border-top:1px solid #eee;padding-top:10px;margin-top:4px">
+    <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">📅 Перенос этапа</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <input type="date" id="mmShiftDate" style="border:1px solid #ccc;border-radius:6px;padding:3px 8px;font-size:13px">
+      <button class="btn btn-blue btn-sm" onclick="doMMPinStage()">Зафиксировать</button>
+      <button class="btn btn-gray btn-sm" id="mmUnpinBtn" onclick="doMMUnpinStage()" style="display:none">✕ Снять перенос</button>
+    </div>
+    <input type="text" id="mmShiftReason" placeholder="Причина переноса..." style="width:100%;border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:12px;box-sizing:border-box">
+    <div id="mmPinnedNote" style="display:none;font-size:11px;color:#2471a3;margin-top:4px"></div>
   </div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mMMMarkDay')">Закрыть</button></div>
 </div></div>
