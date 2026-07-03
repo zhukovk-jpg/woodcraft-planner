@@ -6668,9 +6668,10 @@ function renderMMCalendar(){
         const conLabel=spec==='frame'?conA?.name||'—':spec==='sewing'?conB?.name||'—':spec==='merge'?'слияние':'оба';
         const trackIdx=spec==='sewing'?'1':'0';
         const isPinned=!!(S.mm.stageConstraints[prod.id]||{})[stage.id];
-        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor};padding-left:18px;cursor:${canClick?'pointer':'default'}" ${canClick?`onmouseenter="showMMDurPopup('${prod.id}','${stage.id}',event.clientX,event.clientY)" onmouseleave="scheduleMMDurPopupHide()"`:''}>`;
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor};padding-left:18px">`;
         html+=`${isPinned?'📌 ':''}${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}${spec!=='both'&&spec!=='merge'?' · '+conLabel:''}</span></td>`;
         let firstActive=true;
+        const _pid=prod.id,_sid=stage.id;
         for(const d of days){
           const v=isCtrl?(e?.days?.[d]||e?.track0?.days?.[d]):spec==='sewing'?e?.track1?.days?.[d]:(e?.track0?.days?.[d]||e?.days?.[d]);
           const st=v?.status||'';
@@ -6681,7 +6682,8 @@ function renderMMCalendar(){
           const cellClick=canClick&&(st==='planned'||st==='done'||st==='fail');
           const showAbbr=st&&firstActive;
           if(st)firstActive=false;
-          html+=`<td class="${cls}${cellClick?' clickable':''}" style="background:${rowBg}" ${cellClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','${isCtrl?'null':trackIdx}','${d}')"`:''}><div class="dc-txt" style="font-size:9px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${st==='done'?'✔':st==='fail'?'✖':showAbbr?stage.abbr:''}</div></td>`;
+          const hoverAttr=canClick?`onmouseenter="showMMDurPopup('${_pid}','${_sid}',event.clientX,event.clientY)" onmouseleave="scheduleMMDurPopupHide()"`:'' ;
+          html+=`<td class="${cls}${cellClick?' clickable':''}" style="background:${rowBg}" ${hoverAttr} ${cellClick?`onclick="openMMMarkDay('${_pid}','${_sid}','${isCtrl?'null':trackIdx}','${d}')"`:''}><div class="dc-txt" style="font-size:9px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${st==='done'?'✔':st==='fail'?'✖':showAbbr?stage.abbr:''}</div></td>`;
         }
         html+='</tr>';
       }
@@ -6696,8 +6698,9 @@ function renderMMCalendar(){
     const sched=S.mm.schedule[prod.id]||{};
     for(const stage of tmpl.stages.filter(s=>s&&s.id&&s.expWorkshop)){
       const e=sched[stage.id];if(!e)continue;
-      const ab=stage.abbr;const sp=stage.spec||'both';
-      if(!ewOps[ab])ewOps[ab]={label:stage.name,abbr:ab,spec:sp,dayMap:{}};
+      const ab=stage.abbr.replace(/\d+$/,'');const sp=stage.spec||'both';
+      const lbl=stage.name.replace(/\s*\(чист\.\)/i,'').replace(/\s*2$/,'').trim();
+      if(!ewOps[ab])ewOps[ab]={label:lbl,abbr:ab,spec:sp,dayMap:{}};
       const stageDays=[...Object.keys(e.days||{}),...Object.keys(e.track0?.days||{}),...Object.keys(e.track1?.days||{})];
       const unique=[...new Set(stageDays)];
       for(const d of unique)if(days.includes(d))ewOps[ab].dayMap[d]=(ewOps[ab].dayMap[d]||0)+1;
