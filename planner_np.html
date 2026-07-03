@@ -1617,11 +1617,919 @@ function migrate(){
   S.mm.templates.forEach(t=>{if(!t.stages)t.stages=[];});
   if(!S.mm.templates.length){
     S.mm.templates=[
-      {id:'mmt1',name:'Сложность 1',stages:[],pointsDoing:2,pointsCtrl:1},
-      {id:'mmt2',name:'Сложность 2',stages:[],pointsDoing:4,pointsCtrl:2},
-      {id:'mmt3',name:'Сложность 3',stages:[],pointsDoing:6,pointsCtrl:3},
-      {id:'mmt4',name:'Сложность 4',stages:[],pointsDoing:8,pointsCtrl:4},
-    ];
+  {
+    "id": "mmt1",
+    "name": "СП1 — Пуф / Банкетка / Кровать",
+    "stages": [
+      {
+        "id": "tz1",
+        "name": "Согласование ТЗ",
+        "abbr": "ТЗ",
+        "spec": "both",
+        "mode": "combined",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "mod1",
+        "name": "3Д моделирование",
+        "abbr": "3ДМ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "chh1",
+        "name": "Проектирование чехла",
+        "abbr": "ПРЧЕХ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsp1",
+        "name": "Заказ распила",
+        "abbr": "ЗРАСП",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "stl1",
+        "name": "Столярная сборка",
+        "abbr": "СТСБ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "okl1",
+        "name": "Оклейка",
+        "abbr": "ОКЛ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsk1",
+        "name": "Раскрой",
+        "abbr": "РСК",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "psh1",
+        "name": "Пошив",
+        "abbr": "ПШВ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "drp1",
+        "name": "Драпировка",
+        "abbr": "ДРП",
+        "spec": "merge",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "kmp1",
+        "name": "Комплектующие",
+        "abbr": "КОМПЛ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgi1",
+        "name": "Сборка готового изделия",
+        "abbr": "СБГИ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rcf1",
+        "name": "Расчёт цены",
+        "abbr": "РЦФ",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "nkm1",
+        "name": "Нормоконтроль",
+        "abbr": "НКМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ktd1",
+        "name": "Подготовка КТД",
+        "abbr": "КТД",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgt1",
+        "name": "Согласование с технологом",
+        "abbr": "СГТ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rf21",
+        "name": "Расчёт прайса (КТД)",
+        "abbr": "РЦФ2",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vdk1",
+        "name": "Выдача документов",
+        "abbr": "ВЫДОК",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "pvd1",
+        "name": "Постановка в производство",
+        "abbr": "ПСТН",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ozhd1",
+        "name": "Ожидание очереди",
+        "abbr": "ОЖД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "izg1",
+        "name": "Изготовление",
+        "abbr": "ИЗГ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprm1",
+        "name": "Внутренняя приёмка",
+        "abbr": "ВПРМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprd1",
+        "name": "Выдача в продажу",
+        "abbr": "ВПРД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      }
+    ],
+    "pointsDoing": 2,
+    "pointsCtrl": 1
+  },
+  {
+    "id": "mmt2",
+    "name": "СП2 — Модуль / Диван на базе",
+    "stages": [
+      {
+        "id": "tz2",
+        "name": "Согласование ТЗ",
+        "abbr": "ТЗ",
+        "spec": "both",
+        "mode": "combined",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "mod2",
+        "name": "3Д моделирование",
+        "abbr": "3ДМ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "chh2",
+        "name": "Проектирование чехла",
+        "abbr": "ПРЧЕХ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsp2",
+        "name": "Заказ распила",
+        "abbr": "ЗРАСП",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "stl2",
+        "name": "Столярная сборка",
+        "abbr": "СТСБ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "okl2",
+        "name": "Оклейка",
+        "abbr": "ОКЛ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsk2",
+        "name": "Раскрой",
+        "abbr": "РСК",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "psh2",
+        "name": "Пошив",
+        "abbr": "ПШВ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "drp2",
+        "name": "Драпировка",
+        "abbr": "ДРП",
+        "spec": "merge",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "kmp2",
+        "name": "Комплектующие",
+        "abbr": "КОМПЛ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgi2",
+        "name": "Сборка готового изделия",
+        "abbr": "СБГИ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rcf2",
+        "name": "Расчёт цены",
+        "abbr": "РЦФ",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "nkm2",
+        "name": "Нормоконтроль",
+        "abbr": "НКМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ktd2",
+        "name": "Подготовка КТД",
+        "abbr": "КТД",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgt2",
+        "name": "Согласование с технологом",
+        "abbr": "СГТ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rf22",
+        "name": "Расчёт прайса (КТД)",
+        "abbr": "РЦФ2",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vdk2",
+        "name": "Выдача документов",
+        "abbr": "ВЫДОК",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "pvd2",
+        "name": "Постановка в производство",
+        "abbr": "ПСТН",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ozhd2",
+        "name": "Ожидание очереди",
+        "abbr": "ОЖД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "izg2",
+        "name": "Изготовление",
+        "abbr": "ИЗГ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprm2",
+        "name": "Внутренняя приёмка",
+        "abbr": "ВПРМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprd2",
+        "name": "Выдача в продажу",
+        "abbr": "ВПРД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      }
+    ],
+    "pointsDoing": 4,
+    "pointsCtrl": 2
+  },
+  {
+    "id": "mmt3",
+    "name": "СП3 — Кресло / Диван прямой/угловой",
+    "stages": [
+      {
+        "id": "tz3",
+        "name": "Согласование ТЗ",
+        "abbr": "ТЗ",
+        "spec": "both",
+        "mode": "combined",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "mod3",
+        "name": "3Д моделирование",
+        "abbr": "3ДМ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "chh3",
+        "name": "Проектирование чехла",
+        "abbr": "ПРЧЕХ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsp3",
+        "name": "Заказ распила",
+        "abbr": "ЗРАСП",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "stl3",
+        "name": "Столярная сборка",
+        "abbr": "СТСБ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 5,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "okl3",
+        "name": "Оклейка",
+        "abbr": "ОКЛ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsk3",
+        "name": "Раскрой",
+        "abbr": "РСК",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "psh3",
+        "name": "Пошив",
+        "abbr": "ПШВ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 5,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "drp3",
+        "name": "Драпировка",
+        "abbr": "ДРП",
+        "spec": "merge",
+        "mode": "seq",
+        "days": 3,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "kmp3",
+        "name": "Комплектующие",
+        "abbr": "КОМПЛ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgi3",
+        "name": "Сборка готового изделия",
+        "abbr": "СБГИ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rcf3",
+        "name": "Расчёт цены",
+        "abbr": "РЦФ",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "nkm3",
+        "name": "Нормоконтроль",
+        "abbr": "НКМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ktd3",
+        "name": "Подготовка КТД",
+        "abbr": "КТД",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgt3",
+        "name": "Согласование с технологом",
+        "abbr": "СГТ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 3,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rf23",
+        "name": "Расчёт прайса (КТД)",
+        "abbr": "РЦФ2",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vdk3",
+        "name": "Выдача документов",
+        "abbr": "ВЫДОК",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "pvd3",
+        "name": "Постановка в производство",
+        "abbr": "ПСТН",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ozhd3",
+        "name": "Ожидание очереди",
+        "abbr": "ОЖД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 10,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "izg3",
+        "name": "Изготовление",
+        "abbr": "ИЗГ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 10,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprm3",
+        "name": "Внутренняя приёмка",
+        "abbr": "ВПРМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprd3",
+        "name": "Выдача в продажу",
+        "abbr": "ВПРД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      }
+    ],
+    "pointsDoing": 6,
+    "pointsCtrl": 3
+  },
+  {
+    "id": "mmt4",
+    "name": "СП4 — Особой сложности",
+    "stages": [
+      {
+        "id": "tz4",
+        "name": "Согласование ТЗ",
+        "abbr": "ТЗ",
+        "spec": "both",
+        "mode": "combined",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "mod4",
+        "name": "3Д моделирование",
+        "abbr": "3ДМ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "chh4",
+        "name": "Проектирование чехла",
+        "abbr": "ПРЧЕХ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 4,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsp4",
+        "name": "Заказ распила",
+        "abbr": "ЗРАСП",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "stl4",
+        "name": "Столярная сборка",
+        "abbr": "СТСБ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 7,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "okl4",
+        "name": "Оклейка",
+        "abbr": "ОКЛ",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 4,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rsk4",
+        "name": "Раскрой",
+        "abbr": "РСК",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 4,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "psh4",
+        "name": "Пошив",
+        "abbr": "ПШВ",
+        "spec": "sewing",
+        "mode": "seq",
+        "days": 7,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "drp4",
+        "name": "Драпировка",
+        "abbr": "ДРП",
+        "spec": "merge",
+        "mode": "seq",
+        "days": 4,
+        "expWorkshop": true,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "kmp4",
+        "name": "Комплектующие",
+        "abbr": "КОМПЛ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 10,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgi4",
+        "name": "Сборка готового изделия",
+        "abbr": "СБГИ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rcf4",
+        "name": "Расчёт цены",
+        "abbr": "РЦФ",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "nkm4",
+        "name": "Нормоконтроль",
+        "abbr": "НКМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 7,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ktd4",
+        "name": "Подготовка КТД",
+        "abbr": "КТД",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 10,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "sgt4",
+        "name": "Согласование с технологом",
+        "abbr": "СГТ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 5,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "rf24",
+        "name": "Расчёт прайса (КТД)",
+        "abbr": "РЦФ2",
+        "spec": "frame",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vdk4",
+        "name": "Выдача документов",
+        "abbr": "ВЫДОК",
+        "spec": "frame",
+        "mode": "seq",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "pvd4",
+        "name": "Постановка в производство",
+        "abbr": "ПСТН",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "ozhd4",
+        "name": "Ожидание очереди",
+        "abbr": "ОЖД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 14,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "izg4",
+        "name": "Изготовление",
+        "abbr": "ИЗГ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 14,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprm4",
+        "name": "Внутренняя приёмка",
+        "abbr": "ВПРМ",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 2,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      },
+      {
+        "id": "vprd4",
+        "name": "Выдача в продажу",
+        "abbr": "ВПРД",
+        "spec": "both",
+        "mode": "ctrl",
+        "days": 1,
+        "expWorkshop": false,
+        "expWorkshopSlots": 1
+      }
+    ],
+    "pointsDoing": 8,
+    "pointsCtrl": 4
+  }
+];
   }
 }
 
@@ -6251,199 +7159,134 @@ function delMMProd(id){
 }
 
 // ── MM Scheduling ─────────────────────────────────────────────
+function _mmSchedSingle(prevMarks,dur,cursor,cid,isCtrl,ew,ewSlots,doingBusy,expBusy){
+  const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+  const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+  const complete=doneDays.length>=dur;
+  const days={};let endDate,nextCursor;
+  if(complete){
+    const allD=[...new Set([...failDays,...doneDays])].sort();
+    for(const d of allD){days[d]={...prevMarks[d]};if(!isCtrl&&cid&&doingBusy[cid])doingBusy[cid].add(d);}
+    endDate=doneDays[doneDays.length-1];
+    nextCursor=cid?mmEnsureWork(addDay(endDate,1),cid):addDay(endDate,1);
+  }else{
+    const remaining=dur-doneDays.length;
+    const lastMarked=[...doneDays,...failDays].sort().pop();
+    const afterMarked=lastMarked?(cid?mmEnsureWork(addDay(lastMarked,1),cid):addDay(lastMarked,1)):null;
+    let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
+    const planned=[];
+    if(!isCtrl&&cid&&doingBusy[cid]){for(const d of doneDays)doingBusy[cid].add(d);for(const d of failDays)doingBusy[cid].add(d);}
+    while(planned.length<remaining){
+      const okW=cid?isMMWorkDay(probe,cid):!isBaseWknd(probe);
+      const okB=isCtrl||!cid||!doingBusy[cid]?.has(probe);
+      const okE=!ew||(expBusy[probe]||0)<ewSlots;
+      if(okW&&okB&&okE){planned.push(probe);if(!isCtrl&&cid&&doingBusy[cid])doingBusy[cid].add(probe);if(ew)expBusy[probe]=(expBusy[probe]||0)+1;}
+      probe=addDay(probe,1);
+    }
+    for(const d of failDays)days[d]={...prevMarks[d]};
+    for(const d of doneDays)days[d]={...prevMarks[d]};
+    for(const d of planned)days[d]=prevMarks[d]||{status:'planned',setBy:'system'};
+    const lastEff=doneDays.length?doneDays[doneDays.length-1]:planned[planned.length-1]||cursor;
+    endDate=lastEff;nextCursor=cid?mmEnsureWork(addDay(lastEff,1),cid):addDay(lastEff,1);
+  }
+  const allD=Object.keys(days).sort();
+  return{days,startDate:allD[0]||cursor,endDate,nextCursor};
+}
+function _mmSchedBoth(prevMarks,dur,cursor,cidA,cidB,isCtrl,ew,ewSlots,doingBusy,expBusy){
+  const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+  const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+  const complete=doneDays.length>=dur;
+  const days={};let endDate,nextCursor;
+  if(complete){
+    const allD=[...new Set([...failDays,...doneDays])].sort();
+    for(const d of allD){days[d]={...prevMarks[d]};if(!isCtrl){if(cidA&&doingBusy[cidA])doingBusy[cidA].add(d);if(cidB&&doingBusy[cidB])doingBusy[cidB].add(d);}}
+    endDate=doneDays[doneDays.length-1];
+    const nc1=cidA?mmEnsureWork(addDay(endDate,1),cidA):addDay(endDate,1);
+    const nc2=cidB?mmEnsureWork(addDay(endDate,1),cidB):addDay(endDate,1);
+    nextCursor=nc1>nc2?nc1:nc2;
+  }else{
+    const remaining=dur-doneDays.length;
+    const lastMarked=[...doneDays,...failDays].sort().pop();
+    const afterMarked=lastMarked?((cidA?mmEnsureWork(addDay(lastMarked,1),cidA):addDay(lastMarked,1))):null;
+    let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
+    const planned=[];
+    if(!isCtrl){
+      for(const d of doneDays){if(cidA&&doingBusy[cidA])doingBusy[cidA].add(d);if(cidB&&doingBusy[cidB])doingBusy[cidB].add(d);}
+      for(const d of failDays){if(cidA&&doingBusy[cidA])doingBusy[cidA].add(d);if(cidB&&doingBusy[cidB])doingBusy[cidB].add(d);}
+    }
+    while(planned.length<remaining){
+      const okA=cidA?(isMMWorkDay(probe,cidA)&&(isCtrl||!doingBusy[cidA]?.has(probe))):!isBaseWknd(probe);
+      const okB=cidB?(isMMWorkDay(probe,cidB)&&(isCtrl||!doingBusy[cidB]?.has(probe))):!isBaseWknd(probe);
+      const okE=!ew||(expBusy[probe]||0)<ewSlots;
+      if(okA&&okB&&okE){planned.push(probe);if(!isCtrl){if(cidA&&doingBusy[cidA])doingBusy[cidA].add(probe);if(cidB&&doingBusy[cidB])doingBusy[cidB].add(probe);}if(ew)expBusy[probe]=(expBusy[probe]||0)+1;}
+      probe=addDay(probe,1);
+    }
+    for(const d of failDays)days[d]={...prevMarks[d]};
+    for(const d of doneDays)days[d]={...prevMarks[d]};
+    for(const d of planned)days[d]=prevMarks[d]||{status:'planned',setBy:'system'};
+    const lastEff=doneDays.length?doneDays[doneDays.length-1]:planned[planned.length-1]||cursor;
+    endDate=lastEff;
+    const nc1=cidA?mmEnsureWork(addDay(lastEff,1),cidA):addDay(lastEff,1);
+    const nc2=cidB?mmEnsureWork(addDay(lastEff,1),cidB):addDay(lastEff,1);
+    nextCursor=nc1>nc2?nc1:nc2;
+  }
+  const allD=Object.keys(days).sort();
+  return{days,startDate:allD[0]||cursor,endDate,nextCursor};
+}
 function rebuildAllMM(){
   const saved={};
   for(const pid in S.mm.schedule){
     saved[pid]={};
     for(const sid in S.mm.schedule[pid]){
       const e=S.mm.schedule[pid][sid];
-      const marks={};
-      for(const [d,v] of Object.entries(e.days||{}))
-        if(v.status==='done'||v.status==='fail')marks[d]={...v};
-      saved[pid][sid]={
-        marks0:e.track0?Object.fromEntries(Object.entries(e.track0.days||{}).filter(([,v])=>v.status==='done'||v.status==='fail')):null,
-        marks1:e.track1?Object.fromEntries(Object.entries(e.track1.days||{}).filter(([,v])=>v.status==='done'||v.status==='fail')):null,
-        marks,failReason:e.failReason
-      };
+      const marks={},marks0={},marks1={};
+      for(const [d,v] of Object.entries(e.days||{}))if(v.status==='done'||v.status==='fail')marks[d]={...v};
+      for(const [d,v] of Object.entries(e.track0?.days||{}))if(v.status==='done'||v.status==='fail')marks0[d]={...v};
+      for(const [d,v] of Object.entries(e.track1?.days||{}))if(v.status==='done'||v.status==='fail')marks1[d]={...v};
+      saved[pid][sid]={marks,marks0,marks1,failReason:e.failReason||null};
     }
   }
   S.mm.schedule={};
   const prods=[...S.mm.products].sort((a,b)=>a.priority-b.priority);
-  const mmDoingBusy={};
-  const expBusy={};
+  const mmDoingBusy={},expBusy={};
   for(const prod of prods){
     if(prod.status==='closed')continue;
-    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
-    if(!tmpl)continue;
-    const cidA=prod.cidA||'';
-    const cidB=prod.cidB||cidA;
-    if(!mmDoingBusy[cidA])mmDoingBusy[cidA]=new Set();
-    if(!mmDoingBusy[cidB])mmDoingBusy[cidB]=new Set();
-    S.mm.schedule[prod.id]={};
-    const sched=S.mm.schedule[prod.id];
-    let cursor=cidA?mmEnsureWork(prod.startDate,cidA):prod.startDate;
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+    const cidA=prod.cidA||'';const cidB=prod.cidB||cidA;
+    if(cidA&&!mmDoingBusy[cidA])mmDoingBusy[cidA]=new Set();
+    if(cidB&&!mmDoingBusy[cidB])mmDoingBusy[cidB]=new Set();
+    S.mm.schedule[prod.id]={};const sched=S.mm.schedule[prod.id];
+    let cursorA=cidA?mmEnsureWork(prod.startDate,cidA):prod.startDate;
+    let cursorB=cidB?mmEnsureWork(prod.startDate,cidB):prod.startDate;
     for(const stage of tmpl.stages){
-      const sv=saved[prod.id]?.[stage.id];
-      const prevMarks=sv?.marks||{};
-      const prevMarks0=sv?.marks0||{};
-      const prevMarks1=sv?.marks1||{};
-      const prevFR=sv?.failReason||null;
+      const sv=saved[prod.id]?.[stage.id]||{};
+      const spec=stage.spec||'both';
       const dur=stage.days||1;
-      const ew=stage.expWorkshop;
-      const ewSlots=stage.expWorkshopSlots||1;
-      sched[stage.id]={startDate:null,endDate:null,days:{},failReason:prevFR};
+      const ew=stage.expWorkshop,ewSlots=stage.expWorkshopSlots||1;
+      const isCtrl=stage.mode==='ctrl';
+      sched[stage.id]={startDate:null,endDate:null,days:{},failReason:sv.failReason||null};
       const entry=sched[stage.id];
-      if(stage.mode==='ctrl'){
-        const refCid=cidA||null;
-        const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
-        const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
-        const stageComplete=doneDays.length>=dur;
-        if(stageComplete){
-          const allD=[...new Set([...failDays,...doneDays])].sort();
-          for(const d of allD)entry.days[d]={...prevMarks[d]};
-          const lastEff=doneDays[doneDays.length-1];
-          cursor=addDay(lastEff,1);
-          if(refCid)cursor=mmEnsureWork(cursor,refCid);
-        }else{
-          const remaining=dur-doneDays.length;
-          const lastMarked=[...doneDays,...failDays].sort().pop();
-          const afterMarked=lastMarked?(refCid?mmEnsureWork(addDay(lastMarked,1),refCid):addDay(lastMarked,1)):null;
-          let planned=[];
-          let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
-          while(planned.length<remaining){
-            const ok=refCid?isMMWorkDay(probe,refCid):!isBaseWknd(probe);
-            if(ok&&(!ew||(expBusy[probe]||0)<ewSlots)){planned.push(probe);if(ew)expBusy[probe]=(expBusy[probe]||0)+1;}
-            probe=addDay(probe,1);
-          }
-          for(const d of failDays)entry.days[d]={...prevMarks[d]};
-          for(const d of doneDays)entry.days[d]={...prevMarks[d]};
-          for(const d of planned)entry.days[d]=prevMarks[d]||{status:'planned',setBy:'system'};
-          const allDSorted=[...new Set([...failDays,...doneDays,...planned])].sort();
-          entry.startDate=allDSorted[0]||cursor;
-          entry.endDate=allDSorted[allDSorted.length-1]||cursor;
-          const lastEff=doneDays.length?doneDays[doneDays.length-1]:entry.endDate;
-          cursor=addDay(lastEff,1);if(refCid)cursor=mmEnsureWork(cursor,refCid);
-          continue;
-        }
-        const allD=Object.keys(entry.days).sort();
-        entry.startDate=allD[0]||cursor;entry.endDate=allD[allD.length-1]||cursor;
-      }else if(stage.mode==='seq'){
-        const doneDays0=Object.keys(prevMarks0).filter(d=>prevMarks0[d].status==='done').sort();
-        const failDays0=Object.keys(prevMarks0).filter(d=>prevMarks0[d].status==='fail').sort();
-        const doneDays1=Object.keys(prevMarks1).filter(d=>prevMarks1[d].status==='done').sort();
-        const failDays1=Object.keys(prevMarks1).filter(d=>prevMarks1[d].status==='fail').sort();
-        entry.track0={constructorId:cidA,days:{}};
-        const t0=entry.track0;
-        const complete0=doneDays0.length>=dur;
-        let t0end;
-        if(complete0){
-          const allD=[...new Set([...failDays0,...doneDays0])].sort();
-          for(const d of allD){t0.days[d]={...prevMarks0[d]};mmDoingBusy[cidA].add(d);}
-          t0end=doneDays0[doneDays0.length-1];
-        }else{
-          const remaining=dur-doneDays0.length;
-          const lastMarked=[...doneDays0,...failDays0].sort().pop();
-          const afterMarked=lastMarked?mmEnsureWork(addDay(lastMarked,1),cidA):null;
-          let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
-          const planned=[];
-          for(const d of doneDays0)mmDoingBusy[cidA].add(d);
-          for(const d of failDays0)mmDoingBusy[cidA].add(d);
-          while(planned.length<remaining){
-            if(isMMWorkDay(probe,cidA)&&!mmDoingBusy[cidA].has(probe)&&(!ew||(expBusy[probe]||0)<ewSlots)){
-              planned.push(probe);mmDoingBusy[cidA].add(probe);
-              if(ew)expBusy[probe]=(expBusy[probe]||0)+1;
-            }
-            probe=addDay(probe,1);
-          }
-          const allD=[...new Set([...failDays0,...doneDays0,...planned])].sort();
-          for(const d of failDays0)t0.days[d]={...prevMarks0[d]};
-          for(const d of doneDays0)t0.days[d]={...prevMarks0[d]};
-          for(const d of planned)t0.days[d]=prevMarks0[d]||{status:'planned',setBy:'system'};
-          t0end=(doneDays0.length?doneDays0[doneDays0.length-1]:planned[planned.length-1])||cursor;
-        }
-        const t1start=mmEnsureWork(addDay(t0end,1),cidB);
-        entry.track1={constructorId:cidB,days:{}};
-        const t1=entry.track1;
-        const complete1=doneDays1.length>=dur;
-        let t1end;
-        if(complete1){
-          const allD=[...new Set([...failDays1,...doneDays1])].sort();
-          for(const d of allD){t1.days[d]={...prevMarks1[d]};mmDoingBusy[cidB].add(d);}
-          t1end=doneDays1[doneDays1.length-1];
-        }else{
-          const remaining=dur-doneDays1.length;
-          const lastMarked=[...doneDays1,...failDays1].sort().pop();
-          const afterMarked=lastMarked?mmEnsureWork(addDay(lastMarked,1),cidB):null;
-          let probe=afterMarked&&(afterMarked>t1start||afterMarked>cursor)?afterMarked:t1start;
-          const planned=[];
-          for(const d of doneDays1)mmDoingBusy[cidB].add(d);
-          for(const d of failDays1)mmDoingBusy[cidB].add(d);
-          while(planned.length<remaining){
-            if(isMMWorkDay(probe,cidB)&&!mmDoingBusy[cidB].has(probe)&&(!ew||(expBusy[probe]||0)<ewSlots)){
-              planned.push(probe);mmDoingBusy[cidB].add(probe);
-              if(ew)expBusy[probe]=(expBusy[probe]||0)+1;
-            }
-            probe=addDay(probe,1);
-          }
-          const allD=[...new Set([...failDays1,...doneDays1,...planned])].sort();
-          for(const d of failDays1)t1.days[d]={...prevMarks1[d]};
-          for(const d of doneDays1)t1.days[d]={...prevMarks1[d]};
-          for(const d of planned)t1.days[d]=prevMarks1[d]||{status:'planned',setBy:'system'};
-          t1end=(doneDays1.length?doneDays1[doneDays1.length-1]:planned[planned.length-1])||t1start;
-        }
-        const allT0Days=Object.keys(t0.days).sort();
-        const allT1Days=Object.keys(t1.days).sort();
-        entry.startDate=allT0Days[0]||cursor;
-        entry.endDate=allT1Days[allT1Days.length-1]||t1end;
-        cursor=addDay(t1end,1);cursor=mmEnsureWork(cursor,cidA);
+      if(spec==='frame'){
+        const pm=sv.marks0||sv.marks||{};
+        const r=_mmSchedSingle(pm,dur,cursorA,cidA,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
+        entry.track0={constructorId:cidA,days:r.days};entry.days=r.days;
+        entry.startDate=r.startDate;entry.endDate=r.endDate;cursorA=r.nextCursor;
+      }else if(spec==='sewing'){
+        const pm=sv.marks1||sv.marks||{};
+        const r=_mmSchedSingle(pm,dur,cursorB,cidB,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
+        entry.track1={constructorId:cidB,days:r.days};entry.days=r.days;
+        entry.startDate=r.startDate;entry.endDate=r.endDate;cursorB=r.nextCursor;
       }else{
-        const doneDays0=Object.keys(prevMarks0).filter(d=>prevMarks0[d].status==='done').sort();
-        const failDays0=Object.keys(prevMarks0).filter(d=>prevMarks0[d].status==='fail').sort();
-        entry.track0={constructorId:cidA,days:{}};
-        entry.track1={constructorId:cidB,days:{}};
-        const t0=entry.track0;const t1=entry.track1;
-        const complete=doneDays0.length>=dur;
-        let lastDay;
-        if(complete){
-          const allD=[...new Set([...failDays0,...doneDays0])].sort();
-          for(const d of allD){
-            t0.days[d]={...prevMarks0[d]};t1.days[d]={...prevMarks0[d]};
-            mmDoingBusy[cidA].add(d);mmDoingBusy[cidB].add(d);
-          }
-          lastDay=doneDays0[doneDays0.length-1];
-        }else{
-          const remaining=dur-doneDays0.length;
-          const lastMarked=[...doneDays0,...failDays0].sort().pop();
-          const afterMarked=lastMarked?mmEnsureWork(addDay(lastMarked,1),cidA):null;
-          let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
-          const planned=[];
-          for(const d of doneDays0){mmDoingBusy[cidA].add(d);mmDoingBusy[cidB].add(d);}
-          for(const d of failDays0){mmDoingBusy[cidA].add(d);mmDoingBusy[cidB].add(d);}
-          while(planned.length<remaining){
-            if(isMMWorkDay(probe,cidA)&&isMMWorkDay(probe,cidB)&&!mmDoingBusy[cidA].has(probe)&&!mmDoingBusy[cidB].has(probe)&&(!ew||(expBusy[probe]||0)<ewSlots)){
-              planned.push(probe);mmDoingBusy[cidA].add(probe);mmDoingBusy[cidB].add(probe);
-              if(ew)expBusy[probe]=(expBusy[probe]||0)+1;
-            }
-            probe=addDay(probe,1);
-          }
-          const allD=[...new Set([...failDays0,...doneDays0,...planned])].sort();
-          for(const d of failDays0){t0.days[d]={...prevMarks0[d]};t1.days[d]={...prevMarks0[d]};}
-          for(const d of doneDays0){t0.days[d]={...prevMarks0[d]};t1.days[d]={...prevMarks0[d]};}
-          for(const d of planned){
-            t0.days[d]=prevMarks0[d]||{status:'planned',setBy:'system'};
-            t1.days[d]=prevMarks0[d]||{status:'planned',setBy:'system'};
-          }
-          lastDay=(doneDays0.length?doneDays0[doneDays0.length-1]:planned[planned.length-1])||cursor;
-        }
-        const allT0Days=Object.keys(t0.days).sort();
-        entry.startDate=allT0Days[0]||cursor;
-        entry.endDate=lastDay;
-        cursor=addDay(lastDay,1);cursor=mmEnsureWork(cursor,cidA);
+        // both or merge: start from max of both cursors
+        const startFrom=cursorA>cursorB?cursorA:cursorB;
+        const pm=sv.marks0||sv.marks||{};
+        const r=_mmSchedBoth(pm,dur,startFrom,cidA,cidB,isCtrl,ew,ewSlots,mmDoingBusy,expBusy);
+        entry.track0={constructorId:cidA,days:r.days};
+        entry.track1={constructorId:cidB,days:{...r.days}};
+        entry.days=r.days;
+        entry.startDate=r.startDate;entry.endDate=r.endDate;
+        cursorA=r.nextCursor;cursorB=r.nextCursor;
       }
-      const allD=Object.keys(entry.days||{}).concat(Object.keys(entry.track0?.days||{})).concat(Object.keys(entry.track1?.days||{}));
-      const allDSorted=[...new Set(allD)].sort();
-      if(allDSorted.length&&!entry.startDate)entry.startDate=allDSorted[0];
-      if(allDSorted.length&&!entry.endDate)entry.endDate=allDSorted[allDSorted.length-1];
     }
   }
 }
@@ -6469,10 +7312,10 @@ function renderMMCalendar(){
     html+=`<th class="gh-day${isWknd?' wknd':''}${isToday?' today-h':''}">${dd}<br><span style="font-size:9px;font-weight:400">${['вс','пн','вт','ср','чт','пт','сб'][dt.getDay()]}</span></th>`;
   }
   html+='</tr></thead><tbody>';
+  // Exp workshop load row
   const expLoad={};
   for(const prod of S.mm.products){
-    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
-    if(!tmpl)continue;
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
     const sched=S.mm.schedule[prod.id]||{};
     for(const stage of tmpl.stages){
       if(!stage.expWorkshop)continue;
@@ -6487,59 +7330,61 @@ function renderMMCalendar(){
     html+=`<td style="text-align:center;font-size:10px;font-weight:700;background:${cnt>0?'#c8e6c9':'#f4f6f9'};color:${cnt>0?'#1e8449':'#aaa'}">${cnt||''}</td>`;
   }
   html+='</tr>';
+  const SPEC_ROW_BG={frame:'#fff8f5',sewing:'#fdf5ff',both:'#f5f9ff',merge:'#f0f7f0'};
+  const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
   const prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
   for(const prod of prods){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
     const sched=S.mm.schedule[prod.id]||{};
-    const cidA=S.mm.constructors.find(x=>x.id===prod.cidA);
-    const cidB=S.mm.constructors.find(x=>x.id===prod.cidB);
-    html+=`<tr class="gc-hdr"><td colspan="${days.length+1}">${prod.name} [${tmpl?.name||'?'}] — ${cidA?.name||'?'} + ${cidB?.name||'?'}</td></tr>`;
+    const conA=S.mm.constructors.find(x=>x.id===prod.cidA);
+    const conB=S.mm.constructors.find(x=>x.id===prod.cidB);
+    const pairLabel=prod.pairType==='frame'?`🪵 ${conA?.name||'—'}`:prod.pairType==='sewing'?`🧵 ${conB?.name||'—'}`:
+      `🪵 ${conA?.name||'—'} + 🧵 ${conB?.name||'—'}`;
+    html+=`<tr class="gc-hdr"><td colspan="${days.length+1}">${prod.name} [${tmpl?.name||'?'}] — ${pairLabel}</td></tr>`;
     for(const stage of (tmpl?.stages||[])){
       const e=sched[stage.id];
-      if(stage.mode==='ctrl'){
-        html+=`<tr><td class="gc-stage">${stage.abbr} ${stage.name}</td>`;
+      const spec=stage.spec||'both';
+      const isCtrl=stage.mode==='ctrl';
+      const canClick=session.role==='admin'||(session.module==='mm'&&(prod.cidA===session.cid||prod.cidB===session.cid));
+      const rowBg=SPEC_ROW_BG[spec]||'';
+      const lblColor=SPEC_LABEL_COLOR[spec]||'#333';
+      const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
+      const conLabel=spec==='frame'?conA?.name||'—':spec==='sewing'?conB?.name||'—':spec==='merge'?'слияние':'оба';
+      if(isCtrl){
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}</span></td>`;
         for(const d of days){
-          const v=e?.days?.[d];
-          const st=v?.status||'';
-          let cls='dc';
-          if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';
-          else if(st==='fail')cls+=' s-doing-fail';
-          else if(st==='planned')cls+=' s-ctrl';
-          const canClick=session.role==='admin'||(session.module==='mm'&&(prod.cidA===session.cid||prod.cidB===session.cid));
-          html+=`<td class="${cls}${canClick?' clickable':''}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}',null,'${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+          const v=e?.days?.[d]||e?.track0?.days?.[d];const st=v?.status||'';
+          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
+          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-ctrl';
+          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}',null,'${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
         }
         html+='</tr>';
-      }else if(stage.mode==='seq'){
-        const rows=[{t:e?.track0,label:`${stage.abbr} ${stage.name} (${cidA?.name||'A'})`},{t:e?.track1,label:`${stage.abbr} (${cidB?.name||'B'})`}];
-        for(let ri=0;ri<rows.length;ri++){
-          const row=rows[ri];
-          html+=`<tr><td class="gc-stage">${row.label}</td>`;
-          for(const d of days){
-            const v=row.t?.days?.[d];
-            const st=v?.status||'';
-            let cls='dc';
-            if(isBaseWknd(d))cls+=' wknd-cell';
-            if(st==='done')cls+=' s-doing-done';
-            else if(st==='fail')cls+=' s-doing-fail';
-            else if(st==='planned')cls+=' s-doing';
-            const canClick=session.role==='admin'||(session.module==='mm'&&(prod.cidA===session.cid||prod.cidB===session.cid));
-            html+=`<td class="${cls}${canClick?' clickable':''}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','${ri}','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
-          }
-          html+='</tr>';
-        }
-      }else{
-        html+=`<tr><td class="gc-stage">${stage.abbr} ${stage.name} (${cidA?.name||'A'}+${cidB?.name||'B'})</td>`;
+      }else if(spec==='frame'){
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name} · ${conLabel}</span></td>`;
         for(const d of days){
-          const v=e?.track0?.days?.[d];
-          const st=v?.status||'';
-          let cls='dc';
-          if(isBaseWknd(d))cls+=' wknd-cell';
-          if(st==='done')cls+=' s-doing-done';
-          else if(st==='fail')cls+=' s-doing-fail';
-          else if(st==='planned')cls+=' s-doing';
-          const canClick=session.role==='admin'||(session.module==='mm'&&(prod.cidA===session.cid||prod.cidB===session.cid));
-          html+=`<td class="${cls}${canClick?' clickable':''}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','0','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+          const v=e?.track0?.days?.[d];const st=v?.status||'';
+          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
+          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
+          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','0','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+        }
+        html+='</tr>';
+      }else if(spec==='sewing'){
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name} · ${conLabel}</span></td>`;
+        for(const d of days){
+          const v=e?.track1?.days?.[d];const st=v?.status||'';
+          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
+          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
+          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','1','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
+        }
+        html+='</tr>';
+      }else{
+        // both or merge — one row
+        html+=`<tr><td class="gc-stage" style="background:${rowBg};color:${lblColor}">${specIcon} ${stage.abbr} <span style="font-weight:400;font-size:10px">${stage.name}</span></td>`;
+        for(const d of days){
+          const v=e?.track0?.days?.[d]||e?.days?.[d];const st=v?.status||'';
+          let cls='dc';if(isBaseWknd(d))cls+=' wknd-cell';
+          if(st==='done')cls+=' s-doing-done';else if(st==='fail')cls+=' s-doing-fail';else if(st==='planned')cls+=' s-doing';
+          html+=`<td class="${cls}${canClick?' clickable':''}" style="background:${rowBg}" ${canClick?`onclick="openMMMarkDay('${prod.id}','${stage.id}','0','${d}')"`:''}><div class="dc-txt">${st==='done'?'✔':st==='fail'?'✖':''}</div></td>`;
         }
         html+='</tr>';
       }
