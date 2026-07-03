@@ -6410,7 +6410,7 @@ function rebuildAllMM(){
       const spec=stage.spec||'both';
       const dur=(S.mm.customDurations[prod.id]||{})[stage.id]??stage.days??1;
       const ew=stage.expWorkshop,ewSlots=stage.expWorkshopSlots||1;
-      const isCtrl=stage.mode==='ctrl';
+      const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
       sched[stage.id]={startDate:null,endDate:null,days:{},failReason:sv.failReason||null};
       const entry=sched[stage.id];
       const constr=(S.mm.stageConstraints[prod.id]||{})[stage.id]||null;
@@ -6661,7 +6661,7 @@ function renderMMCalendar(){
       for(const stage of phStages){
         const e=sched[stage.id];
         const spec=stage.spec||'both';
-        const isCtrl=stage.mode==='ctrl';
+        const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
         const rowBg=SPEC_ROW_BG[spec]||'';
         const lblColor=SPEC_LABEL_COLOR[spec]||'#333';
         const specIcon=spec==='frame'?'🪵':spec==='sewing'?'🧵':spec==='merge'?'🔀':'👥';
