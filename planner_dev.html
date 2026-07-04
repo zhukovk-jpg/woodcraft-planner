@@ -5783,11 +5783,12 @@ function renderCalendar(){
         stLabel.innerHTML=`${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}`;
         stRow.appendChild(stLabel);
         if(session.role==='admin'){
-          const addBtn=document.createElement('button');
-          addBtn.className='gc-stage-add';addBtn.title='Вставить этап после';addBtn.textContent='+';
+          const plusHint=document.createElement('span');
+          plusHint.className='gc-stage-add';plusHint.textContent='+';plusHint.style.pointerEvents='none';
+          stRow.appendChild(plusHint);
           const _pid=prod.id,_sid=stage.id;
-          addBtn.addEventListener('click',e=>{e.stopPropagation();openProdStageModal(_pid,_sid);});
-          stRow.appendChild(addBtn);
+          st.style.cursor='pointer';
+          st.addEventListener('click',()=>openProdStageModal(_pid,_sid));
         }
         const stDate=document.createElement('div');stDate.style.cssText='font-size:10px;color:#aaa';stDate.textContent=`до ${fmtShort(entry?.endDate)}`;
         st.appendChild(stRow);st.appendChild(stDate);
