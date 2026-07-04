@@ -2236,7 +2236,7 @@ function switchSection(section){
   }
 }
 // ── Workload ──────────────────────────────────────────────────
-let _wlYear=0,_wlMonth=0,_wlModule='km';
+let _wlYear=0,_wlMonth=0,_wlModule='km',_wlHeatmapMod='km';
 function initWorkload(){
   if(!_wlYear){const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;}
   renderWorkload();
@@ -2255,6 +2255,8 @@ function _wlCompute(Y,M){
   const init=cid=>{if(!data[cid]){data[cid]={days:{}};for(const ds of allDays)data[cid].days[ds]={doing:[],ctrl:[]};}};
   for(const con of S.constructors){init(con.id);data[con.id].name=con.name;data[con.id].module='КМ';}
   for(const con of S.mm.constructors){init(con.id);if(!data[con.id].name){data[con.id].name=con.name;data[con.id].module='ММ';}}
+  for(const con of S.metal.constructors){init(con.id);if(!data[con.id].name){data[con.id].name=con.name;data[con.id].module='МТ';}}
+  for(const con of S.massiv.constructors){init(con.id);if(!data[con.id].name){data[con.id].name=con.name;data[con.id].module='МС';}}
   for(const prod of S.products){
     const cid=prod.constructorId;if(!cid||!data[cid])continue;
     const sched=S.schedule[prod.id]||{};
@@ -2287,6 +2289,34 @@ function _wlCompute(Y,M){
       }
     }
   }
+  for(const prod of S.metal.products){
+    const cid=prod.constructorId;if(!cid||!data[cid])continue;
+    const sched=S.metal.schedule[prod.id]||{};
+    for(const stage of STAGES_MT){
+      const e=sched[stage.id];if(!e||!e.startDate||!e.endDate)continue;
+      for(const ds of allDays){
+        if(ds>=e.startDate&&ds<=e.endDate){
+          const label=prod.name+' / '+stage.abbr;
+          if(stage.type==='ctrl')data[cid].days[ds].ctrl.push(label);
+          else data[cid].days[ds].doing.push(label);
+        }
+      }
+    }
+  }
+  for(const prod of S.massiv.products){
+    const cid=prod.constructorId;if(!cid||!data[cid])continue;
+    const sched=S.massiv.schedule[prod.id]||{};
+    for(const stage of STAGES_MS){
+      const e=sched[stage.id];if(!e||!e.startDate||!e.endDate)continue;
+      for(const ds of allDays){
+        if(ds>=e.startDate&&ds<=e.endDate){
+          const label=prod.name+' / '+stage.abbr;
+          if(stage.type==='ctrl')data[cid].days[ds].ctrl.push(label);
+          else data[cid].days[ds].doing.push(label);
+        }
+      }
+    }
+  }
   return{data,allDays};
 }
 const _MN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -2306,10 +2336,25 @@ function renderWorkloadHeatmap(){
     if(m>12){m-=12;y++;}
     months.push({y,m,label:_MN[m-1].slice(0,3)+'\''+String(y).slice(2)});
   }
-  const kmCons=S.constructors.map(c=>({id:c.id,name:c.name,mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd'}));
-  const mmCons=S.mm.constructors.filter(c=>!S.constructors.find(x=>x.id===c.id)).map(c=>({id:c.id,name:c.name,mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5'}));
-  const allCons=[...kmCons,...mmCons];
-  if(!allCons.length)return'<div style="color:#aaa;padding:16px;text-align:center">Нет сотрудников</div>';
+  const hmMods=[
+    {key:'km', label:'🗄 Корпус (КМ)', clr:'#1565c0', bg:'#e3f2fd', acl:'#1a3a5c'},
+    {key:'mm', label:'🛋 Мягкая (ММ)', clr:'#6a1b9a', bg:'#f3e5f5', acl:'#6a1b9a'},
+    {key:'metal', label:'🔩 Металл (МТ)', clr:'#b7410e', bg:'#fbe9e7', acl:'#b7410e'},
+    {key:'massiv', label:'🪵 Массив (МС)', clr:'#5d4037', bg:'#efebe9', acl:'#5d4037'},
+  ];
+  const tabBtns=hmMods.map(hm=>{
+    const active=_wlHeatmapMod===hm.key;
+    return`<button onclick="_wlHeatmapMod='${hm.key}';renderWorkload()" style="padding:5px 14px;border-radius:20px;border:2px solid ${hm.acl};font-size:12px;font-weight:700;cursor:pointer;background:${active?hm.acl:'transparent'};color:${active?'#fff':hm.acl};transition:.15s">${hm.label}</button>`;
+  }).join('');
+  const hmMod=hmMods.find(h=>h.key===_wlHeatmapMod)||hmMods[0];
+  let srcCons=[];
+  if(_wlHeatmapMod==='km') srcCons=S.constructors.map(c=>({id:c.id,name:c.name,mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd'}));
+  else if(_wlHeatmapMod==='mm') srcCons=S.mm.constructors.map(c=>({id:c.id,name:c.name,mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5'}));
+  else if(_wlHeatmapMod==='metal') srcCons=S.metal.constructors.map(c=>({id:c.id,name:c.name,mod:'МТ',modClr:'#b7410e',modBg:'#fbe9e7'}));
+  else srcCons=S.massiv.constructors.map(c=>({id:c.id,name:c.name,mod:'МС',modClr:'#5d4037',modBg:'#efebe9'}));
+  const allCons=srcCons;
+  const tabsHtml=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tabBtns}</div>`;
+  if(!allCons.length)return tabsHtml+'<div style="color:#aaa;padding:16px;text-align:center">Нет сотрудников в этом подразделении</div>';
 
   const monthData=months.map(({y,m,label})=>{
     const{data,allDays}=_wlCompute(y,m);
@@ -2352,7 +2397,7 @@ function renderWorkloadHeatmap(){
     return`<div style="display:flex;align-items:center;gap:3px"><div style="width:22px;height:14px;border-radius:3px;background:${bg};border:1px solid rgba(0,0,0,.08)"></div><span style="font-size:10px;color:#666">${p}–${next}%</span></div>`;
   }).join('');
 
-  return`<div style="overflow-x:auto">
+  return tabsHtml+`<div style="overflow-x:auto">
     <table style="border-collapse:collapse;font-size:12px">
       <thead><tr>
         <th style="padding:7px 12px;text-align:left;font-weight:600;font-size:11px;border:1px solid #d0d8e4;background:#f4f6f9;color:#555">Сотрудник</th>
@@ -2410,10 +2455,16 @@ function renderWorkload(){
   const totalWD=allDays.length;
   const kmCids=S.constructors.map(c=>c.id);
   const mmCids=S.mm.constructors.map(c=>c.id);
-  const isKm=_wlModule==='km';
-  const tabStyle=(active)=>active
-    ?'padding:8px 22px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;cursor:pointer;border:none;background:#1a3a5c;color:#fff;transition:.15s'
-    :'padding:8px 22px;border-radius:8px 8px 0 0;font-weight:600;font-size:13px;cursor:pointer;border:none;background:#e8eef5;color:#4a6080;transition:.15s';
+  const detailMods=[
+    {key:'km',label:'🗄 КМ',acl:'#1a3a5c'},
+    {key:'mm',label:'🛋 ММ',acl:'#6a1b9a'},
+    {key:'metal',label:'🔩 МТ',acl:'#b7410e'},
+    {key:'massiv',label:'🪵 МС',acl:'#5d4037'},
+  ];
+  const tabStyle=(key)=>_wlModule===key
+    ?`padding:8px 18px;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;cursor:pointer;border:none;background:${detailMods.find(d=>d.key===key).acl};color:#fff;transition:.15s`
+    :'padding:8px 18px;border-radius:8px 8px 0 0;font-weight:600;font-size:13px;cursor:pointer;border:none;background:#e8eef5;color:#4a6080;transition:.15s';
+  const detailTabBtns=detailMods.map(d=>`<button style="${tabStyle(d.key)}" onclick="_wlModule='${d.key}';renderWorkload()">${d.label}</button>`).join('');
   el.innerHTML=`<div class="panel">
     <div class="panel-hdr" style="align-items:center;flex-wrap:wrap;gap:12px">
       <h2>Загрузка сотрудников</h2>
@@ -2428,17 +2479,17 @@ function renderWorkload(){
       <span style="font-weight:600;font-size:13px;min-width:120px;text-align:center">${_MN[M-1]} ${Y}</span>
       <button class="btn btn-sm btn-gray" onclick="_wlMonth++;if(_wlMonth>12){_wlMonth=1;_wlYear++;}renderWorkload()">▶</button>
       <button class="btn btn-sm btn-gray" onclick="const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;renderWorkload()">Сегодня</button>
-      <div style="display:flex;gap:4px;margin-left:auto">
-        <button style="${tabStyle(isKm)}" onclick="_wlModule='km';renderWorkload()">🗄 КМ</button>
-        <button style="${tabStyle(!isKm)}" onclick="_wlModule='mm';renderWorkload()">🛋 ММ</button>
-      </div>
+      <div style="display:flex;gap:4px;margin-left:auto">${detailTabBtns}</div>
     </div>
     <p style="font-size:12px;color:#888;margin:0 0 14px">Рабочих дней: <b>${totalWD}</b>. &nbsp;Загрузка % = Задач-делает ÷ рабочих дней × 100. &nbsp;Контроль >3 в день — перегруз.</p>
-    ${isKm?_wlRenderTable(kmCids,data,totalWD,Y,M):_wlRenderTable(mmCids,data,totalWD,Y,M)}
+    ${_wlModule==='km'?_wlRenderTable(S.constructors.map(c=>c.id),data,totalWD,Y,M):
+      _wlModule==='mm'?_wlRenderTable(S.mm.constructors.map(c=>c.id),data,totalWD,Y,M):
+      _wlModule==='metal'?_wlRenderTable(S.metal.constructors.map(c=>c.id),data,totalWD,Y,M):
+      _wlRenderTable(S.massiv.constructors.map(c=>c.id),data,totalWD,Y,M)}
   </div>`;
 }
 function openWorkloadDetail(cid,Y,M){
-  const con=S.constructors.find(x=>x.id===cid)||S.mm.constructors.find(x=>x.id===cid);if(!con)return;
+  const con=S.constructors.find(x=>x.id===cid)||S.mm.constructors.find(x=>x.id===cid)||S.metal.constructors.find(x=>x.id===cid)||S.massiv.constructors.find(x=>x.id===cid);if(!con)return;
   const{data,allDays}=_wlCompute(Y,M);
   const d=data[cid];if(!d)return;
   const DAY_RU=['вс','пн','вт','ср','чт','пт','сб'];
