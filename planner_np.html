@@ -282,6 +282,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <button class="btn btn-gray btn-sm" onclick="logout()">Выйти</button>
   </div>
   <div class="main-nav">
+    <button class="main-tab constructor-only" id="mtDashboard" onclick="switchSection('dashboard')">🏠 Кабинет</button>
     <button class="main-tab" id="mtRating" onclick="switchSection('rating')">🏆 Рейтинг</button>
     <button class="main-tab" id="mtKm" onclick="switchSection('km')">🗄 КМ</button>
     <button class="main-tab" id="mtMm" onclick="switchSection('mm')">🛋 ММ</button>
@@ -323,6 +324,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="sub-tab" onclick="switchMMTab(this,'mm-extras')">⭐ Доп. задачи</div>
   </div>
 
+  <div id="tab-dashboard" style="display:none"></div>
   <div id="tab-rating" style="display:none"></div>
   <div id="tab-calendar" style="display:none">
     <div class="month-bar">
@@ -2188,8 +2190,11 @@ function startApp(){
   if(profileBtn)profileBtn.style.display=session.role==='constructor'?'':'none';
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=session.role==='admin'?'':'none');
   document.querySelectorAll('.sub-nav .admin-only').forEach(el=>el.style.display=session.role==='admin'?'':'none');
+  document.querySelectorAll('.constructor-only').forEach(el=>el.style.display=session.role==='constructor'?'':'none');
   const now=new Date();viewYear=now.getFullYear();viewMonth=now.getMonth();
-  if(session.module==='mm'){
+  if(session.role==='constructor'){
+    switchSection('dashboard');
+  } else if(session.module==='mm'){
     switchSection('mm');
   } else {
     switchSection('rating');
@@ -2202,12 +2207,13 @@ let _activeSection='rating';
 function switchSection(section){
   _activeSection=section;
   document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
-  const ids={rating:'mtRating',km:'mtKm',mm:'mtMm',metal:'mtMetal',massiv:'mtMassiv',workload:'mtWorkload'};
+  const ids={dashboard:'mtDashboard',rating:'mtRating',km:'mtKm',mm:'mtMm',metal:'mtMetal',massiv:'mtMassiv',workload:'mtWorkload'};
   document.getElementById(ids[section])?.classList.add('active');
   document.getElementById('subNavKm').style.display=section==='km'?'flex':'none';
   document.getElementById('subNavMm').style.display=section==='mm'?'flex':'none';
   document.getElementById('subNavMetal').style.display=section==='metal'?'flex':'none';
   document.getElementById('subNavMassiv').style.display=section==='massiv'?'flex':'none';
+  document.getElementById('tab-dashboard').style.display='none';
   document.getElementById('tab-rating').style.display='none';
   document.getElementById('tab-workload').style.display='none';
   document.getElementById('tab-metal').style.display='none';
@@ -2217,7 +2223,10 @@ function switchSection(section){
   document.getElementById('tab-mm').style.display='none';
   ['mm-constructors','mm-products','mm-calendar','mm-templates','mm-acceptance','mm-extras','mm-shifts'].forEach(t=>
     document.getElementById('tab-'+t).style.display='none');
-  if(section==='rating'){
+  if(section==='dashboard'){
+    document.getElementById('tab-dashboard').style.display='';
+    renderDashboard();
+  } else if(section==='rating'){
     document.getElementById('tab-rating').style.display='';
     renderRating();
   } else if(section==='km'){
@@ -2235,6 +2244,169 @@ function switchSection(section){
     initWorkload();
   }
 }
+// ── Constructor Dashboard ─────────────────────────────────────
+function _dbStageDone(entry,trackKey){
+  const days=Object.values(trackKey?(entry[trackKey]?.days||{}):(entry.days||{}));
+  return days.length>0&&days.every(v=>v.status==='done');
+}
+function _dbCollectTasks(cid){
+  const today=new Date().toISOString().slice(0,10);
+  const active=[],today_doing=[],today_ctrl=[],overdue=[];
+  for(const prod of S.products.filter(p=>p.constructorId===cid)){
+    const sched=S.schedule[prod.id]||{};
+    for(const stage of STAGES){
+      const e=sched[stage.id];
+      if(!e||!e.startDate||!e.endDate||e.skipped)continue;
+      if(_dbStageDone(e))continue;
+      const task={prodName:prod.name,prodId:prod.id,stageAbbr:stage.abbr,stageName:stage.name,
+        startDate:e.startDate,endDate:e.endDate,isCtrl:stage.type==='ctrl',
+        mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd'};
+      if(e.endDate<today)overdue.push(task);
+      else if(e.startDate<=today){active.push(task);(task.isCtrl?today_ctrl:today_doing).push(task);}
+    }
+  }
+  for(const prod of S.mm.products.filter(p=>p.cidA===cid||p.cidB===cid)){
+    const sched=S.mm.schedule[prod.id]||{};
+    const tmpl=S.mm.templates.find(t=>t.id===prod.templateId);if(!tmpl)continue;
+    for(const sid in sched){
+      const e=sched[sid];if(!e||!e.startDate||!e.endDate)continue;
+      const stage=tmpl.stages.find(s=>s.id===sid);if(!stage)continue;
+      const isA=e.track0?.constructorId===cid,isB=e.track1?.constructorId===cid;
+      if(!isA&&!isB)continue;
+      if(_dbStageDone(e,isA?'track0':'track1'))continue;
+      const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
+      const task={prodName:prod.name,prodId:prod.id,stageAbbr:stage.abbr,stageName:stage.name,
+        startDate:e.startDate,endDate:e.endDate,isCtrl,
+        mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5'};
+      if(e.endDate<today)overdue.push(task);
+      else if(e.startDate<=today){active.push(task);(isCtrl?today_ctrl:today_doing).push(task);}
+    }
+  }
+  const sortByEnd=(a,b)=>a.endDate<b.endDate?-1:a.endDate>b.endDate?1:0;
+  [active,today_doing,today_ctrl,overdue].forEach(a=>a.sort(sortByEnd));
+  return{active,today_doing,today_ctrl,overdue};
+}
+function _dbTaskRow(task){
+  const today=new Date().toISOString().slice(0,10);
+  const ms=(parseDate(task.endDate)-new Date());
+  const daysLeft=Math.ceil(ms/864e5);
+  const isOv=task.endDate<today;
+  const urgClr=isOv?'#c62828':daysLeft<=2?'#e65100':'#2e7d32';
+  const urgBg=isOv?'#fdecea':daysLeft<=2?'#fff3e0':'#f1f8f1';
+  const badge=`<span style="background:${task.modBg};color:${task.modClr};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;margin-right:4px">${task.mod}</span>`;
+  const ctrlBadge=task.isCtrl?'<span style="background:#f3e5f5;color:#7b1fa2;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:600;margin-left:3px">контроль</span>':'';
+  const endLabel=isOv?`<span style="color:#c62828;font-weight:700">просрочено ${task.endDate}</span>`:`до ${task.endDate}`;
+  const dLabel=isOv?'⚠ '+Math.abs(daysLeft)+'д':daysLeft===0?'сегодня':'+'+daysLeft+'д';
+  return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;margin-bottom:5px;background:${urgBg};border-left:3px solid ${urgClr}">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;color:#1a2030">${badge}<b>${task.stageAbbr}</b>${ctrlBadge} — ${task.prodName}</div>
+      <div style="font-size:11px;color:#666;margin-top:1px">${task.stageName} · ${endLabel}</div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:${urgClr};white-space:nowrap">${dLabel}</div>
+  </div>`;
+}
+function renderDashboard(){
+  if(session.role!=='constructor')return;
+  const el=document.getElementById('tab-dashboard');if(!el)return;
+  const cid=session.cid;
+  const c=profileGetCon(cid);if(!c)return;
+  const now=new Date();const yr=now.getFullYear();const mo=now.getMonth();
+  const {active,today_doing,today_ctrl,overdue}=_dbCollectTasks(cid);
+  const {data:wlData,allDays:wlDays}=_wlCompute(yr,mo+1);
+  const myWl=wlData[cid];
+  const wlPct=wlDays.length>0&&myWl?Math.round(Object.values(myWl.days).reduce((s,x)=>s+x.doing.length,0)/wlDays.length*100):0;
+  const wlColors=_wlPctBg(wlPct);
+  const moPts=session.module==='mm'?calcMMPointsMonth(cid,yr,mo):calcPoints(cid,yr,mo);
+  const allPts=calcAllTimePoints(cid);
+  const avatarHtml=c.avatar
+    ?`<img src="${c.avatar}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.25)">`
+    :`<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.25)">${drawChar(c.gender||'male',48)}</div>`;
+  const modLabel=session.module==='mm'?'🛋 Мягкая мебель':'🗄 Корпусная мебель';
+  const modClr=session.module==='mm'?'#ce93d8':'#90caf9';
+  const today=now.toISOString().slice(0,10);
+  const dayNames=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+  const todayLabel=`${dayNames[now.getDay()]}, ${today.slice(8)}.${today.slice(5,7)}.${today.slice(0,4)}`;
+
+  const profileHtml=`<div style="background:linear-gradient(135deg,#1a2030 0%,#1a3a5c 100%);border-radius:14px;padding:20px;display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+    <div>${avatarHtml}</div>
+    <div style="flex:1;min-width:160px">
+      <div style="font-size:20px;font-weight:900;color:#fff">${c.name}</div>
+      <div style="font-size:12px;color:${modClr};font-weight:600;margin-top:3px">${modLabel}</div>
+      ${c.motto?`<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px;font-style:italic">«${c.motto}»</div>`:''}
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:24px;font-weight:900;color:${wlPct>100?'#ff8a65':wlPct>70?'#ffd54f':'#a5d6a7'}">${wlPct}%</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Загрузка</div>
+      </div>
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:24px;font-weight:900;color:#ffd700">⭐${moPts}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">За месяц</div>
+      </div>
+      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+        <div style="font-size:24px;font-weight:900;color:#fff">${allPts}</div>
+        <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Всего очков</div>
+      </div>
+    </div>
+    <button onclick="openProfile()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:12px;align-self:flex-start">⚙ Настройки</button>
+  </div>`;
+
+  const overdueHtml=overdue.length?`<div style="margin-bottom:18px">
+    <div style="font-size:14px;font-weight:700;color:#c62828;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+      ⚠️ Просроченные <span style="background:#fdecea;color:#c62828;border-radius:10px;padding:1px 10px;font-size:12px">${overdue.length}</span>
+    </div>
+    <div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)">${overdue.map(_dbTaskRow).join('')}</div>
+  </div>`:'';
+
+  const noTask='<div style="color:#aaa;font-size:12px;padding:8px 0">—</div>';
+  const todayHtml=`<div style="margin-bottom:18px">
+    <div style="font-size:14px;font-weight:700;color:#1a3a5c;margin-bottom:10px">📅 Сегодня — ${todayLabel}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)">
+        <div style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:8px">🔧 Исполнение <span style="background:#e8f5e9;color:#2e7d32;border-radius:10px;padding:1px 8px;font-size:11px">${today_doing.length}</span></div>
+        ${today_doing.length?today_doing.map(_dbTaskRow).join(''):noTask}
+      </div>
+      <div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)">
+        <div style="font-size:12px;font-weight:700;color:#7b1fa2;margin-bottom:8px">👁 Контроль <span style="background:#f3e5f5;color:#7b1fa2;border-radius:10px;padding:1px 8px;font-size:11px">${today_ctrl.length}</span></div>
+        ${today_ctrl.length?today_ctrl.map(_dbTaskRow).join(''):noTask}
+      </div>
+    </div>
+  </div>`;
+
+  const activeHtml=`<div style="margin-bottom:18px">
+    <div style="font-size:14px;font-weight:700;color:#1a3a5c;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+      🔄 Все в работе <span style="background:#e3f2fd;color:#1565c0;border-radius:10px;padding:1px 10px;font-size:12px">${active.length}</span>
+    </div>
+    ${active.length
+      ?`<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)">${active.map(_dbTaskRow).join('')}</div>`
+      :`<div style="background:#fff;border-radius:10px;padding:16px;text-align:center;color:#aaa;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.07)">Нет активных задач</div>`}
+  </div>`;
+
+  const myExtraActive=(S.extraAssignments||[]).filter(ea=>ea.constructorId===cid&&ea.status==='active');
+  const myDefIds=myExtraActive.map(ea=>ea.defId);
+  const extraAvail=(S.extraTaskDefs||[]).filter(d=>!myDefIds.includes(d.id));
+  const extraHtml=`<div style="margin-bottom:8px">
+    <div style="font-size:14px;font-weight:700;color:#e65100;margin-bottom:8px">⭐ Дополнительные задачи</div>
+    ${myExtraActive.length?`<div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">Мои текущие:</div>
+      ${myExtraActive.map(ea=>{const def=(S.extraTaskDefs||[]).find(d=>d.id===ea.defId);if(!def)return'';
+        return`<div style="background:#fff8e1;border-radius:8px;padding:8px 12px;margin-bottom:5px;border-left:3px solid #f9a825;font-size:12px"><b>${def.name}</b> · <span style="color:#e65100">⭐ ${def.points} оч.</span></div>`;
+      }).join('')}
+    </div>`:''}
+    ${extraAvail.length?`<div>
+      <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">Доступны (${extraAvail.length}):</div>
+      <div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.07)">
+        ${extraAvail.slice(0,8).map(d=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;last-child:border:none">
+          <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${d.name}</div>${d.description?`<div style="font-size:11px;color:#888">${d.description}</div>`:''}</div>
+          <span style="background:#fff8e1;color:#e65100;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap">⭐ ${d.points}</span>
+        </div>`).join('')}
+      </div>
+    </div>`:'<div style="color:#aaa;font-size:12px">Нет доступных доп. задач</div>'}
+  </div>`;
+
+  el.innerHTML=`<div class="panel" style="max-width:900px;margin:0 auto">${profileHtml}${overdueHtml}${todayHtml}${activeHtml}${extraHtml}</div>`;
+}
+
 // ── Workload ──────────────────────────────────────────────────
 let _wlYear=0,_wlMonth=0,_wlModule='km',_wlHeatmapMod='km';
 function initWorkload(){
