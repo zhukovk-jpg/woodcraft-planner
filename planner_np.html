@@ -335,7 +335,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       <button class="btn btn-sm" style="background:#9b59b6;color:#fff;font-weight:700" onclick="rebuildAll();save();renderCalendar();alert('✅ График пересчитан')">🔄 Пересчитать</button>
       <button class="btn btn-green btn-sm admin-only" onclick="openModal('mAcceptance')">📋 Приёмки</button>
       <button class="btn btn-sm" style="background:#ffd700;color:#333;font-weight:700" onclick="openTakeTask()">⭐ Взять задачу</button>
-      <div id="calFilterWrap" style="display:flex;align-items:center;gap:6px;margin-left:8px"></div>
+    </div>
+    <div id="calFilterBar" style="display:none;align-items:center;gap:10px;padding:8px 14px;background:#1e2d40;border-bottom:1px solid #2d3f55;flex-wrap:wrap">
+      <span style="font-size:12px;color:#90caf9;font-weight:600">👤 Фильтр по конструктору:</span>
+      <div id="calFilterWrap" style="display:flex;align-items:center;gap:6px"></div>
     </div>
     <div class="legend">
       <b>Легенда:</b>
@@ -5588,18 +5591,23 @@ function renderCalendar(){
   tbl.appendChild(hr);
 
   // ── Constructor filter UI (local only, not synced) ─────────
+  const filterBar=document.getElementById('calFilterBar');
   const filterWrap=document.getElementById('calFilterWrap');
-  if(filterWrap){
+  if(filterBar&&filterWrap){
     if(session.role==='admin'){
-      const opts=['<option value="">👥 Все конструкторы</option>',
+      filterBar.style.display='flex';
+      const opts=['<option value="">Все конструкторы</option>',
         ...S.constructors.map(c=>`<option value="${c.id}"${_calFilter===c.id?' selected':''}>${c.name}</option>`)
       ].join('');
-      filterWrap.innerHTML=`<span style="font-size:12px;color:#ccc">👤</span>
-        <select style="border-radius:6px;border:1px solid #4a5568;background:#2d3748;color:#fff;padding:4px 8px;font-size:12px;cursor:pointer"
+      filterWrap.innerHTML=`<select style="border-radius:8px;border:1px solid #4a5568;background:#2d3748;color:#fff;padding:5px 12px;font-size:13px;cursor:pointer;min-width:180px"
           onchange="_calFilter=this.value||null;renderCalendar()">${opts}</select>
-        ${_calFilter?`<button onclick="_calFilter=null;renderCalendar()" style="background:rgba(255,80,80,.3);border:none;color:#ff9999;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px">✕ Сбросить</button>`:''}`;
+        ${_calFilter
+          ?`<button onclick="_calFilter=null;renderCalendar()" style="background:rgba(255,80,80,.25);border:1px solid rgba(255,80,80,.4);color:#ff9999;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600">✕ Показать всех</button>
+            <span style="font-size:12px;color:#90caf9;font-style:italic">Показан: ${S.constructors.find(c=>c.id===_calFilter)?.name||''}</span>`
+          :'<span style="font-size:12px;color:rgba(255,255,255,.35)">Выберите конструктора для быстрого просмотра (только у вас)</span>'}`;
     } else {
-      filterWrap.innerHTML=''; // constructors don't see the filter UI
+      filterBar.style.display='none';
+      filterWrap.innerHTML='';
     }
   }
 
