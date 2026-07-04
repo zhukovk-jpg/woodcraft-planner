@@ -7608,7 +7608,11 @@ function renderMMCalendar(){
   const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
   const PHASE_NAMES={'1':'Черновой образец','2':'Чистовой и расчёты','3':'КТД','4':'Производство'};
   const PHASE_COLORS={'1':'#7c4dff','2':'#0288d1','3':'#f57c00','4':'#2e7d32'};
-  const prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  const prods=S.mm.products.filter(p=>{
+    if(p.status==='closed') return false;
+    if(session.role==='constructor') return p.cidA===session.cid||p.cidB===session.cid;
+    return true;
+  }).sort((a,b)=>a.priority-b.priority);
   const canClick=session.role==='admin';
   for(const prod of prods){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
