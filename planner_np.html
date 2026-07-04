@@ -2245,6 +2245,108 @@ function switchSection(section){
   }
 }
 // ── Constructor Dashboard ─────────────────────────────────────
+const _DB_MOTIVATIONS=[
+  {text:'Мы делаем лучшую мебель в мире!',icon:'🏆'},
+  {text:'Твой труд приносит уют и счастье в дома людей.',icon:'🏠'},
+  {text:'Каждый чертёж — шаг к совершенству.',icon:'✏️'},
+  {text:'Качество — это не случайность, это привычка.',icon:'⭐'},
+  {text:'Ты создаёшь не просто мебель — ты создаёшь уют.',icon:'🛋'},
+  {text:'Woodcraft — место, где рождается красота.',icon:'🌟'},
+  {text:'Сегодня хороший день, чтобы сделать что-то классное!',icon:'🚀'},
+  {text:'Детали решают всё. Продолжай в том же духе!',icon:'🔩'},
+  {text:'Каждое изделие — это история, которую ты пишешь руками.',icon:'📖'},
+  {text:'Твоя работа живёт в домах людей долгие годы.',icon:'💫'},
+  {text:'Команда сильна каждым из нас. Спасибо, что ты с нами!',icon:'🤝'},
+  {text:'Хорошая мебель — это искусство, которым можно пользоваться.',icon:'🎨'},
+];
+function _dbGetMotivation(){
+  const d=new Date();
+  const seed=(d.getFullYear()*366+d.getMonth()*31+d.getDate())%_DB_MOTIVATIONS.length;
+  return _DB_MOTIVATIONS[seed];
+}
+function _dbGetTips(tasks,wlPct,name){
+  const {active,today_doing,today_ctrl,overdue}=tasks;
+  const tips=[];
+  const firstName=name.split(' ')[0];
+  // --- CRITICAL ---
+  if(overdue.length>0){
+    const names=overdue.slice(0,2).map(t=>`«${t.stageAbbr} — ${t.prodName}»`).join(', ');
+    tips.push({lvl:'critical',icon:'🚨',
+      text:overdue.length===1
+        ?`Срочно! Есть просроченная задача: ${names}. Разберись первым делом.`
+        :`Срочно! ${overdue.length} просроченных задачи: ${names}${overdue.length>2?' и ещё...':''}. Не откладывай.`
+    });
+  }
+  // --- СЕГОДНЯ ДЕДЛАЙН ---
+  const dueToday=active.filter(t=>t.endDate===new Date().toISOString().slice(0,10));
+  if(dueToday.length>0){
+    const names=dueToday.slice(0,2).map(t=>`«${t.stageAbbr} — ${t.prodName}»`).join(', ');
+    tips.push({lvl:'warning',icon:'⏰',
+      text:`Сегодня последний день: ${names}${dueToday.length>2?' и ещё..':''}. Успей закрыть!`
+    });
+  }
+  // --- КОНТРОЛЬ СЕГОДНЯ ---
+  if(today_ctrl.length>0){
+    const t=today_ctrl[0];
+    tips.push({lvl:'info',icon:'👁',
+      text:today_ctrl.length===1
+        ?`Не забудь проконтролировать этап «${t.stageAbbr}» по разработке «${t.prodName}» — срок до ${t.endDate}.`
+        :`Сегодня нужно проконтролировать ${today_ctrl.length} этапа. Начни с «${t.stageAbbr} — ${t.prodName}».`
+    });
+  }
+  // --- ИСПОЛНЕНИЕ СЕГОДНЯ ---
+  if(today_doing.length>0){
+    const t=today_doing[0];
+    tips.push({lvl:'info',icon:'🔧',
+      text:today_doing.length===1
+        ?`В активной работе сегодня: «${t.stageAbbr}» по «${t.prodName}». Дедлайн ${t.endDate}.`
+        :`В работе ${today_doing.length} исполнительных задачи. Приоритет — «${t.stageAbbr} — ${t.prodName}».`
+    });
+  }
+  // --- СКОРО ДЕДЛАЙН ---
+  const soonEnd=active.filter(t=>{
+    const d=Math.ceil((parseDate(t.endDate)-new Date())/864e5);
+    return d>0&&d<=3&&!dueToday.includes(t);
+  });
+  if(soonEnd.length>0&&tips.length<3){
+    const t=soonEnd[0];
+    const d=Math.ceil((parseDate(t.endDate)-new Date())/864e5);
+    tips.push({lvl:'info',icon:'📅',
+      text:`До дедлайна «${t.stageAbbr} — ${t.prodName}» осталось ${d} ${d===1?'день':'дня'}. Держи темп!`
+    });
+  }
+  // --- ПЕРЕГРУЗ ---
+  if(wlPct>100&&tips.length<3){
+    tips.push({lvl:'warning',icon:'💪',
+      text:`Загрузка ${wlPct}% — напряжённый период. Расставляй приоритеты и не забывай об отдыхе.`
+    });
+  }
+  // --- ВСЁ ХОРОШО ---
+  if(tips.length===0){
+    if(active.length===0){
+      tips.push({lvl:'good',icon:'🎉',text:`${firstName}, у тебя нет активных задач — самое время взять что-то новое!`});
+    } else {
+      tips.push({lvl:'good',icon:'✅',text:`${firstName}, всё идёт по плану. ${active.length} задач в работе, ни одной просроченной.`});
+    }
+  }
+  return tips.slice(0,3);
+}
+function _dbRenderTips(tips,motivation){
+  const lvlStyle={
+    critical:'background:#fdecea;border-left:4px solid #c62828;color:#b71c1c',
+    warning: 'background:#fff8e1;border-left:4px solid #f9a825;color:#5d4000',
+    info:    'background:#e8f5e9;border-left:4px solid #43a047;color:#1b5e20',
+    good:    'background:#e3f2fd;border-left:4px solid #1976d2;color:#0d47a1',
+  };
+  const tipsHtml=tips.map(t=>`<div style="${lvlStyle[t.lvl]};border-radius:8px;padding:9px 14px;margin-bottom:6px;font-size:12px;font-weight:600;display:flex;align-items:flex-start;gap:8px">
+    <span style="font-size:16px;flex-shrink:0">${t.icon}</span><span>${t.text}</span>
+  </div>`).join('');
+  const motHtml=`<div style="background:linear-gradient(90deg,#1a3a5c,#0d47a1);border-radius:8px;padding:9px 16px;display:flex;align-items:center;gap:10px;margin-top:8px">
+    <span style="font-size:18px">${motivation.icon}</span>
+    <span style="font-size:12px;font-style:italic;color:rgba(255,255,255,.85);font-weight:500">${motivation.text}</span>
+  </div>`;
+  return`<div style="margin-bottom:18px">${tipsHtml}${motHtml}</div>`;
+}
 function _dbStageDone(entry,trackKey){
   const days=Object.values(trackKey?(entry[trackKey]?.days||{}):(entry.days||{}));
   return days.length>0&&days.every(v=>v.status==='done');
@@ -2351,6 +2453,10 @@ function renderDashboard(){
     <button onclick="openProfile()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:12px;align-self:flex-start">⚙ Настройки</button>
   </div>`;
 
+  const tips=_dbGetTips({active,today_doing,today_ctrl,overdue},wlPct,c.name);
+  const motivation=_dbGetMotivation();
+  const tipsHtml=_dbRenderTips(tips,motivation);
+
   const overdueHtml=overdue.length?`<div style="margin-bottom:18px">
     <div style="font-size:14px;font-weight:700;color:#c62828;margin-bottom:8px;display:flex;align-items:center;gap:8px">
       ⚠️ Просроченные <span style="background:#fdecea;color:#c62828;border-radius:10px;padding:1px 10px;font-size:12px">${overdue.length}</span>
@@ -2404,7 +2510,7 @@ function renderDashboard(){
     </div>`:'<div style="color:#aaa;font-size:12px">Нет доступных доп. задач</div>'}
   </div>`;
 
-  el.innerHTML=`<div class="panel" style="max-width:900px;margin:0 auto">${profileHtml}${overdueHtml}${todayHtml}${activeHtml}${extraHtml}</div>`;
+  el.innerHTML=`<div class="panel" style="max-width:900px;margin:0 auto">${profileHtml}${tipsHtml}${overdueHtml}${todayHtml}${activeHtml}${extraHtml}</div>`;
 }
 
 // ── Workload ──────────────────────────────────────────────────
