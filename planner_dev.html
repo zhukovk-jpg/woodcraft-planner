@@ -6053,9 +6053,11 @@ function getStageList(type, prodId){
     } else {
       const base=STAGES.find(s=>s.id===ex.baseId);
       if(!base)continue;
+      // Use insertAfter if specified (product-level extras), else fall back to baseId (type-level extras)
+      const anchorId=ex.insertAfter||ex.baseId;
       let insertIdx=-1;
       for(let i=result.length-1;i>=0;i--){
-        if(result[i].id===ex.baseId||(result[i]._baseId===ex.baseId&&result[i].id<ex.key)){insertIdx=i;break;}
+        if(result[i].id===anchorId||result[i]._baseId===anchorId){insertIdx=i;break;}
       }
       const newSt={...base,id:ex.key,_baseId:ex.baseId,_isExtra:true};
       result.splice(insertIdx>=0?insertIdx+1:result.length,0,newSt);
