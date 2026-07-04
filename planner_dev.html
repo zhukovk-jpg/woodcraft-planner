@@ -62,6 +62,8 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
 .gc-hdr td{background:#1a3a5c;color:#fff;padding:5px 10px;font-weight:700;font-size:13px;position:sticky;left:0;z-index:8}
 .gc-prod{background:#dce5f0;padding:4px 10px;font-weight:600;color:#1a3a5c;position:sticky;left:0;z-index:8;max-width:260px}
 .gc-stage{background:#fafbfc;padding:3px 10px 3px 20px;color:#555;position:sticky;left:0;z-index:8;max-width:260px}
+.gc-stage-add{display:none;border:none;background:#2471a3;color:#fff;border-radius:3px;padding:0 5px;font-size:11px;font-weight:700;cursor:pointer;line-height:16px;flex-shrink:0}
+.gc-stage:hover .gc-stage-add{display:inline-block}
 .dc{min-width:36px;height:26px;text-align:center;vertical-align:middle;position:relative;border:1px solid #d8dce2}
 .dc.wknd-cell{background:#f9f9f9}
 .dc.abs-vacation{background:#cce5ff!important}
@@ -5776,7 +5778,9 @@ function renderCalendar(){
         if(entry&&entry.skipped)continue;
         const sr=document.createElement('tr');
         const st=document.createElement('td');st.className='gc-stage';
-        st.innerHTML=`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
+        const addBtn=session.role==='admin'
+          ?`<button class="gc-stage-add" onclick="openProdStageModal('${prod.id}','${stage.id}')" title="Вставить этап после">+</button>`:'';
+        st.innerHTML=`<div style="display:flex;align-items:center;gap:4px"><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}</div>${addBtn}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
         sr.appendChild(st);
 
         for(const d of days){
@@ -6390,32 +6394,26 @@ function delProd(id){
 }
 
 // ─── PRODUCT EXTRA STAGES ─────────────────────────────────────
-function openProdStageModal(prodId){
+function openProdStageModal(prodId, insertAfterId){
   const p=S.products.find(x=>x.id===prodId);if(!p)return;
   document.getElementById('psProdId').value=prodId;
   document.getElementById('psStartDate').value='';
 
-  // Build current stage list for this product
   const stageList=getStageList(p.type, prodId);
   const sched=S.schedule[prodId]||{};
 
-  // Stages available to add: all STAGES not already at base level in this product's list
-  const baseIds=new Set(stageList.map(s=>s._baseId||s.id));
-  // Show all STAGES as options (user picks which to duplicate/add)
-  const stSel=document.getElementById('psStageId');
-  stSel.innerHTML=STAGES.map(s=>
+  document.getElementById('psStageId').innerHTML=STAGES.map(s=>
     `<option value="${s.id}">${s.type==='doing'?'🔵':'🟠'} ${s.abbr} — ${s.name}</option>`
   ).join('');
 
-  // "Insert after" — current stages with known endDates
-  const iaSel=document.getElementById('psInsertAfter');
-  iaSel.innerHTML=stageList
-    .filter(s=>!sched[s.id]?.skipped)
+  const nonSkipped=stageList.filter(s=>!sched[s.id]?.skipped);
+  document.getElementById('psInsertAfter').innerHTML=nonSkipped
     .map(s=>`<option value="${s.id}">${s.abbr} — ${s.name} (до ${fmtShort(sched[s.id]?.endDate)})</option>`)
     .join('');
-  // Default insertAfter = last non-skipped stage
-  const lastStage=stageList.filter(s=>!sched[s.id]?.skipped).pop();
-  if(lastStage)iaSel.value=lastStage.id;
+
+  // Pre-select the stage that was clicked
+  if(insertAfterId) document.getElementById('psInsertAfter').value=insertAfterId;
+  else { const last=nonSkipped.pop(); if(last)document.getElementById('psInsertAfter').value=last.id; }
 
   onPsStageChange();
   openModal('mProdStage');
