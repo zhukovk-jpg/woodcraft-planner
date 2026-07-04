@@ -2290,6 +2290,83 @@ function _wlCompute(Y,M){
   return{data,allDays};
 }
 const _MN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function _wlPctBg(pct){
+  if(!pct)return{bg:'#f4f6f9',fg:'#bbb'};
+  if(pct<=30)return{bg:`hsl(142,${50+pct}%,${88-pct*0.25}%)`,fg:'#1b5e20'};
+  if(pct<=70)return{bg:`hsl(${142-(pct-30)*1.5},70%,${76-(pct-30)*0.3}%)`,fg:'#1b5e20'};
+  if(pct<=100)return{bg:`hsl(${82-(pct-70)*2},75%,${67-(pct-70)*0.4}%)`,fg:'#5d4000'};
+  if(pct<=140)return{bg:`hsl(${22-(pct-100)*0.2},80%,${55-(pct-100)*0.2}%)`,fg:'#fff'};
+  return{bg:'#c62828',fg:'#fff'};
+}
+function renderWorkloadHeatmap(){
+  const now=new Date();
+  const months=[];
+  for(let i=0;i<8;i++){
+    let y=now.getFullYear(),m=now.getMonth()+1+i;
+    if(m>12){m-=12;y++;}
+    months.push({y,m,label:_MN[m-1].slice(0,3)+'\''+String(y).slice(2)});
+  }
+  const kmCons=S.constructors.map(c=>({id:c.id,name:c.name,mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd'}));
+  const mmCons=S.mm.constructors.filter(c=>!S.constructors.find(x=>x.id===c.id)).map(c=>({id:c.id,name:c.name,mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5'}));
+  const allCons=[...kmCons,...mmCons];
+  if(!allCons.length)return'<div style="color:#aaa;padding:16px;text-align:center">Нет сотрудников</div>';
+
+  const monthData=months.map(({y,m,label})=>{
+    const{data,allDays}=_wlCompute(y,m);
+    return{y,m,label,data,wd:allDays.length};
+  });
+
+  const hdrCells=months.map(({label,y,m})=>{
+    const isNow=y===now.getFullYear()&&m===now.getMonth()+1;
+    return`<th style="padding:7px 4px;font-size:11px;font-weight:${isNow?'800':'600'};text-align:center;white-space:nowrap;border:1px solid #d0d8e4;background:${isNow?'#1a3a5c':'#f4f6f9'};color:${isNow?'#fff':'#555'};min-width:58px">${label}</th>`;
+  }).join('');
+
+  const rows=allCons.map(con=>{
+    const cells=monthData.map(({y,m,data,wd})=>{
+      const d=data[con.id];
+      if(!d)return`<td style="border:1px solid #e8eaf0;background:#f4f6f9"></td>`;
+      const dayVals=Object.values(d.days);
+      const totalDoing=dayVals.reduce((s,x)=>s+x.doing.length,0);
+      const maxCtrl=Math.max(...dayVals.map(x=>x.ctrl.length),0);
+      const pct=wd>0?Math.round(totalDoing/wd*100):0;
+      const{bg,fg}=_wlPctBg(pct);
+      const ctrlOver=maxCtrl>=4;
+      return`<td style="border:1px solid #e8eaf0;background:${bg};text-align:center;cursor:pointer;transition:.1s" title="${con.name} — ${_MN[m-1]} ${y}\nЗагрузка: ${pct}%, Контроль пик: ${maxCtrl}" onclick="openWorkloadDetail('${con.id}',${y},${m})">
+        <div style="padding:5px 3px">
+          <div style="font-size:12px;font-weight:700;color:${fg}">${pct?pct+'%':''}</div>
+          <div style="font-size:9px;color:${ctrlOver?'#e53935':pct>80?'rgba(255,255,255,.75)':'#999'};font-weight:${ctrlOver?700:400}">${maxCtrl>0?(ctrlOver?'⚠':'')+(maxCtrl)+'к':'—'}</div>
+        </div>
+      </td>`;
+    }).join('');
+    return`<tr>
+      <td style="padding:7px 12px;font-weight:600;font-size:12px;white-space:nowrap;border:1px solid #e8eaf0;background:#fafbfc">${con.name}</td>
+      <td style="padding:3px 6px;border:1px solid #e8eaf0;background:#fafbfc;text-align:center"><span style="background:${con.modBg};color:${con.modClr};border-radius:6px;padding:1px 6px;font-size:10px;font-weight:700">${con.mod}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const legend=[0,30,70,100,140,160].map((p,i,a)=>{
+    const next=a[i+1];if(!next)return'';
+    const mid=Math.round((p+next)/2);
+    const{bg}=_wlPctBg(mid);
+    return`<div style="display:flex;align-items:center;gap:3px"><div style="width:22px;height:14px;border-radius:3px;background:${bg};border:1px solid rgba(0,0,0,.08)"></div><span style="font-size:10px;color:#666">${p}–${next}%</span></div>`;
+  }).join('');
+
+  return`<div style="overflow-x:auto">
+    <table style="border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="padding:7px 12px;text-align:left;font-weight:600;font-size:11px;border:1px solid #d0d8e4;background:#f4f6f9;color:#555">Сотрудник</th>
+        <th style="padding:7px 6px;border:1px solid #d0d8e4;background:#f4f6f9"></th>
+        ${hdrCells}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+      <span style="font-size:11px;color:#888;font-weight:600">Загрузка:</span>${legend}
+      <span style="font-size:10px;color:#888;margin-left:6px">Nк — задач контроля пик в день · ⚠ ≥4 — перегруз · Клик → детали дня</span>
+    </div>
+  </div>`;
+}
 function _wlRenderTable(cids,data,totalWD,Y,M){
   let rows='';
   for(const cid of cids){
@@ -2340,18 +2417,23 @@ function renderWorkload(){
   el.innerHTML=`<div class="panel">
     <div class="panel-hdr" style="align-items:center;flex-wrap:wrap;gap:12px">
       <h2>Загрузка сотрудников</h2>
-      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-        <button class="btn btn-sm btn-gray" onclick="_wlMonth--;if(_wlMonth<1){_wlMonth=12;_wlYear--;}renderWorkload()">◀</button>
-        <span style="font-weight:600;font-size:14px;min-width:145px;text-align:center">${_MN[M-1]} ${Y}</span>
-        <button class="btn btn-sm btn-gray" onclick="_wlMonth++;if(_wlMonth>12){_wlMonth=1;_wlYear++;}renderWorkload()">▶</button>
-        <button class="btn btn-sm btn-gray" onclick="const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;renderWorkload()">Сегодня</button>
+    </div>
+    <h3 style="font-size:14px;font-weight:700;color:#1a3a5c;margin:0 0 10px">🌡 Тепловая карта — 8 месяцев вперёд</h3>
+    <p style="font-size:12px;color:#888;margin:0 0 10px">Цвет ячейки = % загрузки делает. Клик по ячейке открывает детали дня.</p>
+    ${renderWorkloadHeatmap()}
+    <hr style="border:none;border-top:1px solid #e8eaf0;margin:24px 0 16px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <h3 style="font-size:14px;font-weight:700;color:#1a3a5c;margin:0">📋 Детали по месяцу</h3>
+      <button class="btn btn-sm btn-gray" onclick="_wlMonth--;if(_wlMonth<1){_wlMonth=12;_wlYear--;}renderWorkload()">◀</button>
+      <span style="font-weight:600;font-size:13px;min-width:120px;text-align:center">${_MN[M-1]} ${Y}</span>
+      <button class="btn btn-sm btn-gray" onclick="_wlMonth++;if(_wlMonth>12){_wlMonth=1;_wlYear++;}renderWorkload()">▶</button>
+      <button class="btn btn-sm btn-gray" onclick="const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;renderWorkload()">Сегодня</button>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button style="${tabStyle(isKm)}" onclick="_wlModule='km';renderWorkload()">🗄 КМ</button>
+        <button style="${tabStyle(!isKm)}" onclick="_wlModule='mm';renderWorkload()">🛋 ММ</button>
       </div>
     </div>
-    <div style="display:flex;gap:4px;margin-bottom:0;border-bottom:2px solid #1a3a5c">
-      <button style="${tabStyle(isKm)}" onclick="_wlModule='km';renderWorkload()">🗄 Корпус (КМ)</button>
-      <button style="${tabStyle(!isKm)}" onclick="_wlModule='mm';renderWorkload()">🛋 Мягкая (ММ)</button>
-    </div>
-    <p style="font-size:12px;color:#888;margin:12px 0 14px">Рабочих дней в месяце: <b>${totalWD}</b>. &nbsp;Загрузка % = Задач-делает ÷ рабочих дней × 100 (100% = 1 задача в день). &nbsp;Контроль >3 в день — перегруз.</p>
+    <p style="font-size:12px;color:#888;margin:0 0 14px">Рабочих дней: <b>${totalWD}</b>. &nbsp;Загрузка % = Задач-делает ÷ рабочих дней × 100. &nbsp;Контроль >3 в день — перегруз.</p>
     ${isKm?_wlRenderTable(kmCids,data,totalWD,Y,M):_wlRenderTable(mmCids,data,totalWD,Y,M)}
   </div>`;
 }
@@ -4460,13 +4542,14 @@ function kgBuy(cid,bid){
 let _ratingModule='km';
 function renderRating(){
   const now=new Date();const yr=now.getFullYear();const mo=now.getMonth();
-  const isKM=_ratingModule==='km';
-  const scores=isKM
-    ?S.constructors.map(c=>({...c,pts:calcPoints(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts)
-    :S.mm.constructors.map(c=>({...c,pts:calcMMPointsMonth(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts);
-  const maxPts=scores[0]?.pts||1;
+  const rm=_ratingModule;
+  let scores;
+  if(rm==='km')scores=S.constructors.map(c=>({...c,pts:calcPoints(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts);
+  else if(rm==='mm')scores=S.mm.constructors.map(c=>({...c,pts:calcMMPointsMonth(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts);
+  else if(rm==='metal')scores=[...S.metal.constructors].map(c=>({...c,pts:0}));
+  else scores=[...S.massiv.constructors].map(c=>({...c,pts:0}));
+  const maxPts=scores.reduce((m,s)=>Math.max(m,s.pts),1);
 
-  let eggsHtml='';
   const eggDelay=i=>`style="animation-delay:${i*0.15}s"`;
   const numEggs=p=>Math.min(8,Math.round(p/maxPts*8));
 
@@ -4476,8 +4559,7 @@ function renderRating(){
     const ne=numEggs(c.pts);
     let eggs='';
     for(let j=0;j<ne;j++){
-      const left=15+Math.random()*50;
-      const top=5+Math.random()*25;
+      const left=15+Math.random()*50;const top=5+Math.random()*25;
       eggs+=`<div class="egg-anim" ${eggDelay(j)} style="position:absolute;left:${left}px;top:${top}px">🥚</div>`;
     }
     const canUpload=session.role==='admin'||session.cid===c.id;
@@ -4485,17 +4567,19 @@ function renderRating(){
       ?`<img src="${c.avatar}" width="64" height="64" style="border-radius:50%;object-fit:cover">`
       :drawChar(c.gender||'male',52);
     const uploadBtn=canUpload?`<div class="avatar-upload-btn" onclick="event.stopPropagation();triggerAvatarUpload('${c.id}')" title="Загрузить фото">📷</div>`:'';
-    const charHtml=isKM
+    const charHtml=rm==='km'
       ?`<div class="avatar-wrap" onclick="openKingdom('${c.id}')" title="Открыть королевство">${avatarHtml}${uploadBtn}</div>`
       :`<div class="avatar-wrap">${avatarHtml}</div>`;
-    const doingPts=isKM?calcDoingPts(c.id,yr,mo):0;
+    const doingPts=rm==='km'?calcDoingPts(c.id,yr,mo):0;
+    const ptsNote=rm==='km'?`<div class="pts-detail">🔵 ${doingPts} + 🟠 ${c.pts-doingPts}</div>`
+      :(rm==='metal'||rm==='massiv')?'<div style="font-size:10px;color:#aaa">Рейтинг в разработке</div>':'';
     return`<div class="leader-card${isLeader?' is-leader':''}">
       ${isLeader?'<div class="crown">👑</div>':''}
       <div class="char-wrap" style="height:${c.avatar?'70px':'80px'}">${charHtml}</div>
       <div style="position:relative;height:70px">${eggs}${drawBasket(fillPct)}</div>
       <div class="leader-name">${c.name}</div>
       <div class="leader-pts">${c.pts} <span>очков</span></div>
-      ${isKM?`<div class="pts-detail">🔵 ${doingPts} + 🟠 ${c.pts-doingPts}</div>`:''}
+      ${ptsNote}
     </div>`;
   }).join('');
 
@@ -4535,8 +4619,10 @@ function renderRating(){
     ${factorySection}
     <div style="display:flex;align-items:center;gap:8px;margin:20px 0 0">
       <span style="font-size:13px;font-weight:600;color:#555">Рейтинг:</span>
-      <button style="${tabSt(isKM,'#1a3a5c')}" onclick="_ratingModule='km';renderRating()">🗄 Корпус (КМ)</button>
-      <button style="${tabSt(!isKM,'#6a1b9a')}" onclick="_ratingModule='mm';renderRating()">🛋 Мягкая (ММ)</button>
+      <button style="${tabSt(rm==='km','#1a3a5c')}" onclick="_ratingModule='km';renderRating()">🗄 Корпус (КМ)</button>
+      <button style="${tabSt(rm==='mm','#6a1b9a')}" onclick="_ratingModule='mm';renderRating()">🛋 Мягкая (ММ)</button>
+      <button style="${tabSt(rm==='metal','#b7410e')}" onclick="_ratingModule='metal';renderRating()">🔩 Металл</button>
+      <button style="${tabSt(rm==='massiv','#5d4037')}" onclick="_ratingModule='massiv';renderRating()">🪵 Массив</button>
     </div>
     <div class="rating-month" style="margin-top:12px">Рейтинг за ${MONTHS[mo]} ${yr}</div>
     <div class="leaders-grid">${cardsHtml||'<div style="color:#aaa;padding:20px">Нет конструкторов</div>'}</div>
