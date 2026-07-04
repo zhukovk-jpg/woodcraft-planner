@@ -285,6 +285,8 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <button class="main-tab" id="mtRating" onclick="switchSection('rating')">🏆 Рейтинг</button>
     <button class="main-tab" id="mtKm" onclick="switchSection('km')">🗄 КМ</button>
     <button class="main-tab" id="mtMm" onclick="switchSection('mm')">🛋 ММ</button>
+    <button class="main-tab admin-only" id="mtMetal" onclick="switchSection('metal')">🔩 МТ</button>
+    <button class="main-tab admin-only" id="mtMassiv" onclick="switchSection('massiv')">🪵 МС</button>
     <button class="main-tab admin-only" id="mtWorkload" onclick="switchSection('workload')">📊 Загрузка</button>
   </div>
   <div class="sub-nav" id="subNavKm" style="display:none">
@@ -296,6 +298,20 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="sub-tab" onclick="switchKMTab(this,'extratasks')">⭐ Доп. задачи</div>
     <div class="sub-tab" onclick="switchKMTab(this,'assembly')">🔨 Сборка</div>
     <div class="sub-tab" onclick="switchKMTab(this,'acceptance-km')">📋 Приёмка</div>
+  </div>
+  <div class="sub-nav" id="subNavMetal" style="display:none">
+    <div class="sub-tab" onclick="switchModTab('metal',this,'calendar')">📅 Календарь</div>
+    <div class="sub-tab" onclick="switchModTab('metal',this,'products')">📦 Задачи</div>
+    <div class="sub-tab admin-only" onclick="switchModTab('metal',this,'constructors')">👷 Конструкторы</div>
+    <div class="sub-tab admin-only" onclick="switchModTab('metal',this,'configurator')">⚙️ Шаблоны</div>
+    <div class="sub-tab" onclick="switchModTab('metal',this,'extratasks')">⭐ Доп. задачи</div>
+  </div>
+  <div class="sub-nav" id="subNavMassiv" style="display:none">
+    <div class="sub-tab" onclick="switchModTab('massiv',this,'calendar')">📅 Календарь</div>
+    <div class="sub-tab" onclick="switchModTab('massiv',this,'products')">📦 Задачи</div>
+    <div class="sub-tab admin-only" onclick="switchModTab('massiv',this,'constructors')">👷 Конструкторы</div>
+    <div class="sub-tab admin-only" onclick="switchModTab('massiv',this,'configurator')">⚙️ Шаблоны</div>
+    <div class="sub-tab" onclick="switchModTab('massiv',this,'extratasks')">⭐ Доп. задачи</div>
   </div>
   <div class="sub-nav" id="subNavMm" style="display:none">
     <div class="sub-tab" onclick="switchMMTab(this,'mm-calendar')">📅 Календарь</div>
@@ -431,10 +447,46 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       </div>
     </div>
   </div>
+  <div id="tab-metal" style="display:none">
+    <div id="tab-metal-calendar" style="display:none"></div>
+    <div id="tab-metal-products" style="display:none"></div>
+    <div id="tab-metal-constructors" style="display:none"></div>
+    <div id="tab-metal-configurator" style="display:none"></div>
+    <div id="tab-metal-extratasks" style="display:none"></div>
+  </div>
+  <div id="tab-massiv" style="display:none">
+    <div id="tab-massiv-calendar" style="display:none"></div>
+    <div id="tab-massiv-products" style="display:none"></div>
+    <div id="tab-massiv-constructors" style="display:none"></div>
+    <div id="tab-massiv-configurator" style="display:none"></div>
+    <div id="tab-massiv-extratasks" style="display:none"></div>
+  </div>
   <div id="tab-workload" style="display:none"></div>
 </div>
 
 <!-- MODALS -->
+<div class="overlay" id="mModCon"><div class="modal" style="width:400px">
+  <div class="mhdr"><h3 id="mModConTitle">Добавить конструктора</h3></div>
+  <div class="fg"><label>Имя</label><input type="text" id="modConName" placeholder="Фамилия И.О."></div>
+  <div class="fg"><label>Пол</label><div style="display:flex;gap:16px;margin-top:4px">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="modConGender" value="male" checked> Мужчина</label>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="radio" name="modConGender" value="female"> Женщина</label>
+  </div></div>
+  <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mModCon')">Отмена</button><button class="btn btn-green" onclick="saveModCon()">Сохранить</button></div>
+</div></div>
+<div class="overlay" id="mModProd"><div class="modal" style="width:480px">
+  <div class="mhdr"><h3 id="mModProdTitle">Добавить задачу</h3></div>
+  <div class="fg"><label>Название изделия</label><input type="text" id="modProdName" placeholder="Название"></div>
+  <div class="fg"><label>Тип сложности</label><select id="modProdType">
+    <option value="simple">Простое</option>
+    <option value="medium" selected>Среднее</option>
+    <option value="complex">Сложное</option>
+    <option value="series">Серия</option>
+  </select></div>
+  <div class="fg"><label>Конструктор</label><select id="modProdCon"></select></div>
+  <div class="fg"><label>Дата старта</label><input type="date" id="modProdStart"></div>
+  <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mModProd')">Отмена</button><button class="btn btn-green" onclick="saveModProd()">Сохранить</button></div>
+</div></div>
 <div class="overlay" id="mWorkloadDetail"><div class="modal" style="width:720px;max-width:98vw;max-height:85vh;display:flex;flex-direction:column">
   <div class="mhdr" style="flex-shrink:0"><h3 id="mWorkloadDetailTitle">Загрузка</h3><button class="btn btn-sm btn-gray" onclick="closeModal('mWorkloadDetail')">✕</button></div>
   <div id="mWorkloadDetailBody" style="overflow-y:auto;flex:1;padding:0"></div>
@@ -927,6 +979,42 @@ function getStageGroup(pid){
   if(!sid)return null;
   return STAGE_GROUPS.find(g=>g.ids.includes(sid))||null;
 }
+// ── Металл stages ──────────────────────────────────────────────
+const STAGES_MT=[
+  {id:'tz',    abbr:'ТЗ',  name:'Анализ ТЗ',                     type:'doing',days:{simple:1,medium:1,complex:2,series:2}},
+  {id:'model', abbr:'МОД', name:'Чертежи / 3D-модель',           type:'doing',days:{simple:2,medium:3,complex:5,series:7}},
+  {id:'mat',   abbr:'МАТ', name:'Подбор материалов и смета',     type:'ctrl', days:{simple:1,medium:2,complex:3,series:3}},
+  {id:'clar',  abbr:'УТЧ', name:'Уточнения по чертежам',         type:'doing',days:{simple:1,medium:2,complex:3,series:4}},
+  {id:'price', abbr:'ЦЕН', name:'Просчёт цены',                  type:'ctrl', days:{simple:1,medium:1,complex:2,series:2}},
+  {id:'sample',abbr:'ОБР', name:'Изготовление образца',          type:'ctrl', days:{simple:5,medium:7,complex:10,series:14}},
+  {id:'insp',  abbr:'ИНС', name:'Предзаводская инспекция',       type:'ctrl', days:{simple:1,medium:1,complex:2,series:2}},
+  {id:'accept',abbr:'ПРМ', name:'Приёмка заказчиком',            type:'ctrl', days:{simple:2,medium:2,complex:3,series:3}},
+  {id:'fix',   abbr:'ИЗМ', name:'Изменения после приёмки',      type:'doing',days:{simple:2,medium:3,complex:5,series:7}},
+  {id:'docs',  abbr:'ДОК', name:'Подготовка документации',       type:'doing',days:{simple:3,medium:4,complex:5,series:6}},
+  {id:'presale',abbr:'РЛЗ',name:'Предпродажный релиз',          type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+  {id:'zero',  abbr:'НС',  name:'Нулевая серия',                 type:'ctrl', days:{simple:10,medium:14,complex:21,series:21}},
+  {id:'launch',abbr:'ЗПС', name:'Запуск продаж',                 type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+];
+// ── Массив stages ──────────────────────────────────────────────
+const STAGES_MS=[
+  {id:'tz',    abbr:'ТЗ',  name:'Анализ ТЗ',                     type:'doing',days:{simple:1,medium:1,complex:2,series:2}},
+  {id:'model', abbr:'МОД', name:'Чертежи / 3D-модель',           type:'doing',days:{simple:2,medium:4,complex:6,series:8}},
+  {id:'mat',   abbr:'МАТ', name:'Подбор древесины и материалов', type:'ctrl', days:{simple:2,medium:3,complex:4,series:4}},
+  {id:'clar',  abbr:'УТЧ', name:'Уточнения по конструкции',      type:'doing',days:{simple:1,medium:2,complex:3,series:4}},
+  {id:'price', abbr:'ЦЕН', name:'Просчёт и согласование цены',  type:'ctrl', days:{simple:1,medium:2,complex:2,series:3}},
+  {id:'sample',abbr:'ОБР', name:'Изготовление образца',          type:'ctrl', days:{simple:7,medium:10,complex:15,series:21}},
+  {id:'insp',  abbr:'ИНС', name:'Предзаводская инспекция',       type:'ctrl', days:{simple:1,medium:2,complex:2,series:3}},
+  {id:'accept',abbr:'ПРМ', name:'Приёмка заказчиком',            type:'ctrl', days:{simple:2,medium:3,complex:3,series:4}},
+  {id:'fix',   abbr:'ИЗМ', name:'Изменения после приёмки',      type:'doing',days:{simple:2,medium:4,complex:6,series:8}},
+  {id:'docs',  abbr:'ДОК', name:'Подготовка документации',       type:'doing',days:{simple:3,medium:4,complex:6,series:7}},
+  {id:'presale',abbr:'РЛЗ',name:'Предпродажный релиз',          type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+  {id:'zero',  abbr:'НС',  name:'Нулевая серия',                 type:'ctrl', days:{simple:14,medium:21,complex:30,series:30}},
+  {id:'launch',abbr:'ЗПС', name:'Запуск продаж',                 type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+];
+const MOD_CFG={
+  metal:{key:'metal', ns:()=>S.metal, label:'МТ', emoji:'🔩', accent:'#b7410e', stages:STAGES_MT, name:'Металл'},
+  massiv:{key:'massiv',ns:()=>S.massiv,label:'МС', emoji:'🪵', accent:'#5d4037', stages:STAGES_MS, name:'Массив'}
+};
 const MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const MONTHS_G=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 const MONTHS_S=['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -1649,6 +1737,22 @@ function migrate(){
   if(!S.mm.templates.length||!S.mm.templates[0]?.stages?.[0]?.phase)S.mm.templates=MM_DEFAULT_TEMPLATES();
   if(!S.mm.absences)S.mm.absences={};
   if(!S.mm.shiftsLog)S.mm.shiftsLog=[];
+  // ── Metal / Massiv init ────────────────────────────────────
+  for(const mk of ['metal','massiv']){
+    if(!S[mk])S[mk]={constructors:[],products:[],schedule:{},personalDays:{},absences:{},shiftsLog:[],customDurations:{},stageConstraints:{},extraTaskDefs:[],extraAssignments:{}};
+    const m=S[mk];
+    if(!m.constructors)m.constructors=[];
+    if(!m.products)m.products=[];
+    if(!m.schedule)m.schedule={};
+    if(!m.personalDays)m.personalDays={};
+    if(!m.absences)m.absences={};
+    if(!m.shiftsLog)m.shiftsLog=[];
+    if(!m.customDurations)m.customDurations={};
+    if(!m.stageConstraints)m.stageConstraints={};
+    if(!m.extraTaskDefs)m.extraTaskDefs=[];
+    if(!m.extraAssignments)m.extraAssignments={};
+    m.products.forEach(p=>{if(!p.status)p.status='active';if(!p.startStageId)p.startStageId='tz';});
+  }
   S.mm.templates.forEach(t=>{
     if(!t.stages)t.stages=[];
     t.stages.forEach(st=>{
@@ -1878,6 +1982,29 @@ function calcPoints(cid,yr,mo){
   return total;
 }
 
+function calcMMPointsMonth(cid,yr,mo){
+  let total=0;
+  const getD=obj=>Object.entries(obj||{}).filter(([,v])=>v.status==='done').map(([d])=>d).sort();
+  const inMonth=(d)=>{const dt=parseDate(d);return dt.getFullYear()===yr&&dt.getMonth()===mo;};
+  for(const prod of S.mm.products.filter(p=>p.cidA===cid||p.cidB===cid)){
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+    const sched=S.mm.schedule[prod.id]||{};
+    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
+      const e=sched[stage.id];if(!e)continue;
+      const dur=stage.days||1;
+      if(stage.mode==='ctrl'){
+        const dd=getD(e.days);if(dd.length<dur)continue;
+        if(inMonth(dd[dd.length-1]))total+=tmpl.pointsCtrl||1;
+      }else if(stage.mode==='seq'){
+        if(prod.cidA===cid){const dd=getD(e.track0?.days);if(dd.length>=dur&&inMonth(dd[dd.length-1]))total+=tmpl.pointsDoing||2;}
+        if(prod.cidB===cid){const dd=getD(e.track1?.days);if(dd.length>=dur&&inMonth(dd[dd.length-1]))total+=tmpl.pointsDoing||2;}
+      }else{
+        const dd=getD(e.track0?.days);if(dd.length>=dur&&inMonth(dd[dd.length-1]))total+=tmpl.pointsDoing||2;
+      }
+    }
+  }
+  return total;
+}
 // ─── PERMISSION ───────────────────────────────────────────────
 function setBy(){return session.role==='admin'?'admin':'constructor';}
 function canModify(mark){if(!mark)return true;if(session.role==='admin')return true;return mark.setBy!=='admin';}
@@ -2075,12 +2202,16 @@ let _activeSection='rating';
 function switchSection(section){
   _activeSection=section;
   document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
-  const ids={rating:'mtRating',km:'mtKm',mm:'mtMm',workload:'mtWorkload'};
+  const ids={rating:'mtRating',km:'mtKm',mm:'mtMm',metal:'mtMetal',massiv:'mtMassiv',workload:'mtWorkload'};
   document.getElementById(ids[section])?.classList.add('active');
   document.getElementById('subNavKm').style.display=section==='km'?'flex':'none';
   document.getElementById('subNavMm').style.display=section==='mm'?'flex':'none';
+  document.getElementById('subNavMetal').style.display=section==='metal'?'flex':'none';
+  document.getElementById('subNavMassiv').style.display=section==='massiv'?'flex':'none';
   document.getElementById('tab-rating').style.display='none';
   document.getElementById('tab-workload').style.display='none';
+  document.getElementById('tab-metal').style.display='none';
+  document.getElementById('tab-massiv').style.display='none';
   ['calendar','products','shifts','constructors','configurator','extratasks'].forEach(t=>
     document.getElementById('tab-'+t).style.display='none');
   document.getElementById('tab-mm').style.display='none';
@@ -2095,6 +2226,10 @@ function switchSection(section){
   } else if(section==='mm'){
     document.getElementById('tab-mm').style.display='';
     initMMTab();
+  } else if(section==='metal'||section==='massiv'){
+    document.getElementById('tab-'+section).style.display='';
+    const nav=document.querySelector(`#subNav${section==='metal'?'Metal':'Massiv'} .sub-tab:not([style*="none"])`);
+    switchModTab(section,nav,'products');
   } else if(section==='workload'){
     document.getElementById('tab-workload').style.display='';
     initWorkload();
@@ -2255,6 +2390,153 @@ function openWorkloadDetail(cid,Y,M){
       <tbody>${rows||'<tr><td colspan="4" style="padding:24px;text-align:center;color:#aaa">Нет данных</td></tr>'}</tbody>
     </table>`;
   openModal('mWorkloadDetail');
+}
+// ── Generic Metal/Massiv module ───────────────────────────────
+function switchModTab(mk,el,id){
+  const subNavId=mk==='metal'?'subNavMetal':'subNavMassiv';
+  document.querySelectorAll(`#${subNavId} .sub-tab`).forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  ['calendar','products','constructors','configurator','extratasks'].forEach(t=>{
+    const el2=document.getElementById(`tab-${mk}-${t}`);if(el2)el2.style.display=t===id?'':'none';
+  });
+  if(id==='products')renderModProducts(mk);
+  else if(id==='constructors')renderModConstructors(mk);
+  else if(id==='configurator')renderModConfigurator(mk);
+  else if(id==='calendar')renderModCalendar(mk);
+  else if(id==='extratasks')renderModExtraTasks(mk);
+}
+function renderModCalendar(mk){
+  const cfg=MOD_CFG[mk];
+  const el=document.getElementById(`tab-${mk}-calendar`);if(!el)return;
+  el.innerHTML=`<div class="panel"><div style="text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">${cfg.emoji}</div>
+    <div style="font-size:20px;font-weight:700;color:#1a3a5c;margin-bottom:8px">Календарь — ${cfg.name}</div>
+    <div style="color:#888;font-size:14px">Раздел в разработке.<br>Будет аналогичен календарю КМ с этапами ${cfg.name.toLowerCase()}.</div>
+  </div></div>`;
+}
+function renderModExtraTasks(mk){
+  const cfg=MOD_CFG[mk];
+  const el=document.getElementById(`tab-${mk}-extratasks`);if(!el)return;
+  el.innerHTML=`<div class="panel"><div style="text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">${cfg.emoji}</div>
+    <div style="font-size:20px;font-weight:700;color:#1a3a5c;margin-bottom:8px">Доп. задачи — ${cfg.name}</div>
+    <div style="color:#888;font-size:14px">Раздел в разработке.</div>
+  </div></div>`;
+}
+function renderModConfigurator(mk){
+  const cfg=MOD_CFG[mk];
+  const el=document.getElementById(`tab-${mk}-configurator`);if(!el)return;
+  const rows=cfg.stages.map(s=>`<tr style="border-bottom:1px solid #eee">
+    <td style="padding:8px 14px;font-weight:700;color:${cfg.accent}">${s.abbr}</td>
+    <td style="padding:8px 14px">${s.name}</td>
+    <td style="padding:8px 10px;text-align:center"><span style="background:${s.type==='ctrl'?'#fff3e0':'#e3f2fd'};color:${s.type==='ctrl'?'#e67e22':'#1565c0'};border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">${s.type==='ctrl'?'Контроль':'Делает'}</span></td>
+    <td style="padding:8px 10px;text-align:center;font-size:12px;color:#555">${s.days.simple}/${s.days.medium}/${s.days.complex}/${s.days.series} д</td>
+  </tr>`).join('');
+  el.innerHTML=`<div class="panel"><div class="panel-hdr"><h2>Этапы — ${cfg.name}</h2></div>
+    <p style="font-size:12px;color:#888;margin:0 0 14px">Шаблоны дней: Простое / Среднее / Сложное / Серия. Корректировка на следующей неделе.</p>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <thead><tr style="background:#1a3a5c;color:#fff;font-size:12px">
+        <th style="padding:10px 14px;text-align:left">Аббр.</th>
+        <th style="padding:10px 14px;text-align:left">Этап</th>
+        <th style="padding:10px 10px;text-align:center">Тип</th>
+        <th style="padding:10px 10px;text-align:center">Дней (П/С/Сл/Сер)</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+function renderModConstructors(mk){
+  const cfg=MOD_CFG[mk];const ns=cfg.ns();
+  const el=document.getElementById(`tab-${mk}-constructors`);if(!el)return;
+  const isAdmin=session.role==='admin';
+  const rows=ns.constructors.map(c=>`<tr style="border-bottom:1px solid #eee">
+    <td style="padding:10px 14px;font-weight:600">${c.name}</td>
+    <td style="padding:10px 14px;font-size:12px;color:#888">${c.gender==='female'?'Женщина':'Мужчина'}</td>
+    <td style="padding:10px 14px">${isAdmin?`<button class="btn btn-sm btn-danger" style="padding:3px 10px;font-size:11px" onclick="delModCon('${mk}','${c.id}')">Удалить</button>`:'—'}</td>
+  </tr>`).join('');
+  el.innerHTML=`<div class="panel"><div class="panel-hdr"><h2>Конструкторы — ${cfg.name}</h2>
+    ${isAdmin?`<button class="btn btn-green" onclick="openAddModCon('${mk}')">+ Добавить</button>`:''}
+  </div>
+  ${!ns.constructors.length?`<div class="empty">Нет конструкторов. Добавьте первого.</div>`:`
+  <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+    <thead><tr style="background:#1a3a5c;color:#fff;font-size:12px">
+      <th style="padding:10px 14px;text-align:left">Имя</th>
+      <th style="padding:10px 14px;text-align:left">Пол</th>
+      <th style="padding:10px 14px"></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`}
+  </div>`;
+}
+let _modConMk='';
+function openAddModCon(mk){_modConMk=mk;document.getElementById('mModConTitle').textContent=`Добавить конструктора — ${MOD_CFG[mk].name}`;document.getElementById('modConName').value='';document.querySelector('input[name=modConGender][value=male]').checked=true;openModal('mModCon');}
+function saveModCon(){
+  const name=document.getElementById('modConName').value.trim();if(!name)return alert('Введите имя');
+  const gender=document.querySelector('input[name=modConGender]:checked')?.value||'male';
+  MOD_CFG[_modConMk].ns().constructors.push({id:'mc'+Date.now(),name,gender});
+  save();renderModConstructors(_modConMk);closeModal('mModCon');
+}
+function delModCon(mk,id){
+  if(!confirm('Удалить конструктора?'))return;
+  MOD_CFG[mk].ns().constructors=MOD_CFG[mk].ns().constructors.filter(c=>c.id!==id);
+  save();renderModConstructors(mk);
+}
+function renderModProducts(mk){
+  const cfg=MOD_CFG[mk];const ns=cfg.ns();
+  const el=document.getElementById(`tab-${mk}-products`);if(!el)return;
+  const isAdmin=session.role==='admin';
+  const TYPE_L={simple:'Простое',medium:'Среднее',complex:'Сложное',series:'Серия'};
+  const rows=ns.products.map(p=>{
+    const con=ns.constructors.find(c=>c.id===p.constructorId);
+    return`<tr style="border-bottom:1px solid #eee">
+      <td style="padding:10px 14px;font-weight:600">${p.name}</td>
+      <td style="padding:10px 14px;font-size:12px;color:#555">${TYPE_L[p.type]||p.type}</td>
+      <td style="padding:10px 14px;font-size:12px;color:#555">${con?.name||'—'}</td>
+      <td style="padding:10px 14px;font-size:12px;color:#888">${p.startDate||'—'}</td>
+      ${isAdmin?`<td style="padding:10px 14px"><button class="btn btn-sm btn-danger" style="padding:3px 10px;font-size:11px" onclick="delModProd('${mk}','${p.id}')">Удалить</button></td>`:'<td></td>'}
+    </tr>`;
+  }).join('');
+  el.innerHTML=`<div class="panel"><div class="panel-hdr"><h2>Задачи — ${cfg.name}</h2>
+    ${isAdmin?`<button class="btn btn-green" onclick="openAddModProd('${mk}')">+ Добавить</button>`:''}
+  </div>
+  ${!ns.products.length?`<div class="empty">Нет задач. Добавьте первую.</div>`:`
+  <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+    <thead><tr style="background:#1a3a5c;color:#fff;font-size:12px">
+      <th style="padding:10px 14px;text-align:left">Название</th>
+      <th style="padding:10px 10px;text-align:left">Тип</th>
+      <th style="padding:10px 10px;text-align:left">Конструктор</th>
+      <th style="padding:10px 10px;text-align:left">Старт</th>
+      <th style="padding:10px 10px"></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`}
+  </div>`;
+}
+let _modProdMk='';
+function openAddModProd(mk){
+  _modProdMk=mk;const cfg=MOD_CFG[mk];const ns=cfg.ns();
+  document.getElementById('mModProdTitle').textContent=`Добавить задачу — ${cfg.name}`;
+  document.getElementById('modProdName').value='';
+  document.getElementById('modProdStart').value=todayStr();
+  const conSel=document.getElementById('modProdCon');
+  conSel.innerHTML='<option value="">— выберите —</option>'+ns.constructors.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  openModal('mModProd');
+}
+function saveModProd(){
+  const name=document.getElementById('modProdName').value.trim();if(!name)return alert('Введите название');
+  const type=document.getElementById('modProdType').value;
+  const constructorId=document.getElementById('modProdCon').value;
+  const startDate=document.getElementById('modProdStart').value;
+  const ns=MOD_CFG[_modProdMk].ns();
+  const priority=(ns.products.length?Math.max(...ns.products.map(p=>p.priority||0)):0)+1;
+  ns.products.push({id:'mp'+Date.now(),name,type,constructorId,startDate,priority,status:'active',startStageId:'tz'});
+  save();renderModProducts(_modProdMk);closeModal('mModProd');
+}
+function delModProd(mk,id){
+  if(!confirm('Удалить задачу?'))return;
+  MOD_CFG[mk].ns().products=MOD_CFG[mk].ns().products.filter(p=>p.id!==id);
+  delete MOD_CFG[mk].ns().schedule[id];
+  save();renderModProducts(mk);
 }
 function switchKMTab(el,id){
   document.querySelectorAll('#subNavKm .sub-tab').forEach(t=>t.classList.remove('active'));
@@ -4175,10 +4457,13 @@ function kgBuy(cid,bid){
   renderKingdom(cid);
 }
 
+let _ratingModule='km';
 function renderRating(){
   const now=new Date();const yr=now.getFullYear();const mo=now.getMonth();
-  const scores=S.constructors.map(c=>({...c,pts:calcPoints(c.id,yr,mo)}))
-    .sort((a,b)=>b.pts-a.pts);
+  const isKM=_ratingModule==='km';
+  const scores=isKM
+    ?S.constructors.map(c=>({...c,pts:calcPoints(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts)
+    :S.mm.constructors.map(c=>({...c,pts:calcMMPointsMonth(c.id,yr,mo)})).sort((a,b)=>b.pts-a.pts);
   const maxPts=scores[0]?.pts||1;
 
   let eggsHtml='';
@@ -4200,17 +4485,17 @@ function renderRating(){
       ?`<img src="${c.avatar}" width="64" height="64" style="border-radius:50%;object-fit:cover">`
       :drawChar(c.gender||'male',52);
     const uploadBtn=canUpload?`<div class="avatar-upload-btn" onclick="event.stopPropagation();triggerAvatarUpload('${c.id}')" title="Загрузить фото">📷</div>`:'';
-    const charHtml=`<div class="avatar-wrap" onclick="openKingdom('${c.id}')" title="Открыть королевство">
-        ${avatarHtml}
-        ${uploadBtn}
-      </div>`;
+    const charHtml=isKM
+      ?`<div class="avatar-wrap" onclick="openKingdom('${c.id}')" title="Открыть королевство">${avatarHtml}${uploadBtn}</div>`
+      :`<div class="avatar-wrap">${avatarHtml}</div>`;
+    const doingPts=isKM?calcDoingPts(c.id,yr,mo):0;
     return`<div class="leader-card${isLeader?' is-leader':''}">
       ${isLeader?'<div class="crown">👑</div>':''}
       <div class="char-wrap" style="height:${c.avatar?'70px':'80px'}">${charHtml}</div>
       <div style="position:relative;height:70px">${eggs}${drawBasket(fillPct)}</div>
       <div class="leader-name">${c.name}</div>
       <div class="leader-pts">${c.pts} <span>очков</span></div>
-      <div class="pts-detail">🔵 ${calcDoingPts(c.id,yr,mo)} + 🟠 ${c.pts-calcDoingPts(c.id,yr,mo)}</div>
+      ${isKM?`<div class="pts-detail">🔵 ${doingPts} + 🟠 ${c.pts-doingPts}</div>`:''}
     </div>`;
   }).join('');
 
@@ -4243,10 +4528,17 @@ function renderRating(){
     ${session.role==='admin'?`<button onclick="resetFactory()" style="background:rgba(255,50,50,.3);color:#fff;border:1px solid rgba(255,100,100,.4);border-radius:8px;padding:6px 16px;font-size:12px;cursor:pointer;margin-left:12px">🗑 Сбросить стройку</button>`:''}
   </div>`;
 
+  const tabSt=(active,col)=>active
+    ?`padding:9px 28px;border-radius:8px 8px 0 0;font-weight:700;font-size:14px;cursor:pointer;border:none;background:${col};color:#fff;margin-right:4px`
+    :`padding:9px 28px;border-radius:8px 8px 0 0;font-weight:600;font-size:14px;cursor:pointer;border:none;background:#e8eef5;color:#4a6080;margin-right:4px`;
   document.getElementById('tab-rating').innerHTML=`<div class="rating-wrap">
-    ${factorySection}
+    <div style="display:flex;padding:0 0 0 0;border-bottom:2px solid #1a3a5c;margin-bottom:0">
+      <button style="${tabSt(isKM,'#1a3a5c')}" onclick="_ratingModule='km';renderRating()">🗄 Корпус (КМ)</button>
+      <button style="${tabSt(!isKM,'#6a1b9a')}" onclick="_ratingModule='mm';renderRating()">🛋 Мягкая (ММ)</button>
+    </div>
+    ${isKM?factorySection:''}
     <div class="rating-month" style="margin-top:24px">Рейтинг за ${MONTHS[mo]} ${yr}</div>
-    <div class="leaders-grid">${cardsHtml}</div>
+    <div class="leaders-grid">${cardsHtml||'<div style="color:#aaa;padding:20px">Нет конструкторов</div>'}</div>
     ${session.role==='admin'?`<div style="text-align:center;margin-bottom:20px">
       <button class="btn btn-orange" onclick="closeMonth()">🏅 Закрыть месяц и записать победителя</button>
     </div>`:''}
