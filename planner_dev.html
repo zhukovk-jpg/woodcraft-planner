@@ -525,6 +525,33 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mProd')">Отмена</button><button class="btn btn-green" onclick="saveProd()">Сохранить</button></div>
 </div></div>
 
+<!-- PRODUCT EXTRA STAGE MODAL -->
+<div class="overlay" id="mProdStage"><div class="modal" style="width:480px;max-width:98vw">
+  <h2>➕ Добавить этап к разработке</h2>
+  <input type="hidden" id="psПrodId">
+  <div class="fg">
+    <label>Этап</label>
+    <select id="psStageId" onchange="onPsStageChange()" style="width:100%"></select>
+  </div>
+  <div class="fg">
+    <label>Вставить после этапа</label>
+    <select id="psInsertAfter" style="width:100%"></select>
+  </div>
+  <div class="fg">
+    <label>Длительность (дней)</label>
+    <input type="number" id="psDays" min="1" max="99" style="width:100px">
+  </div>
+  <div class="fg">
+    <label>Дата начала <span style="font-weight:400;color:#999;font-size:11px">(необязательно — если нужно зафиксировать старт)</span></label>
+    <input type="date" id="psStartDate">
+  </div>
+  <div id="psTypeHint" style="font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px"></div>
+  <div class="mfooter">
+    <button class="btn btn-gray" onclick="closeModal('mProdStage')">Отмена</button>
+    <button class="btn btn-green" onclick="saveProdStage()">Добавить и пересчитать</button>
+  </div>
+</div></div>
+
 <!-- EXTRA TASK DEF MODAL (admin) -->
 <div class="overlay" id="mExtraDef"><div class="modal" style="width:520px;max-width:98vw">
   <h2 id="mExtraDefTitle">Создать доп. задачу</h2>
@@ -1720,6 +1747,7 @@ function migrate(){
   if(!S.factory.items)S.factory.items={};
   if(!S.typeDurations)S.typeDurations={};
   if(!S.typeExtraStages)S.typeExtraStages={};
+  if(!S.productExtraStages)S.productExtraStages={};
   for(const t of ['simple','medium','complex','series']){
     if(!S.typeDurations[t])S.typeDurations[t]={};
     if(!S.typeExtraStages[t])S.typeExtraStages[t]=[];
@@ -1848,7 +1876,7 @@ function rebuildForConstructor(cid){
     // Doing stages compute a "naive" parallel end (counting ctrl-work-days) so ctrl stages
     // after them aren't pushed by vacation-induced extension of doing stages.
     let naiveCursor=ensureCtrlWork(prod.startDate,cid);
-    const stageList=getStageList(prod.type);
+    const stageList=getStageList(prod.type, prod.id);
     const startIdx=stageList.findIndex(s=>s.id===(prod.startStageId||'tz'));
     let pgActive=null,pgStartNC=null,pgMaxEnd=null; // parallelGroup state
     for(let si=0;si<stageList.length;si++){
@@ -5742,7 +5770,7 @@ function renderCalendar(){
       for(const d of days){const td2=document.createElement('td');td2.style.cssText='background:#dce5f0;border:1px solid #d8dce2';pr.appendChild(td2);}
       tbl.appendChild(pr);
 
-      for(const stage of getStageList(prod.type)){
+      for(const stage of getStageList(prod.type, prod.id)){
         const entry=sched[stage.id];
         // Hide skipped stages (before startStageId)
         if(entry&&entry.skipped)continue;
@@ -6007,13 +6035,14 @@ function doExtraRevert(){
 // Первые этапы каждой фазы — именно с них возможен перенос на след. месяц
 const KEY_STAGES=['tz','sample','fix','presale'];
 
-function getStageList(type){
-  const extras=(S.typeExtraStages?.[type]||[]);
-  if(!extras.length)return STAGES;
+function getStageList(type, prodId){
+  const typeExtras=(S.typeExtraStages?.[type]||[]);
+  const prodExtras=prodId?(S.productExtraStages?.[prodId]||[]):[];
+  const allExtras=[...typeExtras,...prodExtras];
+  if(!allExtras.length)return STAGES;
   const result=[...STAGES];
-  for(const ex of extras){
+  for(const ex of allExtras){
     if(ex.isCustom){
-      // Brand-new custom stage
       const newSt={id:ex.key,abbr:ex.abbr,name:ex.name,type:ex.stageType||'ctrl',days:{simple:1,medium:1,complex:1,series:1},_isExtra:true,_isCustom:true};
       const insertIdx=result.findIndex(s=>s.id===ex.insertAfter);
       result.splice(insertIdx>=0?insertIdx+1:result.length,0,newSt);
@@ -6220,6 +6249,27 @@ function renderProducts(){
           ${isPool?'<span style="color:#8e44ad;font-weight:600">📋 Пул</span> · ':(`Конструктор: <b>${c?c.name:'—'}</b> · `)}
           Начало: ${fmtFull(p.startDate)}${!isPool?` · <b>Окончание: ${fmtFull(endDate)}</b>`:''}
         </div>
+        ${(()=>{
+          const extras=(S.productExtraStages?.[p.id]||[]);
+          if(!extras.length&&session.role!=='admin')return '';
+          const sched=S.schedule[p.id]||{};
+          const rows=extras.map(ex=>{
+            const base=STAGES.find(s=>s.id===ex.baseId);
+            const days=(S.customDurations?.[p.id]||{})[ex.key]??base?.days[p.type]??'?';
+            const end=sched[ex.key]?.endDate;
+            return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #e8ecf0">
+              <span style="font-size:11px">${base?.type==='doing'?'🔵':'🟠'}</span>
+              <span style="font-size:12px;font-weight:600">${base?.abbr||ex.baseId}</span>
+              <span style="font-size:12px;color:#555;flex:1">${base?.name||''}</span>
+              <span style="font-size:11px;color:#888">${days} дн.${end?' · до '+fmtShort(end):''}</span>
+              ${session.role==='admin'?`<button onclick="removeProdStage('${p.id}','${ex.key}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px;padding:0 2px" title="Удалить этап">✕</button>`:''}
+            </div>`;
+          }).join('');
+          return`<div style="margin-top:8px;border-top:1px solid #e0e4ea;padding-top:6px">
+            ${rows}
+            ${session.role==='admin'?`<button onclick="openProdStageModal('${p.id}')" style="margin-top:6px;background:none;border:1px dashed #2471a3;color:#2471a3;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600">➕ Добавить этап</button>`:''}
+          </div>`;
+        })()}
       </div>${adminBtns}${conBtns}</div>`;
   }
 
@@ -6336,6 +6386,98 @@ function delProd(id){
   if(!confirm('Удалить изделие?'))return;
   const p=S.products.find(x=>x.id===id);S.products=S.products.filter(x=>x.id!==id);delete S.schedule[id];
   if(p)rebuildForConstructor(p.constructorId);renderProducts();
+}
+
+// ─── PRODUCT EXTRA STAGES ─────────────────────────────────────
+function openProdStageModal(prodId){
+  const p=S.products.find(x=>x.id===prodId);if(!p)return;
+  document.getElementById('psProdId').value=prodId;
+  document.getElementById('psStartDate').value='';
+
+  // Build current stage list for this product
+  const stageList=getStageList(p.type, prodId);
+  const sched=S.schedule[prodId]||{};
+
+  // Stages available to add: all STAGES not already at base level in this product's list
+  const baseIds=new Set(stageList.map(s=>s._baseId||s.id));
+  // Show all STAGES as options (user picks which to duplicate/add)
+  const stSel=document.getElementById('psStageId');
+  stSel.innerHTML=STAGES.map(s=>
+    `<option value="${s.id}">${s.type==='doing'?'🔵':'🟠'} ${s.abbr} — ${s.name}</option>`
+  ).join('');
+
+  // "Insert after" — current stages with known endDates
+  const iaSel=document.getElementById('psInsertAfter');
+  iaSel.innerHTML=stageList
+    .filter(s=>!sched[s.id]?.skipped)
+    .map(s=>`<option value="${s.id}">${s.abbr} — ${s.name} (до ${fmtShort(sched[s.id]?.endDate)})</option>`)
+    .join('');
+  // Default insertAfter = last non-skipped stage
+  const lastStage=stageList.filter(s=>!sched[s.id]?.skipped).pop();
+  if(lastStage)iaSel.value=lastStage.id;
+
+  onPsStageChange();
+  openModal('mProdStage');
+}
+function onPsStageChange(){
+  const sid=document.getElementById('psStageId').value;
+  const prodId=document.getElementById('psProdId').value;
+  const p=S.products.find(x=>x.id===prodId);
+  const st=STAGES.find(s=>s.id===sid);if(!st||!p)return;
+  document.getElementById('psDays').value=st.days[p.type]||1;
+  const hint=document.getElementById('psTypeHint');
+  if(st.type==='doing'){
+    hint.style.cssText='font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px;background:#e3f2fd;color:#1565c0';
+    hint.textContent='🔵 Исполнительный — войдёт в рабочие дни конструктора';
+  } else {
+    hint.style.cssText='font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px;background:#f3e5f5;color:#6a1b9a';
+    hint.textContent='🟠 Параллельный — не блокирует конструктора, идёт независимо';
+  }
+}
+function saveProdStage(){
+  const prodId=document.getElementById('psProdId').value;
+  const baseId=document.getElementById('psStageId').value;
+  const insertAfter=document.getElementById('psInsertAfter').value;
+  const days=parseInt(document.getElementById('psDays').value)||1;
+  const startDate=document.getElementById('psStartDate').value;
+  const p=S.products.find(x=>x.id===prodId);if(!p)return;
+
+  if(!S.productExtraStages)S.productExtraStages={};
+  if(!S.productExtraStages[prodId])S.productExtraStages[prodId]=[];
+
+  const key=baseId+'_'+Date.now();
+  S.productExtraStages[prodId].push({key, baseId, insertAfter});
+
+  // Save custom duration
+  if(!S.customDurations[prodId])S.customDurations[prodId]={};
+  S.customDurations[prodId][key]=days;
+
+  // Save start date constraint if specified
+  if(startDate){
+    if(!S.stageConstraints[prodId])S.stageConstraints[prodId]={};
+    S.stageConstraints[prodId][key]=startDate;
+  }
+
+  save();
+  if(p.constructorId)rebuildForConstructor(p.constructorId);
+  closeModal('mProdStage');
+  renderProducts();
+  renderCalendar();
+}
+function removeProdStage(prodId, key){
+  if(!confirm('Удалить этот этап из разработки?'))return;
+  if(S.productExtraStages?.[prodId]){
+    S.productExtraStages[prodId]=S.productExtraStages[prodId].filter(x=>x.key!==key);
+  }
+  if(S.customDurations?.[prodId])delete S.customDurations[prodId][key];
+  if(S.stageConstraints?.[prodId])delete S.stageConstraints[prodId][key];
+  // Remove marks
+  const p=S.products.find(x=>x.id===prodId);
+  if(S.schedule[prodId])delete S.schedule[prodId][key];
+  save();
+  if(p?.constructorId)rebuildForConstructor(p.constructorId);
+  renderProducts();
+  renderCalendar();
 }
 
 // ─── CONSTRUCTORS + ABSENCES ──────────────────────────────────
