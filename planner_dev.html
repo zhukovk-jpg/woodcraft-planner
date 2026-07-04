@@ -6235,6 +6235,27 @@ function renderProducts(){
     const conBtns=(session.role==='constructor'&&isPool)?
       `<button class="btn btn-sm" style="background:#27ae60;color:#fff;flex-shrink:0" onclick="claimProd('${p.id}')">✋ Взять задачу</button>`:'';
 
+    const pExtras=S.productExtraStages?.[p.id]||[];
+    const pSched=S.schedule[p.id]||{};
+    const extraRows=pExtras.map(ex=>{
+      const base=STAGES.find(s=>s.id===ex.baseId);
+      const days=(S.customDurations?.[p.id]||{})[ex.key]??base?.days[p.type]??'?';
+      const end=pSched[ex.key]?.endDate;
+      const delBtn=session.role==='admin'
+        ?`<button onclick="removeProdStage('${p.id}','${ex.key}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px;padding:0 4px" title="Удалить">✕</button>`:'';
+      return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #e8ecf0">
+        <span>${base?.type==='doing'?'🔵':'🟠'}</span>
+        <b style="font-size:12px">${base?.abbr||ex.baseId}</b>
+        <span style="font-size:12px;color:#555;flex:1">${base?.name||''}</span>
+        <span style="font-size:11px;color:#888">${days} дн.${end?' · до '+fmtShort(end):''}</span>
+        ${delBtn}
+      </div>`;
+    }).join('');
+    const addBtn=session.role==='admin'
+      ?`<button onclick="openProdStageModal('${p.id}')" style="margin-top:6px;background:none;border:1px dashed #2471a3;color:#2471a3;border-radius:6px;padding:3px 12px;cursor:pointer;font-size:12px;font-weight:600">➕ Добавить этап</button>`:'';
+    const extraStagesHtml=(pExtras.length||session.role==='admin')
+      ?`<div style="margin-top:8px;border-top:1px solid #e0e4ea;padding-top:6px">${extraRows}${addBtn}</div>` :'';
+
     return`<div class="card" style="background:${cardBg};${cardBorder}">
       <div style="background:${priColor};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${p.priority}</div>
       <div style="flex:1;min-width:0">
@@ -6249,27 +6270,7 @@ function renderProducts(){
           ${isPool?'<span style="color:#8e44ad;font-weight:600">📋 Пул</span> · ':(`Конструктор: <b>${c?c.name:'—'}</b> · `)}
           Начало: ${fmtFull(p.startDate)}${!isPool?` · <b>Окончание: ${fmtFull(endDate)}</b>`:''}
         </div>
-        ${(()=>{
-          const extras=(S.productExtraStages?.[p.id]||[]);
-          if(!extras.length&&session.role!=='admin')return '';
-          const sched=S.schedule[p.id]||{};
-          const rows=extras.map(ex=>{
-            const base=STAGES.find(s=>s.id===ex.baseId);
-            const days=(S.customDurations?.[p.id]||{})[ex.key]??base?.days[p.type]??'?';
-            const end=sched[ex.key]?.endDate;
-            return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #e8ecf0">
-              <span style="font-size:11px">${base?.type==='doing'?'🔵':'🟠'}</span>
-              <span style="font-size:12px;font-weight:600">${base?.abbr||ex.baseId}</span>
-              <span style="font-size:12px;color:#555;flex:1">${base?.name||''}</span>
-              <span style="font-size:11px;color:#888">${days} дн.${end?' · до '+fmtShort(end):''}</span>
-              ${session.role==='admin'?`<button onclick="removeProdStage('${p.id}','${ex.key}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px;padding:0 2px" title="Удалить этап">✕</button>`:''}
-            </div>`;
-          }).join('');
-          return`<div style="margin-top:8px;border-top:1px solid #e0e4ea;padding-top:6px">
-            ${rows}
-            ${session.role==='admin'?`<button onclick="openProdStageModal('${p.id}')" style="margin-top:6px;background:none;border:1px dashed #2471a3;color:#2471a3;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px;font-weight:600">➕ Добавить этап</button>`:''}
-          </div>`;
-        })()}
+        ${extraStagesHtml}
       </div>${adminBtns}${conBtns}</div>`;
   }
 
