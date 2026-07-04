@@ -4529,15 +4529,16 @@ function renderRating(){
   </div>`;
 
   const tabSt=(active,col)=>active
-    ?`padding:9px 28px;border-radius:8px 8px 0 0;font-weight:700;font-size:14px;cursor:pointer;border:none;background:${col};color:#fff;margin-right:4px`
-    :`padding:9px 28px;border-radius:8px 8px 0 0;font-weight:600;font-size:14px;cursor:pointer;border:none;background:#e8eef5;color:#4a6080;margin-right:4px`;
+    ?`padding:8px 24px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;border:none;background:${col};color:#fff;margin-right:4px`
+    :`padding:8px 24px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;border:1px solid #d0d8e4;background:#f4f6f9;color:#4a6080;margin-right:4px`;
   document.getElementById('tab-rating').innerHTML=`<div class="rating-wrap">
-    <div style="display:flex;padding:0 0 0 0;border-bottom:2px solid #1a3a5c;margin-bottom:0">
+    ${factorySection}
+    <div style="display:flex;align-items:center;gap:8px;margin:20px 0 0">
+      <span style="font-size:13px;font-weight:600;color:#555">Рейтинг:</span>
       <button style="${tabSt(isKM,'#1a3a5c')}" onclick="_ratingModule='km';renderRating()">🗄 Корпус (КМ)</button>
       <button style="${tabSt(!isKM,'#6a1b9a')}" onclick="_ratingModule='mm';renderRating()">🛋 Мягкая (ММ)</button>
     </div>
-    ${isKM?factorySection:''}
-    <div class="rating-month" style="margin-top:24px">Рейтинг за ${MONTHS[mo]} ${yr}</div>
+    <div class="rating-month" style="margin-top:12px">Рейтинг за ${MONTHS[mo]} ${yr}</div>
     <div class="leaders-grid">${cardsHtml||'<div style="color:#aaa;padding:20px">Нет конструкторов</div>'}</div>
     ${session.role==='admin'?`<div style="text-align:center;margin-bottom:20px">
       <button class="btn btn-orange" onclick="closeMonth()">🏅 Закрыть месяц и записать победителя</button>
