@@ -5778,9 +5778,19 @@ function renderCalendar(){
         if(entry&&entry.skipped)continue;
         const sr=document.createElement('tr');
         const st=document.createElement('td');st.className='gc-stage';
-        const addBtn=session.role==='admin'
-          ?`<button class="gc-stage-add" onclick="openProdStageModal('${prod.id}','${stage.id}')" title="Вставить этап после">+</button>`:'';
-        st.innerHTML=`<div style="display:flex;align-items:center;gap:4px"><div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}</div>${addBtn}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
+        const stRow=document.createElement('div');stRow.style.cssText='display:flex;align-items:center;gap:4px';
+        const stLabel=document.createElement('div');stLabel.style.cssText='min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
+        stLabel.innerHTML=`${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}`;
+        stRow.appendChild(stLabel);
+        if(session.role==='admin'){
+          const addBtn=document.createElement('button');
+          addBtn.className='gc-stage-add';addBtn.title='Вставить этап после';addBtn.textContent='+';
+          const _pid=prod.id,_sid=stage.id;
+          addBtn.addEventListener('click',e=>{e.stopPropagation();openProdStageModal(_pid,_sid);});
+          stRow.appendChild(addBtn);
+        }
+        const stDate=document.createElement('div');stDate.style.cssText='font-size:10px;color:#aaa';stDate.textContent=`до ${fmtShort(entry?.endDate)}`;
+        st.appendChild(stRow);st.appendChild(stDate);
         sr.appendChild(st);
 
         for(const d of days){
