@@ -285,6 +285,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <button class="main-tab" id="mtRating" onclick="switchSection('rating')">🏆 Рейтинг</button>
     <button class="main-tab" id="mtKm" onclick="switchSection('km')">🗄 КМ</button>
     <button class="main-tab" id="mtMm" onclick="switchSection('mm')">🛋 ММ</button>
+    <button class="main-tab admin-only" id="mtWorkload" onclick="switchSection('workload')">📊 Загрузка</button>
   </div>
   <div class="sub-nav" id="subNavKm" style="display:none">
     <div class="sub-tab" onclick="switchKMTab(this,'calendar')">📅 Календарь</div>
@@ -430,9 +431,15 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       </div>
     </div>
   </div>
+  <div id="tab-workload" style="display:none"></div>
 </div>
 
 <!-- MODALS -->
+<div class="overlay" id="mWorkloadDetail"><div class="modal" style="width:720px;max-width:98vw;max-height:85vh;display:flex;flex-direction:column">
+  <div class="mhdr" style="flex-shrink:0"><h3 id="mWorkloadDetailTitle">Загрузка</h3><button class="btn btn-sm btn-gray" onclick="closeModal('mWorkloadDetail')">✕</button></div>
+  <div id="mWorkloadDetailBody" style="overflow-y:auto;flex:1;padding:0"></div>
+  <div class="mfooter" style="flex-shrink:0"><button class="btn btn-gray" onclick="closeModal('mWorkloadDetail')">Закрыть</button></div>
+</div></div>
 <div class="overlay" id="mProd"><div class="modal">
   <h2 id="mProdTitle">Добавить изделие</h2>
   <input type="hidden" id="mProdId">
@@ -2068,11 +2075,12 @@ let _activeSection='rating';
 function switchSection(section){
   _activeSection=section;
   document.querySelectorAll('.main-tab').forEach(t=>t.classList.remove('active'));
-  const ids={rating:'mtRating',km:'mtKm',mm:'mtMm'};
+  const ids={rating:'mtRating',km:'mtKm',mm:'mtMm',workload:'mtWorkload'};
   document.getElementById(ids[section])?.classList.add('active');
   document.getElementById('subNavKm').style.display=section==='km'?'flex':'none';
   document.getElementById('subNavMm').style.display=section==='mm'?'flex':'none';
   document.getElementById('tab-rating').style.display='none';
+  document.getElementById('tab-workload').style.display='none';
   ['calendar','products','shifts','constructors','configurator','extratasks'].forEach(t=>
     document.getElementById('tab-'+t).style.display='none');
   document.getElementById('tab-mm').style.display='none';
@@ -2087,7 +2095,158 @@ function switchSection(section){
   } else if(section==='mm'){
     document.getElementById('tab-mm').style.display='';
     initMMTab();
+  } else if(section==='workload'){
+    document.getElementById('tab-workload').style.display='';
+    initWorkload();
   }
+}
+// ── Workload ──────────────────────────────────────────────────
+let _wlYear=0,_wlMonth=0;
+function initWorkload(){
+  if(!_wlYear){const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;}
+  renderWorkload();
+}
+function _wlWorkDays(Y,M){
+  const days=[];const last=new Date(Y,M,0).getDate();
+  for(let d=1;d<=last;d++){
+    const ds=`${Y}-${String(M).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if(!isBaseWknd(ds))days.push(ds);
+  }
+  return days;
+}
+function _wlCompute(Y,M){
+  const allDays=_wlWorkDays(Y,M);
+  const data={};
+  const init=cid=>{if(!data[cid]){data[cid]={days:{}};for(const ds of allDays)data[cid].days[ds]={doing:[],ctrl:[]};}};
+  for(const con of S.constructors){init(con.id);data[con.id].name=con.name;data[con.id].module='КМ';}
+  for(const con of S.mm.constructors){init(con.id);if(!data[con.id].name){data[con.id].name=con.name;data[con.id].module='ММ';}}
+  for(const prod of S.products){
+    const cid=prod.constructorId;if(!cid||!data[cid])continue;
+    const sched=S.schedule[prod.id]||{};
+    for(const stage of STAGES){
+      const e=sched[stage.id];if(!e||!e.startDate||!e.endDate)continue;
+      for(const ds of allDays){
+        if(ds>=e.startDate&&ds<=e.endDate){
+          const label=prod.name+' / '+stage.abbr;
+          if(stage.type==='ctrl')data[cid].days[ds].ctrl.push(label);
+          else data[cid].days[ds].doing.push(label);
+        }
+      }
+    }
+  }
+  for(const prod of S.mm.products){
+    const sched=S.mm.schedule[prod.id]||{};
+    const tmpl=S.mm.templates.find(t=>t.id===prod.templateId);if(!tmpl)continue;
+    for(const sid in sched){
+      const e=sched[sid];if(!e||!e.startDate||!e.endDate)continue;
+      const stage=tmpl.stages.find(s=>s.id===sid);if(!stage)continue;
+      const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
+      const cidA=e.track0?.constructorId||'';
+      const cidB=e.track1?.constructorId||'';
+      for(const ds of allDays){
+        if(ds>=e.startDate&&ds<=e.endDate){
+          const label=prod.name+' / '+stage.abbr;
+          if(cidA&&data[cidA]){if(isCtrl)data[cidA].days[ds].ctrl.push(label);else data[cidA].days[ds].doing.push(label);}
+          if(cidB&&cidB!==cidA&&data[cidB]){if(isCtrl)data[cidB].days[ds].ctrl.push(label);else data[cidB].days[ds].doing.push(label);}
+        }
+      }
+    }
+  }
+  return{data,allDays};
+}
+const _MN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function renderWorkload(){
+  const el=document.getElementById('tab-workload');if(!el)return;
+  const Y=_wlYear,M=_wlMonth;
+  const{data,allDays}=_wlCompute(Y,M);
+  const totalWD=allDays.length;
+  const allCids=[...S.constructors.map(c=>c.id),...S.mm.constructors.filter(c=>!S.constructors.find(x=>x.id===c.id)).map(c=>c.id)];
+  let rows='';
+  for(const cid of allCids){
+    const d=data[cid];if(!d||!d.name)continue;
+    const dayVals=Object.values(d.days);
+    const totalDoing=dayVals.reduce((s,x)=>s+x.doing.length,0);
+    const totalCtrl=dayVals.reduce((s,x)=>s+x.ctrl.length,0);
+    const maxCtrl=Math.max(...dayVals.map(x=>x.ctrl.length),0);
+    const pct=totalWD>0?Math.round(totalDoing/totalWD*100):0;
+    const avgCtrl=totalWD>0?(totalCtrl/totalWD).toFixed(1):0;
+    const pctBg=pct>=150?'#fdecea':pct>=90?'#fff8e1':'#e8f5e9';
+    const pctClr=pct>=150?'#c62828':pct>=90?'#e65100':'#2e7d32';
+    const ctrlClr=maxCtrl>=4?'#c62828':maxCtrl===3?'#e65100':'#555';
+    const modBg=d.module==='КМ'?'#e3f2fd':'#f3e5f5';
+    const modClr=d.module==='КМ'?'#1565c0':'#6a1b9a';
+    rows+=`<tr style="border-bottom:1px solid #eee">
+      <td style="padding:8px 14px;font-weight:600">${d.name}</td>
+      <td style="padding:8px 10px"><span style="background:${modBg};color:${modClr};border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">${d.module}</span></td>
+      <td style="padding:8px 10px;text-align:center;color:#555">${totalWD}</td>
+      <td style="padding:8px 10px;text-align:center"><span style="background:${pctBg};color:${pctClr};border-radius:8px;padding:3px 10px;font-weight:700">${pct}%</span></td>
+      <td style="padding:8px 10px;text-align:center;color:#555">${(totalDoing/Math.max(totalWD,1)).toFixed(1)}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:700;color:${ctrlClr}">${maxCtrl}${maxCtrl>=4?' ⚠':''}</td>
+      <td style="padding:8px 10px;text-align:center;color:#555">${avgCtrl}</td>
+      <td style="padding:8px 10px"><button class="btn btn-sm" style="padding:3px 12px;font-size:11px" onclick="openWorkloadDetail('${cid}',${Y},${M})">Детали →</button></td>
+    </tr>`;
+  }
+  el.innerHTML=`<div class="panel">
+    <div class="panel-hdr" style="align-items:center;flex-wrap:wrap;gap:12px">
+      <h2>Загрузка сотрудников</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <button class="btn btn-sm btn-gray" onclick="_wlMonth--;if(_wlMonth<1){_wlMonth=12;_wlYear--;}renderWorkload()">◀</button>
+        <span style="font-weight:600;font-size:14px;min-width:145px;text-align:center">${_MN[M-1]} ${Y}</span>
+        <button class="btn btn-sm btn-gray" onclick="_wlMonth++;if(_wlMonth>12){_wlMonth=1;_wlYear++;}renderWorkload()">▶</button>
+        <button class="btn btn-sm btn-gray" onclick="const n=new Date();_wlYear=n.getFullYear();_wlMonth=n.getMonth()+1;renderWorkload()">Сегодня</button>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#888;margin:0 0 14px">Рабочих дней в месяце: <b>${totalWD}</b>. &nbsp;Загрузка % = Задач-делает ÷ рабочих дней × 100 (100% = 1 задача в день). &nbsp;Контроль >3 в день — перегруз.</p>
+    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <thead><tr style="background:#1a3a5c;color:#fff;font-size:12px">
+        <th style="padding:10px 14px;text-align:left;font-weight:600">Сотрудник</th>
+        <th style="padding:10px 10px;text-align:left;font-weight:600">Модуль</th>
+        <th style="padding:10px 10px;text-align:center;font-weight:600">Раб. дней</th>
+        <th style="padding:10px 10px;text-align:center;font-weight:600">Загрузка %</th>
+        <th style="padding:10px 10px;text-align:center;font-weight:600">Делает ср/д</th>
+        <th style="padding:10px 10px;text-align:center;font-weight:600">Контроль пик</th>
+        <th style="padding:10px 10px;text-align:center;font-weight:600">Контроль ср/д</th>
+        <th style="padding:10px 10px"></th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="8" style="padding:24px;text-align:center;color:#aaa">Нет сотрудников</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+function openWorkloadDetail(cid,Y,M){
+  const con=S.constructors.find(x=>x.id===cid)||S.mm.constructors.find(x=>x.id===cid);if(!con)return;
+  const{data,allDays}=_wlCompute(Y,M);
+  const d=data[cid];if(!d)return;
+  const DAY_RU=['вс','пн','вт','ср','чт','пт','сб'];
+  let rows='';
+  for(const ds of allDays){
+    const dd=d.days[ds];
+    const doingN=dd.doing.length,ctrlN=dd.ctrl.length;
+    const ctrlOver=ctrlN>=4,ctrlWarn=ctrlN===3;
+    const rowBg=ctrlOver?'#fdecea':ctrlWarn?'#fff8e1':'';
+    const dayObj=parseDate(ds);
+    rows+=`<tr style="border-bottom:1px solid #eee${rowBg?';background:'+rowBg:''}">
+      <td style="padding:6px 14px;font-size:12px;white-space:nowrap">${ds.slice(8)} ${DAY_RU[dayObj.getDay()]}</td>
+      <td style="padding:6px 10px;text-align:center">
+        ${doingN?`<span title="${dd.doing.join('\n')}" style="background:#e3f2fd;color:#1565c0;border-radius:10px;padding:2px 10px;font-size:12px;font-weight:700;cursor:default">${doingN}</span>`:'<span style="color:#ccc;font-size:12px">—</span>'}
+      </td>
+      <td style="padding:6px 10px;text-align:center">
+        ${ctrlN?`<span title="${dd.ctrl.join('\n')}" style="background:${ctrlOver?'#fdecea':ctrlWarn?'#fff8e1':'#fff3e0'};color:${ctrlOver?'#c62828':ctrlWarn?'#e65100':'#e67e22'};border-radius:10px;padding:2px 10px;font-size:12px;font-weight:700;cursor:default">${ctrlN}${ctrlOver?' ⚠':ctrlWarn?' !':''}</span>`:'<span style="color:#ccc;font-size:12px">—</span>'}
+      </td>
+      <td style="padding:6px 14px;font-size:11px;color:#777;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${dd.doing.concat(dd.ctrl).join(', ')}">${dd.doing.concat(dd.ctrl).join(', ')||'—'}</td>
+    </tr>`;
+  }
+  document.getElementById('mWorkloadDetailTitle').textContent=`${con.name} — ${_MN[M-1]} ${Y}`;
+  document.getElementById('mWorkloadDetailBody').innerHTML=`
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#f4f6f9;font-size:12px;font-weight:700;color:#1a3a5c;position:sticky;top:0">
+        <th style="padding:8px 14px;text-align:left">День</th>
+        <th style="padding:8px 10px;text-align:center">Делает</th>
+        <th style="padding:8px 10px;text-align:center">Контроль</th>
+        <th style="padding:8px 14px;text-align:left">Задачи</th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="4" style="padding:24px;text-align:center;color:#aaa">Нет данных</td></tr>'}</tbody>
+    </table>`;
+  openModal('mWorkloadDetail');
 }
 function switchKMTab(el,id){
   document.querySelectorAll('#subNavKm .sub-tab').forEach(t=>t.classList.remove('active'));
