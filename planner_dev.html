@@ -2862,26 +2862,76 @@ function renderModExtraTasks(mk){
   </div></div>`;
 }
 function renderModConfigurator(mk){
-  const cfg=MOD_CFG[mk];
+  const cfg=MOD_CFG[mk];const ns=cfg.ns();
   const el=document.getElementById(`tab-${mk}-configurator`);if(!el)return;
-  const rows=cfg.stages.map(s=>`<tr style="border-bottom:1px solid #eee">
-    <td style="padding:8px 14px;font-weight:700;color:${cfg.accent}">${s.abbr}</td>
-    <td style="padding:8px 14px">${s.name}</td>
-    <td style="padding:8px 10px;text-align:center"><span style="background:${s.type==='ctrl'?'#fff3e0':'#e3f2fd'};color:${s.type==='ctrl'?'#e67e22':'#1565c0'};border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700">${s.type==='ctrl'?'Контроль':'Делает'}</span></td>
-    <td style="padding:8px 10px;text-align:center;font-size:12px;color:#555">${s.days.simple}/${s.days.medium}/${s.days.complex}/${s.days.series} д</td>
-  </tr>`).join('');
-  el.innerHTML=`<div class="panel"><div class="panel-hdr"><h2>Этапы — ${cfg.name}</h2></div>
-    <p style="font-size:12px;color:#888;margin:0 0 14px">Шаблоны дней: Простое / Среднее / Сложное / Серия. Корректировка на следующей неделе.</p>
-    <table style="width:100%;border-collapse:collapse;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <thead><tr style="background:#1a3a5c;color:#fff;font-size:12px">
-        <th style="padding:10px 14px;text-align:left">Аббр.</th>
-        <th style="padding:10px 14px;text-align:left">Этап</th>
-        <th style="padding:10px 10px;text-align:center">Тип</th>
-        <th style="padding:10px 10px;text-align:center">Дней (П/С/Сл/Сер)</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
+  const types=['simple','medium','complex','series'];
+  const phaseNames=['Фаза 1: ТЗ и модель','Фаза 2: Образец','Фаза 3: Изменения и документы','Фаза 4: Релиз'];
+  if(!ns.typeDurations)ns.typeDurations={};
+  for(const t of types){
+    if(!ns.typeDurations[t])ns.typeDurations[t]={};
+    for(const st of cfg.stages)if(ns.typeDurations[t][st.id]===undefined)ns.typeDurations[t][st.id]=st.days[t];
+  }
+  let html=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:16px">`;
+  for(const type of types){
+    const td=ns.typeDurations[type];
+    const totalDays=cfg.stages.reduce((s,st)=>s+(td[st.id]??st.days[type]),0);
+    const maxD=Math.max(...cfg.stages.map(st=>td[st.id]??st.days[type]),1);
+    const total=totalDays||1;
+    html+=`<div style="background:#132b47;border-radius:12px;padding:16px;border:1px solid #1e4060">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="font-weight:700;font-size:16px;color:#f0c040">${TYPE_LABEL[type]}</span>
+        <span style="font-size:12px;color:#7fb3d3">Итого: ~${totalDays} дн.</span>
+      </div>`;
+    // Gantt bar
+    html+=`<div style="height:28px;background:#0a1e33;border-radius:6px;overflow:hidden;margin-bottom:16px;display:flex">`;
+    for(const st of cfg.stages){
+      const d=td[st.id]??st.days[type];
+      const w=(d/total*100).toFixed(1);
+      const color=st.type==='doing'?'#2471a3':'#7d3c98';
+      html+=`<div title="${st.name} — ${d} дн." style="width:${w}%;background:${color};border-right:1px solid #0a1e33;display:flex;align-items:center;justify-content:center;overflow:hidden;min-width:2px">${d>1?`<span style="font-size:9px;color:#fff;opacity:.9">${st.abbr}</span>`:''}</div>`;
+    }
+    html+=`</div>`;
+    // Stages by phase
+    for(let pi=0;pi<PHASE_GROUPS.length;pi++){
+      const pg=PHASE_GROUPS[pi];
+      const phaseStages=cfg.stages.filter(st=>pg.ids.includes(st.id));
+      if(!phaseStages.length)continue;
+      html+=`<div style="font-size:10px;color:#5d9ec7;text-transform:uppercase;letter-spacing:.8px;margin:10px 0 5px">${phaseNames[pi]}</div>`;
+      for(const st of phaseStages){
+        const d=td[st.id]??st.days[type];
+        const barW=Math.round(d/maxD*100);
+        const isCtrl=st.type==='ctrl';
+        const badge=isCtrl
+          ?`<span style="font-size:9px;background:#5b2c6f;color:#d7bde2;padding:1px 5px;border-radius:3px">⇉ параллельный</span>`
+          :`<span style="font-size:9px;background:#1a5276;color:#aed6f1;padding:1px 5px;border-radius:3px">→ конструктор</span>`;
+        const barColor=isCtrl?'rgba(125,60,152,.6)':'rgba(36,113,163,.7)';
+        html+=`<div style="margin-bottom:7px">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+            <span style="font-size:11px;color:#bbb;min-width:36px">${st.abbr}</span>${badge}
+            <span style="flex:1;font-size:11px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st.name}</span>
+            <input type="number" min="0" max="99" value="${d}"
+              onchange="setModTypeDur('${mk}','${type}','${st.id}',+this.value)"
+              style="width:46px;border:1px solid #2e5a8a;background:#0f2540;color:#f0c040;border-radius:4px;padding:2px 4px;font-size:13px;font-weight:700;text-align:center">
+            <span style="font-size:10px;color:#888">дн</span>
+          </div>
+          <div style="background:#0a1e33;border-radius:3px;height:5px">
+            <div style="width:${barW}%;height:100%;background:${barColor};border-radius:3px"></div>
+          </div>
+        </div>`;
+      }
+    }
+    html+=`</div>`;
+  }
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+function setModTypeDur(mk,type,sid,val){
+  const ns=MOD_CFG[mk].ns();
+  if(!ns.typeDurations)ns.typeDurations={};
+  if(!ns.typeDurations[type])ns.typeDurations[type]={};
+  ns.typeDurations[type][sid]=Math.max(0,Math.round(val)||0);
+  save();
+  renderModConfigurator(mk);
 }
 function renderModConstructors(mk){
   const cfg=MOD_CFG[mk];const ns=cfg.ns();
