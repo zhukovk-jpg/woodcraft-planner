@@ -438,6 +438,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
         <button class="btn btn-blue btn-sm" style="margin-left:auto" onclick="changeMMMonth(0)">Сегодня</button>
         <button class="btn btn-sm" style="background:#9b59b6;color:#fff;font-weight:700" onclick="rebuildAllMM();save();renderMMCalendar();alert('✅ График ММ пересчитан')">🔄 Пересчитать</button>
       </div>
+      <div id="mmFilterBar" style="display:none;align-items:center;gap:8px;padding:8px 14px;background:#1e2d40;border-bottom:1px solid #2d3f55;flex-wrap:wrap">
+        <span style="font-size:12px;color:#90caf9;font-weight:600">👤 Фильтр по конструктору:</span>
+        <div id="mmFilterWrap" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></div>
+      </div>
       <div class="gantt-wrap"><table class="gantt" id="mmGanttTable"></table></div>
     </div>
     <div id="tab-mm-templates" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Шаблоны сроков ММ</h2></div><div id="mmTemplateList"></div></div></div>
@@ -6884,7 +6888,7 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('overlay'))
 
 // ─── MM MODULE ────────────────────────────────────────────────
 
-let mmViewYear, mmViewMonth;
+let mmViewYear, mmViewMonth, _mmFilter=null;
 let mmPhaseCollapsed={}; // key: 'prodId_phase' -> bool (true=collapsed)
 
 function isMMWorkDay(d,cid){
@@ -7599,6 +7603,44 @@ function changeMMMonth(dir){
   renderMMCalendar();
 }
 
+function setMMFilter(cid){
+  _mmFilter=(_mmFilter===cid)?null:cid;
+  renderMMCalendar();
+}
+
+function mmLoadColor(pct){
+  const t=Math.min(Math.max(pct,0),120)/120;
+  const r=Math.round(255+(26-255)*t);
+  const g=Math.round(255+(92-255)*t);
+  const b=Math.round(255+(42-255)*t);
+  return`rgb(${r},${g},${b})`;
+}
+
+function mmLoadForDay(cid,day,prods){
+  const con=S.mm.constructors.find(x=>x.id===cid);if(!con)return{pct:0,doing:0,ctrl:0};
+  const isSewing=con.spec==='sewing';
+  let doing=0,ctrl=0;
+  for(const prod of prods){
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+    const sched=S.mm.schedule[prod.id]||{};
+    for(const stage of(tmpl.stages||[]).filter(s=>s&&s.id)){
+      const spec=stage.spec||'both';
+      const involves=isSewing?(spec==='sewing'||spec==='both'||spec==='merge'):(spec==='frame'||spec==='both'||spec==='merge');
+      if(!involves)continue;
+      const e=sched[stage.id];if(!e)continue;
+      const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
+      let v;
+      if(isCtrl)v=e?.days?.[day]||e?.track0?.days?.[day];
+      else if(isSewing)v=e?.track1?.days?.[day];
+      else v=e?.track0?.days?.[day]||e?.days?.[day];
+      const st=v?.status||'';
+      if(st==='planned'||st==='done'){if(isCtrl)ctrl++;else doing++;}
+    }
+  }
+  const pct=doing*55+ctrl*15;
+  return{pct,doing,ctrl};
+}
+
 function renderMMCalendar(){
   if(!mmViewYear){const n=new Date();mmViewYear=n.getFullYear();mmViewMonth=n.getMonth();}
   const el=document.getElementById('mmMonthTitle');
@@ -7606,6 +7648,21 @@ function renderMMCalendar(){
   const tbl=document.getElementById('mmGanttTable');if(!tbl)return;
   const days=monthDays(mmViewYear,mmViewMonth);
   const today=todayStr();
+
+  // ── Filter bar ────────────────────────────────────────────────
+  const filterBar=document.getElementById('mmFilterBar');
+  const filterWrap=document.getElementById('mmFilterWrap');
+  if(filterBar&&filterWrap){
+    filterBar.style.display=session.role==='admin'?'flex':'none';
+    const allBtn=`<button onclick="setMMFilter(null)" style="padding:4px 10px;border-radius:14px;border:1px solid ${!_mmFilter?'#90caf9':'#4a6080'};background:${!_mmFilter?'#2471a3':'#1e2d40'};color:#fff;font-size:12px;cursor:pointer;font-weight:${!_mmFilter?'700':'400'}">Все</button>`;
+    const conBtns=S.mm.constructors.map(c=>{
+      const icon=c.spec==='sewing'?'🧵':'🪵';
+      const active=_mmFilter===c.id;
+      return`<button onclick="setMMFilter('${c.id}')" style="padding:4px 10px;border-radius:14px;border:1px solid ${active?'#90caf9':'#4a6080'};background:${active?'#2471a3':'#1e2d40'};color:#fff;font-size:12px;cursor:pointer;font-weight:${active?'700':'400'}">${icon} ${c.name}</button>`;
+    }).join('');
+    filterWrap.innerHTML=allBtn+conBtns;
+  }
+
   let html=`<thead><tr><th class="gh-label">ММ / Этап</th>`;
   for(const d of days){
     const dt=parseDate(d);const dd=dt.getDate();
@@ -7617,7 +7674,25 @@ function renderMMCalendar(){
   const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
   const PHASE_NAMES={'1':'Черновой образец','2':'Чистовой и расчёты','3':'КТД','4':'Производство'};
   const PHASE_COLORS={'1':'#7c4dff','2':'#0288d1','3':'#f57c00','4':'#2e7d32'};
-  const prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  let prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  if(_mmFilter)prods=prods.filter(p=>p.cidA===_mmFilter||p.cidB===_mmFilter);
+
+  // ── Workload strip (when constructor selected) ─────────────────
+  if(_mmFilter){
+    const con=S.mm.constructors.find(x=>x.id===_mmFilter);
+    const specIcon=con?.spec==='sewing'?'🧵':'🪵';
+    html+=`<tr><td class="gc-prod" style="font-size:11px;font-weight:700;color:#1a5c2a;background:#e8f5e9">📊 Загрузка: ${specIcon} ${con?.name||''}</td>`;
+    for(const d of days){
+      const isWknd=isBaseWknd(d);const isToday=d===today;
+      const {pct,doing,ctrl}=mmLoadForDay(_mmFilter,d,prods);
+      const bg=isWknd?'#f0f0f0':mmLoadColor(pct);
+      const txtColor=pct>60?'#0d3320':'#1a5c2a';
+      const border=isToday?'2px solid #1a73e8':'1px solid #d0d8e4';
+      const tip=`${pct}%${doing?` исп:${doing}`:''}${ctrl?` кнт:${ctrl}`:''}`;
+      html+=`<td style="background:${bg};border:${border};text-align:center;font-size:9px;font-weight:700;color:${pct?txtColor:'#ccc'};padding:0;min-width:36px;height:28px;vertical-align:middle" title="${tip}">${pct?pct+'%':''}</td>`;
+    }
+    html+='</tr>';
+  }
   const canClick=session.role==='admin';
   for(const prod of prods){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
