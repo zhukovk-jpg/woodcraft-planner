@@ -62,8 +62,6 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
 .gc-hdr td{background:#1a3a5c;color:#fff;padding:5px 10px;font-weight:700;font-size:13px;position:sticky;left:0;z-index:8}
 .gc-prod{background:#dce5f0;padding:4px 10px;font-weight:600;color:#1a3a5c;position:sticky;left:0;z-index:8;max-width:260px}
 .gc-stage{background:#fafbfc;padding:3px 10px 3px 20px;color:#555;position:sticky;left:0;z-index:8;max-width:260px}
-.gc-stage-add{display:none;border:none;background:#2471a3;color:#fff;border-radius:3px;padding:0 5px;font-size:11px;font-weight:700;cursor:pointer;line-height:16px;flex-shrink:0}
-.gc-stage:hover .gc-stage-add{display:inline-block}
 .dc{min-width:36px;height:26px;text-align:center;vertical-align:middle;position:relative;border:1px solid #d8dce2}
 .dc.wknd-cell{background:#f9f9f9}
 .dc.abs-vacation{background:#cce5ff!important}
@@ -440,6 +438,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
         <button class="btn btn-blue btn-sm" style="margin-left:auto" onclick="changeMMMonth(0)">Сегодня</button>
         <button class="btn btn-sm" style="background:#9b59b6;color:#fff;font-weight:700" onclick="rebuildAllMM();save();renderMMCalendar();alert('✅ График ММ пересчитан')">🔄 Пересчитать</button>
       </div>
+      <div id="mmFilterBar" style="display:none;align-items:center;gap:8px;padding:8px 14px;background:#1e2d40;border-bottom:1px solid #2d3f55;flex-wrap:wrap">
+        <span style="font-size:12px;color:#90caf9;font-weight:600">👤 Фильтр по конструктору:</span>
+        <div id="mmFilterWrap" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"></div>
+      </div>
       <div class="gantt-wrap"><table class="gantt" id="mmGanttTable"></table></div>
     </div>
     <div id="tab-mm-templates" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Шаблоны сроков ММ</h2></div><div id="mmTemplateList"></div></div></div>
@@ -517,41 +519,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="fg"><label>Количество моделей в задаче</label><input type="number" id="pQty" min="1" max="9999" value="1" style="width:100px"></div>
   <div class="fg"><label>Ссылка в Битрикс</label><input type="url" id="pBitrix" placeholder="https://..."></div>
   <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pSplitMonths"> Разбивать по месяцам (каждый этап — с 1-го числа следующего)</label></div>
-  <div class="fg" style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:10px 12px">
-    <div style="font-size:12px;font-weight:700;color:#1b5e20;margin-bottom:6px">📦 Этапы заказа</div>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-      <input type="checkbox" id="pKmpEnabled" checked>
-      <span><b>КМП — Заказ и поставка комплектующих</b> <span style="color:#888;font-size:11px">(параллельно с изготовлением образца)</span></span>
-    </label>
-  </div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mProd')">Отмена</button><button class="btn btn-green" onclick="saveProd()">Сохранить</button></div>
-</div></div>
-
-<!-- PRODUCT EXTRA STAGE MODAL -->
-<div class="overlay" id="mProdStage"><div class="modal" style="width:480px;max-width:98vw">
-  <h2>➕ Добавить этап к разработке</h2>
-  <input type="hidden" id="psПrodId">
-  <div class="fg">
-    <label>Этап</label>
-    <select id="psStageId" onchange="onPsStageChange()" style="width:100%"></select>
-  </div>
-  <div class="fg">
-    <label>Вставить после этапа</label>
-    <select id="psInsertAfter" style="width:100%"></select>
-  </div>
-  <div class="fg">
-    <label>Длительность (дней)</label>
-    <input type="number" id="psDays" min="1" max="99" style="width:100px">
-  </div>
-  <div class="fg">
-    <label>Дата начала <span style="font-weight:400;color:#999;font-size:11px">(необязательно — если нужно зафиксировать старт)</span></label>
-    <input type="date" id="psStartDate">
-  </div>
-  <div id="psTypeHint" style="font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px"></div>
-  <div class="mfooter">
-    <button class="btn btn-gray" onclick="closeModal('mProdStage')">Отмена</button>
-    <button class="btn btn-green" onclick="saveProdStage()">Добавить и пересчитать</button>
-  </div>
 </div></div>
 
 <!-- EXTRA TASK DEF MODAL (admin) -->
@@ -1001,8 +969,7 @@ const STAGES=[
   {id:'mat',  abbr:'МАТ', name:'Запрос стоим. материалов',   type:'ctrl', days:{simple:1,medium:2,complex:3,series:3}},
   {id:'clar', abbr:'УТЧ', name:'Уточнения по модели',        type:'doing',days:{simple:1,medium:2,complex:2,series:3}},
   {id:'price',abbr:'ЦЕН', name:'Просчёт и согл. цены',       type:'ctrl', days:{simple:1,medium:1,complex:2,series:2}},
-  {id:'kmp',   abbr:'КМП',name:'Заказ и поставка комплект.',  type:'ctrl', days:{simple:3,medium:4,complex:5,series:7},parallelGroup:'sample_phase',optional:true},
-  {id:'sample',abbr:'ОБР',name:'Изготовление образца',       type:'ctrl', days:{simple:3,medium:4,complex:5,series:7},parallelGroup:'sample_phase'},
+  {id:'sample',abbr:'ОБР',name:'Изготовление образца',       type:'ctrl', days:{simple:3,medium:4,complex:5,series:7}},
   {id:'insp', abbr:'ИНС', name:'Предзаводская инспекция',    type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'accept',abbr:'ПРМ',name:'Приёмка заказчиком',        type:'ctrl', days:{simple:2,medium:2,complex:2,series:2}},
   {id:'fix',  abbr:'ИЗМ', name:'Изменения после приёмки',   type:'doing',days:{simple:1,medium:2,complex:3,series:5}},
@@ -1018,7 +985,7 @@ const TYPE_LABEL={simple:'Простое',medium:'Среднее',complex:'Сл�
 const TYPE_CSS={simple:'type-simple',medium:'type-medium',complex:'type-complex',series:'type-series'};
 const STAGE_GROUPS=[
   {ids:['tz','model','mat','clar','price'], n:1, label:'Стадия 1 — Разработка', bg:'#e3f2fd', border:'#90caf9', badge:'#1565c0', badgeBg:'#bbdefb'},
-  {ids:['kmp','sample','insp'],             n:2, label:'Стадия 2 — Образец',    bg:'#e8f5e9', border:'#a5d6a7', badge:'#1b5e20', badgeBg:'#c8e6c9'},
+  {ids:['sample','insp'],                  n:2, label:'Стадия 2 — Образец',    bg:'#e8f5e9', border:'#a5d6a7', badge:'#1b5e20', badgeBg:'#c8e6c9'},
   {ids:['accept','fix','docs','presale'],   n:3, label:'Стадия 3 — Согласование', bg:'#fffde7', border:'#fff176', badge:'#e65100', badgeBg:'#fff9c4'},
   {ids:['zero','launch'],                  n:4, label:'Стадия 4 — Серия',      bg:'#fce4ec', border:'#f48fb1', badge:'#880e4f', badgeBg:'#f8bbd0'},
 ];
@@ -1749,7 +1716,6 @@ function migrate(){
   if(!S.factory.items)S.factory.items={};
   if(!S.typeDurations)S.typeDurations={};
   if(!S.typeExtraStages)S.typeExtraStages={};
-  if(!S.productExtraStages)S.productExtraStages={};
   for(const t of ['simple','medium','complex','series']){
     if(!S.typeDurations[t])S.typeDurations[t]={};
     if(!S.typeExtraStages[t])S.typeExtraStages[t]=[];
@@ -1878,32 +1844,11 @@ function rebuildForConstructor(cid){
     // Doing stages compute a "naive" parallel end (counting ctrl-work-days) so ctrl stages
     // after them aren't pushed by vacation-induced extension of doing stages.
     let naiveCursor=ensureCtrlWork(prod.startDate,cid);
-    const stageList=getStageList(prod.type, prod.id);
+    const stageList=getStageList(prod.type);
     const startIdx=stageList.findIndex(s=>s.id===(prod.startStageId||'tz'));
-    let pgActive=null,pgStartNC=null,pgMaxEnd=null; // parallelGroup state
     for(let si=0;si<stageList.length;si++){
       const stage=stageList[si];
       if(si<startIdx){sched[stage.id]={startDate:null,endDate:null,days:{},failReason:null,skipped:true};continue;}
-
-      // ── parallelGroup: enter / exit ───────────────────────────
-      const pg=stage.parallelGroup||null;
-      if(pg!==pgActive){
-        if(pgActive!==null&&pgMaxEnd){
-          const afterGroup=addDay(pgMaxEnd,1);
-          naiveCursor=ensureCtrlWork(afterGroup,cid);
-          if(naiveCursor>cursor)cursor=naiveCursor;
-        }
-        pgActive=pg;
-        pgStartNC=pg?naiveCursor:null;
-        pgMaxEnd=null;
-      }
-      if(pgActive!==null)naiveCursor=pgStartNC; // each group stage starts from same point
-      // ─────────────────────────────────────────────────────────
-
-      // optional stage disabled per product
-      if(stage.optional&&(prod.disabledStages||[]).includes(stage.id)){
-        sched[stage.id]={startDate:null,endDate:null,days:{},failReason:null,skipped:true};continue;
-      }
       const dur=(S.customDurations[prod.id]||{})[stage.id]??(S.typeDurations?.[prod.type]?.[stage.id])??stage.days[prod.type];
       if(dur===0){sched[stage.id]={startDate:null,endDate:null,days:{},failReason:null,skipped:true};continue;}
       if(prod.splitByMonths&&si>startIdx&&KEY_STAGES.includes(stage._baseId||stage.id)){
@@ -1980,14 +1925,6 @@ function rebuildForConstructor(cid){
       const s=allDays.sort();
       entry.startDate=s[0]||cursor;
       entry.endDate=s[s.length-1]||cursor;
-      // track parallel group max end
-      if(pgActive!==null&&entry.endDate)pgMaxEnd=(!pgMaxEnd||entry.endDate>pgMaxEnd)?entry.endDate:pgMaxEnd;
-    }
-    // close any open parallel group after loop
-    if(pgActive!==null&&pgMaxEnd){
-      const afterGroup=addDay(pgMaxEnd,1);
-      naiveCursor=ensureCtrlWork(afterGroup,cid);
-      if(naiveCursor>cursor)cursor=naiveCursor;
     }
   }
   save();
@@ -4384,7 +4321,7 @@ const KB=[
 // Четыре фазы разработки: баллы начисляются при закрытии последнего этапа каждой фазы
 const PHASE_GROUPS=[
   {ids:['tz','model','mat','clar','price'], closing:'price'},
-  {ids:['kmp','sample','insp','accept'],    closing:'accept'},
+  {ids:['sample','insp','accept'],          closing:'accept'},
   {ids:['fix','docs'],                      closing:'docs'},
   {ids:['presale','zero','launch'],         closing:'launch'},
 ];
@@ -5772,26 +5709,13 @@ function renderCalendar(){
       for(const d of days){const td2=document.createElement('td');td2.style.cssText='background:#dce5f0;border:1px solid #d8dce2';pr.appendChild(td2);}
       tbl.appendChild(pr);
 
-      for(const stage of getStageList(prod.type, prod.id)){
+      for(const stage of getStageList(prod.type)){
         const entry=sched[stage.id];
         // Hide skipped stages (before startStageId)
         if(entry&&entry.skipped)continue;
         const sr=document.createElement('tr');
         const st=document.createElement('td');st.className='gc-stage';
-        const stRow=document.createElement('div');stRow.style.cssText='display:flex;align-items:center;gap:4px';
-        const stLabel=document.createElement('div');stLabel.style.cssText='min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
-        stLabel.innerHTML=`${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}`;
-        stRow.appendChild(stLabel);
-        if(session.role==='admin'){
-          const plusHint=document.createElement('span');
-          plusHint.className='gc-stage-add';plusHint.textContent='+';plusHint.style.pointerEvents='none';
-          stRow.appendChild(plusHint);
-          const _pid=prod.id,_sid=stage.id;
-          st.style.cursor='pointer';
-          st.addEventListener('click',()=>openProdStageModal(_pid,_sid));
-        }
-        const stDate=document.createElement('div');stDate.style.cssText='font-size:10px;color:#aaa';stDate.textContent=`до ${fmtShort(entry?.endDate)}`;
-        st.appendChild(stRow);st.appendChild(stDate);
+        st.innerHTML=`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
         sr.appendChild(st);
 
         for(const d of days){
@@ -6050,25 +5974,22 @@ function doExtraRevert(){
 // Первые этапы каждой фазы — именно с них возможен перенос на след. месяц
 const KEY_STAGES=['tz','sample','fix','presale'];
 
-function getStageList(type, prodId){
-  const typeExtras=(S.typeExtraStages?.[type]||[]);
-  const prodExtras=prodId?(S.productExtraStages?.[prodId]||[]):[];
-  const allExtras=[...typeExtras,...prodExtras];
-  if(!allExtras.length)return STAGES;
+function getStageList(type){
+  const extras=(S.typeExtraStages?.[type]||[]);
+  if(!extras.length)return STAGES;
   const result=[...STAGES];
-  for(const ex of allExtras){
+  for(const ex of extras){
     if(ex.isCustom){
+      // Brand-new custom stage
       const newSt={id:ex.key,abbr:ex.abbr,name:ex.name,type:ex.stageType||'ctrl',days:{simple:1,medium:1,complex:1,series:1},_isExtra:true,_isCustom:true};
       const insertIdx=result.findIndex(s=>s.id===ex.insertAfter);
       result.splice(insertIdx>=0?insertIdx+1:result.length,0,newSt);
     } else {
       const base=STAGES.find(s=>s.id===ex.baseId);
       if(!base)continue;
-      // Use insertAfter if specified (product-level extras), else fall back to baseId (type-level extras)
-      const anchorId=ex.insertAfter||ex.baseId;
       let insertIdx=-1;
       for(let i=result.length-1;i>=0;i--){
-        if(result[i].id===anchorId||result[i]._baseId===anchorId){insertIdx=i;break;}
+        if(result[i].id===ex.baseId||(result[i]._baseId===ex.baseId&&result[i].id<ex.key)){insertIdx=i;break;}
       }
       const newSt={...base,id:ex.key,_baseId:ex.baseId,_isExtra:true};
       result.splice(insertIdx>=0?insertIdx+1:result.length,0,newSt);
@@ -6252,27 +6173,6 @@ function renderProducts(){
     const conBtns=(session.role==='constructor'&&isPool)?
       `<button class="btn btn-sm" style="background:#27ae60;color:#fff;flex-shrink:0" onclick="claimProd('${p.id}')">✋ Взять задачу</button>`:'';
 
-    const pExtras=S.productExtraStages?.[p.id]||[];
-    const pSched=S.schedule[p.id]||{};
-    const extraRows=pExtras.map(ex=>{
-      const base=STAGES.find(s=>s.id===ex.baseId);
-      const days=(S.customDurations?.[p.id]||{})[ex.key]??base?.days[p.type]??'?';
-      const end=pSched[ex.key]?.endDate;
-      const delBtn=session.role==='admin'
-        ?`<button onclick="removeProdStage('${p.id}','${ex.key}')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px;padding:0 4px" title="Удалить">✕</button>`:'';
-      return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #e8ecf0">
-        <span>${base?.type==='doing'?'🔵':'🟠'}</span>
-        <b style="font-size:12px">${base?.abbr||ex.baseId}</b>
-        <span style="font-size:12px;color:#555;flex:1">${base?.name||''}</span>
-        <span style="font-size:11px;color:#888">${days} дн.${end?' · до '+fmtShort(end):''}</span>
-        ${delBtn}
-      </div>`;
-    }).join('');
-    const addBtn=session.role==='admin'
-      ?`<button onclick="openProdStageModal('${p.id}')" style="margin-top:6px;background:none;border:1px dashed #2471a3;color:#2471a3;border-radius:6px;padding:3px 12px;cursor:pointer;font-size:12px;font-weight:600">➕ Добавить этап</button>`:'';
-    const extraStagesHtml=(pExtras.length||session.role==='admin')
-      ?`<div style="margin-top:8px;border-top:1px solid #e0e4ea;padding-top:6px">${extraRows}${addBtn}</div>` :'';
-
     return`<div class="card" style="background:${cardBg};${cardBorder}">
       <div style="background:${priColor};color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">${p.priority}</div>
       <div style="flex:1;min-width:0">
@@ -6287,7 +6187,6 @@ function renderProducts(){
           ${isPool?'<span style="color:#8e44ad;font-weight:600">📋 Пул</span> · ':(`Конструктор: <b>${c?c.name:'—'}</b> · `)}
           Начало: ${fmtFull(p.startDate)}${!isPool?` · <b>Окончание: ${fmtFull(endDate)}</b>`:''}
         </div>
-        ${extraStagesHtml}
       </div>${adminBtns}${conBtns}</div>`;
   }
 
@@ -6356,7 +6255,6 @@ function openAddProd(){
   document.getElementById('pSplitMonths').checked=false;
   document.getElementById('pBitrix').value='';
   document.getElementById('pQty').value=1;
-  document.getElementById('pKmpEnabled').checked=true;
   fillConSelect2(null);openModal('mProd');
 }
 function openEditProd(id){
@@ -6368,7 +6266,6 @@ function openEditProd(id){
   document.getElementById('pSplitMonths').checked=!!p.splitByMonths;
   document.getElementById('pBitrix').value=p.bitrixUrl||'';
   document.getElementById('pQty').value=p.qty||1;
-  document.getElementById('pKmpEnabled').checked=!(p.disabledStages||[]).includes('kmp');
   fillConSelect2(p.constructorId||null);openModal('mProd');
 }
 function fillConSelect2(sel){
@@ -6384,18 +6281,17 @@ function saveProd(){
   const splitByMonths=document.getElementById('pSplitMonths').checked;
   const bitrixUrl=document.getElementById('pBitrix').value.trim();
   const qty=Math.max(1,parseInt(document.getElementById('pQty').value)||1);
-  const disabledStages=document.getElementById('pKmpEnabled').checked?[]:['kmp'];
   if(!name)return alert('Введите название');if(!startDate)return alert('Укажите дату');
   const eid=document.getElementById('mProdId').value;
   if(eid){
     const p=S.products.find(x=>x.id===eid);const oc=p.constructorId;
-    Object.assign(p,{name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,disabledStages});
+    Object.assign(p,{name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty});
     delete S.schedule[eid];
     if(cid)rebuildForConstructor(cid);
     if(oc&&oc!==cid)rebuildForConstructor(oc);
   }else{
     const id='p'+Date.now();
-    S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,disabledStages});
+    S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty});
     if(cid)rebuildForConstructor(cid);
   }
   save();closeModal('mProd');renderProducts();
@@ -6404,92 +6300,6 @@ function delProd(id){
   if(!confirm('Удалить изделие?'))return;
   const p=S.products.find(x=>x.id===id);S.products=S.products.filter(x=>x.id!==id);delete S.schedule[id];
   if(p)rebuildForConstructor(p.constructorId);renderProducts();
-}
-
-// ─── PRODUCT EXTRA STAGES ─────────────────────────────────────
-function openProdStageModal(prodId, insertAfterId){
-  const p=S.products.find(x=>x.id===prodId);if(!p)return;
-  document.getElementById('psProdId').value=prodId;
-  document.getElementById('psStartDate').value='';
-
-  const stageList=getStageList(p.type, prodId);
-  const sched=S.schedule[prodId]||{};
-
-  document.getElementById('psStageId').innerHTML=STAGES.map(s=>
-    `<option value="${s.id}">${s.type==='doing'?'🔵':'🟠'} ${s.abbr} — ${s.name}</option>`
-  ).join('');
-
-  const nonSkipped=stageList.filter(s=>!sched[s.id]?.skipped);
-  document.getElementById('psInsertAfter').innerHTML=nonSkipped
-    .map(s=>`<option value="${s.id}">${s.abbr} — ${s.name} (до ${fmtShort(sched[s.id]?.endDate)})</option>`)
-    .join('');
-
-  // Pre-select the stage that was clicked
-  if(insertAfterId) document.getElementById('psInsertAfter').value=insertAfterId;
-  else { const last=nonSkipped.pop(); if(last)document.getElementById('psInsertAfter').value=last.id; }
-
-  onPsStageChange();
-  openModal('mProdStage');
-}
-function onPsStageChange(){
-  const sid=document.getElementById('psStageId').value;
-  const prodId=document.getElementById('psProdId').value;
-  const p=S.products.find(x=>x.id===prodId);
-  const st=STAGES.find(s=>s.id===sid);if(!st||!p)return;
-  document.getElementById('psDays').value=st.days[p.type]||1;
-  const hint=document.getElementById('psTypeHint');
-  if(st.type==='doing'){
-    hint.style.cssText='font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px;background:#e3f2fd;color:#1565c0';
-    hint.textContent='🔵 Исполнительный — войдёт в рабочие дни конструктора';
-  } else {
-    hint.style.cssText='font-size:12px;padding:6px 10px;border-radius:6px;margin-top:4px;background:#f3e5f5;color:#6a1b9a';
-    hint.textContent='🟠 Параллельный — не блокирует конструктора, идёт независимо';
-  }
-}
-function saveProdStage(){
-  const prodId=document.getElementById('psProdId').value;
-  const baseId=document.getElementById('psStageId').value;
-  const insertAfter=document.getElementById('psInsertAfter').value;
-  const days=parseInt(document.getElementById('psDays').value)||1;
-  const startDate=document.getElementById('psStartDate').value;
-  const p=S.products.find(x=>x.id===prodId);if(!p)return;
-
-  if(!S.productExtraStages)S.productExtraStages={};
-  if(!S.productExtraStages[prodId])S.productExtraStages[prodId]=[];
-
-  const key=baseId+'_'+Date.now();
-  S.productExtraStages[prodId].push({key, baseId, insertAfter});
-
-  // Save custom duration
-  if(!S.customDurations[prodId])S.customDurations[prodId]={};
-  S.customDurations[prodId][key]=days;
-
-  // Save start date constraint if specified
-  if(startDate){
-    if(!S.stageConstraints[prodId])S.stageConstraints[prodId]={};
-    S.stageConstraints[prodId][key]=startDate;
-  }
-
-  save();
-  if(p.constructorId)rebuildForConstructor(p.constructorId);
-  closeModal('mProdStage');
-  renderProducts();
-  renderCalendar();
-}
-function removeProdStage(prodId, key){
-  if(!confirm('Удалить этот этап из разработки?'))return;
-  if(S.productExtraStages?.[prodId]){
-    S.productExtraStages[prodId]=S.productExtraStages[prodId].filter(x=>x.key!==key);
-  }
-  if(S.customDurations?.[prodId])delete S.customDurations[prodId][key];
-  if(S.stageConstraints?.[prodId])delete S.stageConstraints[prodId][key];
-  // Remove marks
-  const p=S.products.find(x=>x.id===prodId);
-  if(S.schedule[prodId])delete S.schedule[prodId][key];
-  save();
-  if(p?.constructorId)rebuildForConstructor(p.constructorId);
-  renderProducts();
-  renderCalendar();
 }
 
 // ─── CONSTRUCTORS + ABSENCES ──────────────────────────────────
@@ -7078,7 +6888,7 @@ document.addEventListener('click',e=>{if(e.target.classList.contains('overlay'))
 
 // ─── MM MODULE ────────────────────────────────────────────────
 
-let mmViewYear, mmViewMonth;
+let mmViewYear, mmViewMonth, _mmFilter=null;
 let mmPhaseCollapsed={}; // key: 'prodId_phase' -> bool (true=collapsed)
 
 function isMMWorkDay(d,cid){
@@ -7793,6 +7603,44 @@ function changeMMMonth(dir){
   renderMMCalendar();
 }
 
+function setMMFilter(cid){
+  _mmFilter=(_mmFilter===cid)?null:cid;
+  renderMMCalendar();
+}
+
+function mmLoadColor(pct){
+  const t=Math.min(Math.max(pct,0),120)/120;
+  const r=Math.round(255+(26-255)*t);
+  const g=Math.round(255+(92-255)*t);
+  const b=Math.round(255+(42-255)*t);
+  return`rgb(${r},${g},${b})`;
+}
+
+function mmLoadForDay(cid,day,prods){
+  const con=S.mm.constructors.find(x=>x.id===cid);if(!con)return{pct:0,doing:0,ctrl:0};
+  const isSewing=con.spec==='sewing';
+  let doing=0,ctrl=0;
+  for(const prod of prods){
+    const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
+    const sched=S.mm.schedule[prod.id]||{};
+    for(const stage of(tmpl.stages||[]).filter(s=>s&&s.id)){
+      const spec=stage.spec||'both';
+      const involves=isSewing?(spec==='sewing'||spec==='both'||spec==='merge'):(spec==='frame'||spec==='both'||spec==='merge');
+      if(!involves)continue;
+      const e=sched[stage.id];if(!e)continue;
+      const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
+      let v;
+      if(isCtrl)v=e?.days?.[day]||e?.track0?.days?.[day];
+      else if(isSewing)v=e?.track1?.days?.[day];
+      else v=e?.track0?.days?.[day]||e?.days?.[day];
+      const st=v?.status||'';
+      if(st==='planned'||st==='done'){if(isCtrl)ctrl++;else doing++;}
+    }
+  }
+  const pct=doing*55+ctrl*15;
+  return{pct,doing,ctrl};
+}
+
 function renderMMCalendar(){
   if(!mmViewYear){const n=new Date();mmViewYear=n.getFullYear();mmViewMonth=n.getMonth();}
   const el=document.getElementById('mmMonthTitle');
@@ -7800,6 +7648,21 @@ function renderMMCalendar(){
   const tbl=document.getElementById('mmGanttTable');if(!tbl)return;
   const days=monthDays(mmViewYear,mmViewMonth);
   const today=todayStr();
+
+  // ── Filter bar ────────────────────────────────────────────────
+  const filterBar=document.getElementById('mmFilterBar');
+  const filterWrap=document.getElementById('mmFilterWrap');
+  if(filterBar&&filterWrap){
+    filterBar.style.display=session.role==='admin'?'flex':'none';
+    const allBtn=`<button onclick="setMMFilter(null)" style="padding:4px 10px;border-radius:14px;border:1px solid ${!_mmFilter?'#90caf9':'#4a6080'};background:${!_mmFilter?'#2471a3':'#1e2d40'};color:#fff;font-size:12px;cursor:pointer;font-weight:${!_mmFilter?'700':'400'}">Все</button>`;
+    const conBtns=S.mm.constructors.map(c=>{
+      const icon=c.spec==='sewing'?'🧵':'🪵';
+      const active=_mmFilter===c.id;
+      return`<button onclick="setMMFilter('${c.id}')" style="padding:4px 10px;border-radius:14px;border:1px solid ${active?'#90caf9':'#4a6080'};background:${active?'#2471a3':'#1e2d40'};color:#fff;font-size:12px;cursor:pointer;font-weight:${active?'700':'400'}">${icon} ${c.name}</button>`;
+    }).join('');
+    filterWrap.innerHTML=allBtn+conBtns;
+  }
+
   let html=`<thead><tr><th class="gh-label">ММ / Этап</th>`;
   for(const d of days){
     const dt=parseDate(d);const dd=dt.getDate();
@@ -7811,7 +7674,25 @@ function renderMMCalendar(){
   const SPEC_LABEL_COLOR={frame:'#6d3a2a',sewing:'#5c1a7a',both:'#1a3a6d',merge:'#1a5c2a'};
   const PHASE_NAMES={'1':'Черновой образец','2':'Чистовой и расчёты','3':'КТД','4':'Производство'};
   const PHASE_COLORS={'1':'#7c4dff','2':'#0288d1','3':'#f57c00','4':'#2e7d32'};
-  const prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  let prods=S.mm.products.filter(p=>p.status!=='closed').sort((a,b)=>a.priority-b.priority);
+  if(_mmFilter)prods=prods.filter(p=>p.cidA===_mmFilter||p.cidB===_mmFilter);
+
+  // ── Workload strip (when constructor selected) ─────────────────
+  if(_mmFilter){
+    const con=S.mm.constructors.find(x=>x.id===_mmFilter);
+    const specIcon=con?.spec==='sewing'?'🧵':'🪵';
+    html+=`<tr><td class="gc-prod" style="font-size:11px;font-weight:700;color:#1a5c2a;background:#e8f5e9">📊 Загрузка: ${specIcon} ${con?.name||''}</td>`;
+    for(const d of days){
+      const isWknd=isBaseWknd(d);const isToday=d===today;
+      const {pct,doing,ctrl}=mmLoadForDay(_mmFilter,d,prods);
+      const bg=isWknd?'#f0f0f0':mmLoadColor(pct);
+      const txtColor=pct>60?'#0d3320':'#1a5c2a';
+      const border=isToday?'2px solid #1a73e8':'1px solid #d0d8e4';
+      const tip=`${pct}%${doing?` исп:${doing}`:''}${ctrl?` кнт:${ctrl}`:''}`;
+      html+=`<td style="background:${bg};border:${border};text-align:center;font-size:9px;font-weight:700;color:${pct?txtColor:'#ccc'};padding:0;min-width:36px;height:28px;vertical-align:middle" title="${tip}">${pct?pct+'%':''}</td>`;
+    }
+    html+='</tr>';
+  }
   const canClick=session.role==='admin';
   for(const prod of prods){
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);
