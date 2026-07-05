@@ -974,9 +974,10 @@ const STAGES=[
   {id:'accept',abbr:'ПРМ',name:'Приёмка заказчиком',        type:'ctrl', days:{simple:2,medium:2,complex:2,series:2}},
   {id:'fix',  abbr:'ИЗМ', name:'Изменения после приёмки',   type:'doing',days:{simple:1,medium:2,complex:3,series:5}},
   {id:'docs', abbr:'ДОК', name:'Подготовка документации',    type:'doing',days:{simple:3,medium:3,complex:4,series:5}},
-  {id:'presale',abbr:'РЛЗ',name:'Предпродажный релиз',      type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
-  {id:'zero', abbr:'НС',  name:'Произв. нулевой серии',      type:'ctrl', days:{simple:7,medium:7,complex:7,series:7}},
-  {id:'launch',abbr:'ЗПС',name:'Запуск продаж',              type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+  {id:'vbsp',  abbr:'ВБСП',name:'Выдача без старта продаж',  type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+  {id:'pp',    abbr:'ПП',  name:'Поступление потребности',   type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
+  {id:'zero',  abbr:'НС',  name:'Произв. нулевой серии',      type:'ctrl', days:{simple:7,medium:7,complex:7,series:7}},
+  {id:'vsp',   abbr:'ВСП', name:'Выдача со стартом продаж',  type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
 ];
 // Points: doing = 2,4,6,8; ctrl = 1,2,3,4 (by type simple/medium/complex/series)
 const DOING_PTS={simple:2,medium:4,complex:6,series:8};
@@ -986,8 +987,8 @@ const TYPE_CSS={simple:'type-simple',medium:'type-medium',complex:'type-complex'
 const STAGE_GROUPS=[
   {ids:['tz','model','mat','clar','price'], n:1, label:'Стадия 1 — Разработка', bg:'#e3f2fd', border:'#90caf9', badge:'#1565c0', badgeBg:'#bbdefb'},
   {ids:['sample','insp'],                  n:2, label:'Стадия 2 — Образец',    bg:'#e8f5e9', border:'#a5d6a7', badge:'#1b5e20', badgeBg:'#c8e6c9'},
-  {ids:['accept','fix','docs','presale'],   n:3, label:'Стадия 3 — Согласование', bg:'#fffde7', border:'#fff176', badge:'#e65100', badgeBg:'#fff9c4'},
-  {ids:['zero','launch'],                  n:4, label:'Стадия 4 — Серия',      bg:'#fce4ec', border:'#f48fb1', badge:'#880e4f', badgeBg:'#f8bbd0'},
+  {ids:['accept','fix','docs','vbsp'],      n:3, label:'Стадия 3 — Согласование', bg:'#fffde7', border:'#fff176', badge:'#e65100', badgeBg:'#fff9c4'},
+  {ids:['pp','zero','vsp'],                n:4, label:'Стадия 4 — Серия',      bg:'#fce4ec', border:'#f48fb1', badge:'#880e4f', badgeBg:'#f8bbd0'},
 ];
 function getStageGroup(pid){
   const sid=getActiveStageId(pid);
@@ -4322,8 +4323,8 @@ const KB=[
 const PHASE_GROUPS=[
   {ids:['tz','model','mat','clar','price'], closing:'price'},
   {ids:['sample','insp','accept'],          closing:'accept'},
-  {ids:['fix','docs'],                      closing:'docs'},
-  {ids:['presale','zero','launch'],         closing:'launch'},
+  {ids:['fix','docs','vbsp'],               closing:'vbsp'},
+  {ids:['pp','zero','vsp'],                 closing:'vsp'},
 ];
 
 function calcAllTimePoints(cid){
@@ -5972,7 +5973,7 @@ function doExtraRevert(){
 
 // ─── MARK MODAL ───────────────────────────────────────────────
 // Первые этапы каждой фазы — именно с них возможен перенос на след. месяц
-const KEY_STAGES=['tz','sample','fix','presale'];
+const KEY_STAGES=['tz','sample','fix','pp'];
 
 function getStageList(type){
   const extras=(S.typeExtraStages?.[type]||[]);
