@@ -241,6 +241,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="ltab active" id="ltC" onclick="switchLT('constructor')">🔧 Конструктор КМ</div>
     <div class="ltab" id="ltMM" onclick="switchLT('mm')">🛋 Конструктор ММ</div>
     <div class="ltab" id="ltSD" onclick="switchLT('scheme')">📐 Схемы сборки</div>
+    <div class="ltab" id="ltMgr" onclick="switchLT('manager')">📊 Менеджер</div>
     <div class="ltab" id="ltA" onclick="switchLT('admin')">Руководитель</div>
   </div>
   <div id="lfSD" style="display:none">
@@ -269,6 +270,11 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       <div class="err" id="mmcErr"></div>
     </div>
     <button class="btn btn-primary btn-block" onclick="loginMMC()">Войти</button>
+  </div>
+  <div id="lfMgr" style="display:none">
+    <div class="fg"><label>Выберите менеджера</label><select id="selMgr"></select></div>
+    <div class="fg"><label>Пароль</label><input type="password" id="mgrPw" placeholder="****" onkeydown="if(event.key==='Enter')loginMgr()"><div class="err" id="mgrErr"></div></div>
+    <button class="btn btn-primary btn-block" onclick="loginMgr()">Войти</button>
   </div>
   <div id="lfA" style="display:none">
     <div class="fg">
@@ -309,6 +315,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div class="sub-tab" onclick="switchKMTab(this,'extratasks')">⭐ Доп. задачи</div>
     <div class="sub-tab" onclick="switchKMTab(this,'assembly')">🔨 Сборка</div>
     <div class="sub-tab" onclick="switchKMTab(this,'acceptance-km')">📋 Приёмка</div>
+    <div class="sub-tab" id="stPlanFact" onclick="switchKMTab(this,'planfact')">📊 План/Факт</div>
   </div>
   <div class="sub-nav" id="subNavMetal" style="display:none">
     <div class="sub-tab" onclick="switchModTab('metal',this,'calendar')">📅 Календарь</div>
@@ -418,6 +425,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       <div id="schemeDesList"></div>
     </div>
     <div class="panel" style="margin-top:12px">
+      <div class="panel-hdr"><h2>📊 Менеджеры</h2><button class="btn btn-green" onclick="openAddManager()">+ Добавить</button></div>
+      <div id="managerList"></div>
+    </div>
+    <div class="panel" style="margin-top:12px">
       <div class="panel-hdr"><h2>Резервное копирование</h2></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:4px 0">
         <button class="btn btn-blue" onclick="exportData()">⬇ Скачать резервную копию</button>
@@ -440,6 +451,22 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       </div>
     </div>
     <div id="configuratorContent" style="padding:0 0 40px"></div>
+  </div>
+  <div id="tab-planfact" style="display:none">
+    <div class="panel">
+      <div class="panel-hdr" style="flex-wrap:wrap;gap:8px">
+        <h2>📊 План/Факт — Корпусная мебель</h2>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <button class="btn btn-gray btn-sm" onclick="pfPrevMonth()">← Пред.</button>
+          <b id="pfMonthLabel" style="min-width:120px;text-align:center;font-size:14px"></b>
+          <button class="btn btn-gray btn-sm" onclick="pfNextMonth()">След. →</button>
+        </div>
+        <select id="pfConFilter" onchange="renderPlanFact()" style="font-size:12px;border:1px solid #ccc;border-radius:6px;padding:4px 8px">
+          <option value="">Все конструкторы</option>
+        </select>
+      </div>
+      <div id="pfTable" style="overflow-x:auto"></div>
+    </div>
   </div>
   <div id="tab-mm" style="display:none">
     <div id="tab-mm-constructors" style="display:none"><div class="panel"><div class="panel-hdr"><h2>Конструкторы ММ</h2><button class="btn btn-green admin-only" onclick="openAddMMCon()">+ Добавить</button><button class="btn btn-red btn-sm admin-only" onclick="resetMMData()" style="margin-left:auto">🗑 Сбросить все данные ММ</button></div><div id="mmConstructorList"></div></div></div>
@@ -672,6 +699,30 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <input type="hidden" id="mSchemeDesId">
   <div class="fg"><label>ФИО</label><input type="text" id="sdName" placeholder="Имя Фамилия"></div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mSchemeDes')">Отмена</button><button class="btn btn-green" onclick="saveSchemeDes()">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="mManager"><div class="modal" style="width:380px">
+  <h2 id="mManagerTitle">Добавить менеджера</h2>
+  <input type="hidden" id="mManagerId">
+  <div class="fg"><label>ФИО</label><input type="text" id="mgrName" placeholder="Имя Фамилия"></div>
+  <div class="fg"><label>Пароль <span style="font-weight:400;color:#999">(оставьте пустым — без пароля)</span></label><input type="password" id="mgrNewPw" placeholder="••••"></div>
+  <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mManager')">Отмена</button><button class="btn btn-green" onclick="saveManager()">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="mSetPlan"><div class="modal" style="width:400px">
+  <h2>📊 Установить план</h2>
+  <input type="hidden" id="spProdId">
+  <input type="hidden" id="spMonthKey">
+  <div style="color:#555;font-size:13px;margin-bottom:12px">Изделие: <b id="spProdName"></b></div>
+  <div class="fg">
+    <label>Целевой этап на <b id="spMonthName"></b></label>
+    <select id="spStageSelect" style="font-size:13px"></select>
+  </div>
+  <div class="mfooter">
+    <button class="btn btn-gray" onclick="closeModal('mSetPlan')">Отмена</button>
+    <button class="btn btn-red btn-sm" onclick="clearPlanStage()">Очистить</button>
+    <button class="btn btn-green" onclick="savePlanStage()">Сохранить</button>
+  </div>
 </div></div>
 
 <div class="overlay" id="mAssignSD"><div class="modal" style="width:420px">
@@ -1749,6 +1800,8 @@ function migrate(){
   if(!S.assemblyChecks)S.assemblyChecks={};
   if(!S.schemeDesigners)S.schemeDesigners=[];
   if(!S.schemeSchedule)S.schemeSchedule={};
+  if(!S.managers)S.managers=[];
+  if(!S.planFact)S.planFact={};
   if(!S.acceptanceResults)S.acceptanceResults={};
   if(!S.acceptanceManualItems)S.acceptanceManualItems={};
   if(!S.individualAcceptDates)S.individualAcceptDates={};
@@ -2171,13 +2224,14 @@ function canModify(mark){if(!mark)return true;if(session.role==='admin')return t
 
 // ─── LOGIN ────────────────────────────────────────────────────
 function switchLT(tab){
-  ['constructor','mm','scheme','admin'].forEach(t=>{
-    document.getElementById('lt'+{constructor:'C',mm:'MM',scheme:'SD',admin:'A'}[t])
+  ['constructor','mm','scheme','manager','admin'].forEach(t=>{
+    document.getElementById('lt'+{constructor:'C',mm:'MM',scheme:'SD',manager:'Mgr',admin:'A'}[t])
       .classList.toggle('active',tab===t);
   });
   document.getElementById('lfC').style.display=tab==='constructor'?'':'none';
   document.getElementById('lfMM').style.display=tab==='mm'?'':'none';
   document.getElementById('lfSD').style.display=tab==='scheme'?'':'none';
+  document.getElementById('lfMgr').style.display=tab==='manager'?'':'none';
   document.getElementById('lfA').style.display=tab==='admin'?'':'none';
 }
 function fillConSelect(){
@@ -2185,7 +2239,14 @@ function fillConSelect(){
   sel.innerHTML=S.constructors.length
     ?S.constructors.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
     :'<option value="">Нет конструкторов — войдите как Руководитель</option>';
-  fillSDSelect();
+  fillSDSelect();fillMgrSelect();
+}
+function fillMgrSelect(){
+  const sel=document.getElementById('selMgr');if(!sel)return;
+  const mgrs=S.managers||[];
+  sel.innerHTML=mgrs.length
+    ?mgrs.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')
+    :'<option value="">Нет менеджеров</option>';
 }
 function fillSDSelect(){
   const sel=document.getElementById('selSD');if(!sel)return;
@@ -2367,8 +2428,8 @@ function startApp(){
   const pill=document.getElementById('userPill');
   if(session.role==='admin'){pill.className='admin-pill';pill.textContent='👑 '+session.name;}
   else if(session.role==='scheme'){pill.className='user-pill';pill.textContent='📐 '+session.name;}
+  else if(session.role==='manager'){pill.className='user-pill';pill.textContent='📊 '+session.name;}
   else{pill.className='user-pill';pill.textContent='👷 '+session.name;}
-  // Show profile button only for constructors
   const profileBtn=document.getElementById('profileBtn');
   if(profileBtn)profileBtn.style.display=session.role==='constructor'?'':'none';
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=session.role==='admin'?'':'none');
@@ -2386,6 +2447,12 @@ function startApp(){
     document.getElementById('mtMm').style.display='none';
     document.getElementById('mtMetal').style.display='none';
     document.getElementById('mtMassiv').style.display='none';
+  } else if(session.role==='manager'){
+    document.getElementById('mtKm').style.display='';
+    document.getElementById('mtMm').style.display='none';
+    document.getElementById('mtMetal').style.display='none';
+    document.getElementById('mtMassiv').style.display='none';
+    document.getElementById('stPlanFact').style.display='';
   }
   const now=new Date();viewYear=now.getFullYear();viewMonth=now.getMonth();
   if(session.role==='constructor'){
@@ -2394,6 +2461,9 @@ function startApp(){
     switchSection('km');
     const calTabEl=document.querySelector('#subNavKm .sub-tab');
     if(calTabEl)calTabEl.click();
+  } else if(session.role==='manager'){
+    switchSection('km');
+    document.getElementById('stPlanFact').click();
   } else if(session.module==='mm'){
     switchSection('mm');
   } else {
@@ -3203,16 +3273,17 @@ function delModProd(mk,id){
 function switchKMTab(el,id){
   document.querySelectorAll('#subNavKm .sub-tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  ['calendar','products','shifts','constructors','configurator','extratasks','assembly','acceptance-km'].forEach(t=>
+  ['calendar','products','shifts','constructors','configurator','extratasks','assembly','acceptance-km','planfact'].forEach(t=>
     document.getElementById('tab-'+t).style.display=t===id?'':'none');
   if(id==='calendar')renderCalendar();
   else if(id==='products')renderProducts();
   else if(id==='shifts')renderShifts();
-  else if(id==='constructors'){renderConstructors();renderSchemeDesigners();}
+  else if(id==='constructors'){renderConstructors();renderSchemeDesigners();renderManagers();}
   else if(id==='configurator')renderConfigurator();
   else if(id==='extratasks')renderExtraTaskDefs();
   else if(id==='assembly')renderAssembly();
   else if(id==='acceptance-km')renderAcceptanceKM();
+  else if(id==='planfact')renderPlanFact();
 }
 
 // ─── ACCEPTANCE HELPERS ───────────────────────────────────────
@@ -6853,6 +6924,201 @@ function doAssignSchemeDes(pid,did){
   if(oldDid&&oldDid!==did)rebuildForSchemeDesigner(oldDid);
   closeModal('mAssignSD');
   save();renderCalendar();
+}
+
+// ─── MANAGER LOGIN ────────────────────────────────────────────
+function loginMgr(){
+  const mid=document.getElementById('selMgr').value;
+  if(!mid){document.getElementById('mgrErr').textContent='Выберите менеджера';return;}
+  const mgr=(S.managers||[]).find(x=>x.id===mid);if(!mgr)return;
+  const pw=document.getElementById('mgrPw').value;
+  const expected=mgr.password||'';
+  if(expected&&pw!==expected){document.getElementById('mgrErr').textContent='Неверный пароль';return;}
+  document.getElementById('mgrErr').textContent='';
+  session={role:'manager',cid:mid,name:mgr.name};
+  startApp();
+}
+
+// ─── MANAGER CRUD ─────────────────────────────────────────────
+function renderManagers(){
+  const el=document.getElementById('managerList');if(!el)return;
+  const mgrs=S.managers||[];
+  if(!mgrs.length){el.innerHTML='<div class="empty"><p>Нет менеджеров</p></div>';return;}
+  el.innerHTML=mgrs.map(m=>`<div class="card">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1"><b>${m.name}</b><div style="font-size:11px;color:#888">📊 Менеджер</div></div>
+      <button class="btn btn-gray btn-sm" onclick="openEditManager('${m.id}')">✏️ Ред.</button>
+      <button class="btn btn-red btn-sm" onclick="delManager('${m.id}')">🗑</button>
+    </div>
+  </div>`).join('');
+}
+function openAddManager(){
+  document.getElementById('mManagerId').value='';
+  document.getElementById('mManagerTitle').textContent='Добавить менеджера';
+  document.getElementById('mgrName').value='';
+  document.getElementById('mgrNewPw').value='';
+  openModal('mManager');
+}
+function openEditManager(id){
+  const m=(S.managers||[]).find(x=>x.id===id);if(!m)return;
+  document.getElementById('mManagerId').value=id;
+  document.getElementById('mManagerTitle').textContent='Редактировать менеджера';
+  document.getElementById('mgrName').value=m.name;
+  document.getElementById('mgrNewPw').value='';
+  openModal('mManager');
+}
+function saveManager(){
+  const name=document.getElementById('mgrName').value.trim();if(!name)return alert('Введите имя');
+  const pw=document.getElementById('mgrNewPw').value;
+  const eid=document.getElementById('mManagerId').value;
+  if(!S.managers)S.managers=[];
+  if(eid){
+    const m=S.managers.find(x=>x.id===eid);if(m){m.name=name;if(pw)m.password=pw;}
+  }else{
+    S.managers.push({id:'mgr'+Date.now(),name,password:pw});
+  }
+  save();fillMgrSelect();renderManagers();closeModal('mManager');
+}
+function delManager(id){
+  if(!confirm('Удалить менеджера?'))return;
+  S.managers=(S.managers||[]).filter(x=>x.id!==id);
+  save();fillMgrSelect();renderManagers();
+}
+
+// ─── ПЛАН/ФАКТ ────────────────────────────────────────────────
+const MONTHS_NOM=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+let _pfYear=new Date().getFullYear(),_pfMonth=new Date().getMonth();
+
+function pfMonthKey(){return `${_pfYear}-${String(_pfMonth+1).padStart(2,'0')}`;}
+function pfPrevMonth(){_pfMonth--;if(_pfMonth<0){_pfMonth=11;_pfYear--;}renderPlanFact();}
+function pfNextMonth(){_pfMonth++;if(_pfMonth>11){_pfMonth=0;_pfYear++;}renderPlanFact();}
+
+function getFactStage(prodId){
+  const sched=S.schedule[prodId];if(!sched)return null;
+  const prod=S.products.find(p=>p.id===prodId);if(!prod)return null;
+  const list=getStageList(prod.type);
+  let last=null;
+  for(const st of list){
+    const e=sched[st.id];
+    if(!e||e.skipped)continue;
+    const vals=Object.values(e.days||{});
+    if(!vals.length)break;
+    const hasDone=vals.some(d=>d.status==='done');
+    const hasPlanned=vals.some(d=>d.status==='planned');
+    if(hasDone&&!hasPlanned)last=st;
+    else break;
+  }
+  return last;
+}
+
+function getPFStatus(prodId,monthKey,planStageId){
+  if(!planStageId)return{label:'—',cls:'',days:null};
+  const prod=S.products.find(p=>p.id===prodId);if(!prod)return{label:'—',cls:'',days:null};
+  const list=getStageList(prod.type);
+  const planIdx=list.findIndex(s=>s.id===planStageId);
+  const factSt=getFactStage(prodId);
+  const factIdx=factSt?list.findIndex(s=>s.id===factSt.id):-1;
+  if(planIdx>=0&&factIdx>=planIdx)return{label:'✔ Выполнено',cls:'ok',days:0};
+  const e=(S.schedule[prodId]||{})[planStageId];
+  const endDate=e?.endDate;
+  if(!endDate)return{label:'Нет в расписании',cls:'',days:null};
+  const[y,mo]=monthKey.split('-').map(Number);
+  const lastDay=new Date(y,mo,0).toISOString().slice(0,10);
+  const today=todayStr();
+  const daysLeft=Math.round((parseDate(endDate)-parseDate(today))/86400000);
+  if(endDate>lastDay)return{label:'Не укладываемся',cls:'fail',days:daysLeft};
+  if(daysLeft<0)return{label:'Просрочено',cls:'fail',days:daysLeft};
+  return{label:'Укладываемся',cls:'ok',days:daysLeft};
+}
+
+function renderPlanFact(){
+  const lbl=document.getElementById('pfMonthLabel');
+  if(lbl)lbl.textContent=MONTHS_NOM[_pfMonth]+' '+_pfYear;
+  const filter=document.getElementById('pfConFilter');
+  if(filter&&filter.options.length<=1){
+    (S.constructors||[]).forEach(c=>{
+      const o=document.createElement('option');o.value=c.id;o.textContent=c.name;filter.appendChild(o);
+    });
+  }
+  const el=document.getElementById('pfTable');if(!el)return;
+  const mk=pfMonthKey();
+  const conFilter=filter?.value||'';
+  const canEdit=session.role==='admin'||session.role==='manager';
+  const prods=(S.products||[])
+    .filter(p=>p.status!=='closed'&&(!conFilter||p.constructorId===conFilter))
+    .sort((a,b)=>a.priority-b.priority);
+  if(!prods.length){el.innerHTML='<div class="empty"><p>Нет изделий</p></div>';return;}
+  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#e8f0fa;color:#1a3a5c;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px">
+      <th style="padding:8px 12px;text-align:left">Изделие</th>
+      <th style="padding:8px 12px;text-align:left">Конструктор</th>
+      <th style="padding:8px 12px;text-align:left">Факт сейчас</th>
+      <th style="padding:8px 12px;text-align:left">План на ${MONTHS_NOM[_pfMonth]}</th>
+      <th style="padding:8px 12px;text-align:left">Дата по плану</th>
+      <th style="padding:8px 12px;text-align:center">Дней осталось</th>
+      <th style="padding:8px 12px;text-align:left">Статус</th>
+    </tr></thead><tbody>`;
+  for(const prod of prods){
+    const con=(S.constructors||[]).find(c=>c.id===prod.constructorId);
+    const factSt=getFactStage(prod.id);
+    const planStageId=((S.planFact||{})[prod.id]||{})[mk]||null;
+    const planSt=planStageId?getStageList(prod.type).find(s=>s.id===planStageId):null;
+    const planEndDate=planStageId?((S.schedule[prod.id]||{})[planStageId]||{}).endDate:null;
+    const st=getPFStatus(prod.id,mk,planStageId);
+    const rowBg=st.cls==='ok'?'#f0faf4':st.cls==='fail'?'#fdf2f2':'';
+    const daysCell=st.days===null?'—':st.days===0?'—':st.days>0
+      ?`<b style="color:#1a5276">${st.days}</b>`
+      :`<b style="color:#c0392b">${Math.abs(st.days)} просроч.</b>`;
+    const statusCell=!planStageId?'<span style="color:#aaa">не задан</span>'
+      :st.cls==='ok'&&st.days===0?'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px">✔ Выполнено</span>'
+      :st.cls==='ok'?'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px">✅ Укладываемся</span>'
+      :'<span style="background:#fde8e8;color:#c0392b;padding:2px 8px;border-radius:10px;font-size:11px">❌ '+st.label+'</span>';
+    const planCell=canEdit
+      ?`<span style="cursor:pointer;color:#2471a3;border-bottom:1px dashed #2471a3" onclick="openSetPlan('${prod.id}','${mk}')">${planSt?planSt.abbr+' · '+planSt.name:'Нажмите, чтобы задать'}</span>`
+      :(planSt?`<b>${planSt.abbr}</b> · ${planSt.name}`:'—');
+    html+=`<tr style="border-bottom:1px solid #e8ecf0;background:${rowBg}">
+      <td style="padding:8px 12px"><div style="font-weight:600;color:#1a3a5c">${prod.name}</div><div style="font-size:10px;color:#999">${TYPE_LABEL[prod.type]||prod.type}</div></td>
+      <td style="padding:8px 12px;color:#555">${con?con.name:'—'}</td>
+      <td style="padding:8px 12px">${factSt?`<b>${factSt.abbr}</b> <span style="color:#555">· ${factSt.name}</span>`:'<span style="color:#aaa">Не начато</span>'}</td>
+      <td style="padding:8px 12px">${planCell}</td>
+      <td style="padding:8px 12px;color:#555">${planEndDate?fmtFull(planEndDate):'—'}</td>
+      <td style="padding:8px 12px;text-align:center">${daysCell}</td>
+      <td style="padding:8px 12px">${statusCell}</td>
+    </tr>`;
+  }
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function openSetPlan(prodId,monthKey){
+  const prod=S.products.find(p=>p.id===prodId);if(!prod)return;
+  document.getElementById('spProdId').value=prodId;
+  document.getElementById('spMonthKey').value=monthKey;
+  document.getElementById('spProdName').textContent=prod.name;
+  const[y,m]=monthKey.split('-').map(Number);
+  document.getElementById('spMonthName').textContent=MONTHS_NOM[m-1]+' '+y;
+  const list=getStageList(prod.type);
+  const current=((S.planFact||{})[prodId]||{})[monthKey]||'';
+  document.getElementById('spStageSelect').innerHTML=
+    '<option value="">— Не задан —</option>'+
+    list.map(st=>`<option value="${st.id}"${st.id===current?' selected':''}>${st.abbr} · ${st.name}</option>`).join('');
+  openModal('mSetPlan');
+}
+function savePlanStage(){
+  const pid=document.getElementById('spProdId').value;
+  const mk=document.getElementById('spMonthKey').value;
+  const sid=document.getElementById('spStageSelect').value;
+  if(!S.planFact)S.planFact={};
+  if(!S.planFact[pid])S.planFact[pid]={};
+  if(sid)S.planFact[pid][mk]=sid;
+  else delete S.planFact[pid][mk];
+  save();closeModal('mSetPlan');renderPlanFact();
+}
+function clearPlanStage(){
+  const pid=document.getElementById('spProdId').value;
+  const mk=document.getElementById('spMonthKey').value;
+  if(S.planFact?.[pid])delete S.planFact[pid][mk];
+  save();closeModal('mSetPlan');renderPlanFact();
 }
 
 function openAbsences(cid){
