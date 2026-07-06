@@ -1975,7 +1975,7 @@ function rebuildForConstructor(cid){
 }
 function rebuildSchemeForProd(prod){
   if(!prod||prod.status==='closed')return;
-  const prmE=(S.schedule[prod.id]||{})['prm'];
+  const prmE=(S.schedule[prod.id]||{})['accept'];
   if(!prmE||!prmE.endDate){delete S.schemeSchedule[prod.id];return;}
   const dur=2*(prod.qty||1);
   const prev=S.schemeSchedule[prod.id];
@@ -2028,7 +2028,7 @@ function rebuildForSchemeDesigner(did){
   for(const prod of prods)delete S.schemeSchedule[prod.id];
   for(const prod of prods){
     const dur=2*(prod.qty||1);
-    const prmE=(S.schedule[prod.id]||{})['prm'];
+    const prmE=(S.schedule[prod.id]||{})['accept'];
     if(!prmE||!prmE.endDate)continue;
     let start=ensureWork(addDay(prmE.endDate,1),null);
     const prevMarks=saved[prod.id]?.marks||{};
@@ -8481,7 +8481,7 @@ function bootAfterData(){
     else if(!_cloudUrl)localStorage.setItem('np4',JSON.stringify(S));
   } else {
     const needsRebuild=S.products.some(p=>!S.schedule[p.id]||!Object.keys(S.schedule[p.id]).length)
-      ||S.products.some(p=>p.status!=='closed'&&(S.schedule[p.id]||{})['prm']?.endDate&&!S.schemeSchedule[p.id]);
+      ||S.products.some(p=>p.status!=='closed'&&(S.schedule[p.id]||{})['accept']?.endDate&&!S.schemeSchedule[p.id]);
     if(needsRebuild){rebuildAll();}
     localStorage.setItem('np4',JSON.stringify(S));
   }
