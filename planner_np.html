@@ -240,7 +240,17 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="ltabs">
     <div class="ltab active" id="ltC" onclick="switchLT('constructor')">🔧 Конструктор КМ</div>
     <div class="ltab" id="ltMM" onclick="switchLT('mm')">🛋 Конструктор ММ</div>
+    <div class="ltab" id="ltSD" onclick="switchLT('scheme')">📐 Схемы сборки</div>
     <div class="ltab" id="ltA" onclick="switchLT('admin')">Руководитель</div>
+  </div>
+  <div id="lfSD" style="display:none">
+    <div class="fg"><label>Выберите конструктора схем</label><select id="selSD"></select></div>
+    <div class="fg">
+      <label>Пароль</label>
+      <input type="password" id="sdPw" placeholder="****" onkeydown="if(event.key==='Enter')loginSD()">
+      <div class="err" id="sdErr"></div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="loginSD()">Войти</button>
   </div>
   <div id="lfC">
     <div class="fg"><label>Выберите конструктора</label><select id="selC"></select></div>
@@ -757,6 +767,15 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-gray btn-sm" onclick="document.getElementById('markEarlyForm').style.display='none'">Назад</button>
       <button class="btn btn-green" onclick="confirmEarlyCompletion()">Подтвердить</button>
+    </div>
+  </div>
+  <div id="schemeActionsSection" style="display:none;margin-top:10px">
+    <div class="divider"></div>
+    <div class="slabel">Управление планом схемы сборки</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-blue btn-sm" style="flex:1" onclick="schemePostponeDay()">→ Перенести на день</button>
+      <button class="btn btn-green btn-sm" style="flex:1" onclick="schemeExtendDur()">+ Добавить день</button>
+      <button class="btn btn-gray btn-sm" style="flex:1" onclick="schemeShortenDur()">− Убрать день</button>
     </div>
   </div>
   <div class="mfooter" id="markFooter"><button class="btn btn-gray" onclick="closeModal('mMark')">Закрыть</button></div>
@@ -2102,11 +2121,13 @@ function canModify(mark){if(!mark)return true;if(session.role==='admin')return t
 
 // ─── LOGIN ────────────────────────────────────────────────────
 function switchLT(tab){
-  document.getElementById('ltC').classList.toggle('active',tab==='constructor');
-  document.getElementById('ltMM').classList.toggle('active',tab==='mm');
-  document.getElementById('ltA').classList.toggle('active',tab==='admin');
+  ['constructor','mm','scheme','admin'].forEach(t=>{
+    document.getElementById('lt'+{constructor:'C',mm:'MM',scheme:'SD',admin:'A'}[t])
+      .classList.toggle('active',tab===t);
+  });
   document.getElementById('lfC').style.display=tab==='constructor'?'':'none';
   document.getElementById('lfMM').style.display=tab==='mm'?'':'none';
+  document.getElementById('lfSD').style.display=tab==='scheme'?'':'none';
   document.getElementById('lfA').style.display=tab==='admin'?'':'none';
 }
 function fillConSelect(){
@@ -2114,6 +2135,23 @@ function fillConSelect(){
   sel.innerHTML=S.constructors.length
     ?S.constructors.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')
     :'<option value="">Нет конструкторов — войдите как Руководитель</option>';
+  fillSDSelect();
+}
+function fillSDSelect(){
+  const sel=document.getElementById('selSD');if(!sel)return;
+  const sds=S.schemeDesigners||[];
+  sel.innerHTML=sds.length
+    ?sds.map(sd=>`<option value="${sd.id}">${sd.name}</option>`).join('')
+    :'<option value="">Нет конструкторов схем</option>';
+}
+function loginSD(){
+  const sid=document.getElementById('selSD').value;if(!sid){alert('Выберите конструктора схем');return;}
+  if(document.getElementById('sdPw').value!==CON_PW){document.getElementById('sdErr').textContent='Неверный пароль';return;}
+  document.getElementById('sdErr').textContent='';
+  const sd=(S.schemeDesigners||[]).find(x=>x.id===sid);if(!sd)return;
+  session={role:'scheme',cid:sid,name:sd.name};
+  sessionStorage.setItem('np4_session',JSON.stringify(session));
+  startApp();
 }
 function loginC(){
   const cid=document.getElementById('selC').value;if(!cid){alert('Выберите конструктора');return;}
@@ -2145,6 +2183,8 @@ function logout(){
   document.getElementById('conErr').textContent='';
   const mmcPwEl=document.getElementById('mmcPw');if(mmcPwEl)mmcPwEl.value='';
   const mmcErrEl=document.getElementById('mmcErr');if(mmcErrEl)mmcErrEl.textContent='';
+  const sdPwEl=document.getElementById('sdPw');if(sdPwEl)sdPwEl.value='';
+  const sdErrEl=document.getElementById('sdErr');if(sdErrEl)sdErrEl.textContent='';
 }
 
 // ─── PROFILE ──────────────────────────────────────────────────
@@ -2276,6 +2316,7 @@ function startApp(){
   startSyncLoop();
   const pill=document.getElementById('userPill');
   if(session.role==='admin'){pill.className='admin-pill';pill.textContent='👑 '+session.name;}
+  else if(session.role==='scheme'){pill.className='user-pill';pill.textContent='📐 '+session.name;}
   else{pill.className='user-pill';pill.textContent='👷 '+session.name;}
   // Show profile button only for constructors
   const profileBtn=document.getElementById('profileBtn');
@@ -2284,17 +2325,25 @@ function startApp(){
   document.querySelectorAll('.sub-nav .admin-only').forEach(el=>el.style.display=session.role==='admin'?'':'none');
   document.querySelectorAll('.constructor-only').forEach(el=>el.style.display=session.role==='constructor'?'':'none');
   if(session.role==='constructor'){
-    // Show only the constructor's own department tab; hide others
     const mod=session.module;
     document.getElementById('mtKm').style.display=mod==='mm'?'none':'';
     document.getElementById('mtMm').style.display=mod==='mm'?'':'none';
     document.getElementById('mtMetal').style.display=mod==='metal'?'':'none';
     document.getElementById('mtMassiv').style.display=mod==='massiv'?'':'none';
     _calFilter=null;
+  } else if(session.role==='scheme'){
+    document.getElementById('mtKm').style.display='';
+    document.getElementById('mtMm').style.display='none';
+    document.getElementById('mtMetal').style.display='none';
+    document.getElementById('mtMassiv').style.display='none';
   }
   const now=new Date();viewYear=now.getFullYear();viewMonth=now.getMonth();
   if(session.role==='constructor'){
     switchSection('dashboard');
+  } else if(session.role==='scheme'){
+    switchSection('km');
+    const calTabEl=document.querySelector('#subNavKm .sub-tab');
+    if(calTabEl)calTabEl.click();
   } else if(session.module==='mm'){
     switchSection('mm');
   } else {
@@ -6062,7 +6111,7 @@ function renderCalendar(){
         const daysInMonth=Object.keys(schE.days||{}).filter(d=>{const dt=parseDate(d);return dt.getFullYear()===viewYear&&dt.getMonth()===viewMonth;});
         if(!daysInMonth.length)continue;
         hasAny=true;
-        const canMark=session.role==='admin';
+        const canMark=session.role==='admin'||(session.role==='scheme'&&sd.id===session.cid);
         const dur=2*(prod.qty||1);
         const doneCnt=Object.values(schE.days||{}).filter(v=>v.status==='done').length;
         const isDone=doneCnt>=dur;
@@ -6601,13 +6650,20 @@ function fillSchemeDesSelect(){
 // ─── SCHEME MARK ──────────────────────────────────────────────
 let schemeMarkCtx=null;
 function openSchemeMarkModal(pid,dateStr,mark){
-  schemeMarkCtx={pid,dateStr};extraMarkCtx=null;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  const canAct=session.role==='admin'||(session.role==='scheme'&&e.schemeDiagCid===session.cid);
+  if(!canAct)return;
+  schemeMarkCtx={pid,dateStr,mark};extraMarkCtx=null;markCtx=null;
   const prod=S.products.find(p=>p.id===pid);
   const d=parseDate(dateStr);
   const status=mark?.status||'planned';
+  const dur=2*(prod?.qty||1);
+  const doneCnt=Object.values(e.days||{}).filter(v=>v.status==='done').length;
+  const plannedCnt=Object.values(e.days||{}).filter(v=>v.status==='planned').length;
   document.getElementById('markTitle').textContent='📐 СС — Схема сборки';
   document.getElementById('markInfo').innerHTML=
-    `<b>Изделие:</b> ${prod?.name||'—'}<br><b>Дата:</b> ${d.getDate()} ${MONTHS_G[d.getMonth()]} ${d.getFullYear()}`;
+    `<b>Изделие:</b> ${prod?.name||'—'}<br><b>Дата:</b> ${d.getDate()} ${MONTHS_G[d.getMonth()]} ${d.getFullYear()}<br>`+
+    `<b>Прогресс:</b> ${doneCnt}/${dur} дн. выполнено · ${plannedCnt} осталось`;
   document.getElementById('markStageSection').style.display='none';
   document.getElementById('markDayBtns').style.display=status==='planned'?'flex':'none';
   document.getElementById('markRevertRow').style.display=status!=='planned'?'':'none';
@@ -6615,6 +6671,7 @@ function openSchemeMarkModal(pid,dateStr,mark){
   document.getElementById('markEarlyForm').style.display='none';
   document.getElementById('markFooter').style.display='flex';
   document.getElementById('markPostponeSection').style.display='none';
+  document.getElementById('schemeActionsSection').style.display=status==='planned'?'':'none';
   if(document.getElementById('markRejectSection'))document.getElementById('markRejectSection').style.display='none';
   document.getElementById('markDayLabel').textContent=`День: ${d.getDate()} ${MONTHS_S[d.getMonth()]}`;
   openModal('mMark');
@@ -6623,7 +6680,7 @@ function doSchemeMark(status){
   if(!schemeMarkCtx)return;
   const{pid,dateStr}=schemeMarkCtx;
   const e=S.schemeSchedule[pid];if(!e)return;
-  e.days[dateStr]={status,setBy:'admin',at:new Date().toISOString()};
+  e.days[dateStr]={status,setBy:session.role,at:new Date().toISOString()};
   const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
   rebuildForSchemeDesigner(did);save();renderCalendar();
@@ -6633,6 +6690,50 @@ function doSchemeRevert(){
   const{pid,dateStr}=schemeMarkCtx;
   const e=S.schemeSchedule[pid];if(!e)return;
   if(e.days[dateStr])e.days[dateStr]={status:'planned',setBy:'system'};
+  const did=e.schemeDiagCid;
+  schemeMarkCtx=null;closeModal('mMark');
+  rebuildForSchemeDesigner(did);save();renderCalendar();
+}
+function schemePostponeDay(){
+  if(!schemeMarkCtx)return;
+  const{pid,dateStr}=schemeMarkCtx;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  const toShift=Object.entries(e.days||{})
+    .filter(([d,v])=>d>=dateStr&&v.status==='planned').map(([d])=>d).sort();
+  if(!toShift.length){schemeMarkCtx=null;closeModal('mMark');return;}
+  for(const d of toShift)delete e.days[d];
+  for(const d of toShift){
+    let nxt=addDay(d,1);
+    while(!isWorkDay(nxt,null)||e.days[nxt])nxt=addDay(nxt,1);
+    e.days[nxt]={status:'planned',setBy:'system'};
+  }
+  const all=Object.keys(e.days).sort();
+  e.startDate=all[0]||dateStr;e.endDate=all[all.length-1]||dateStr;
+  const did=e.schemeDiagCid;
+  schemeMarkCtx=null;closeModal('mMark');
+  rebuildForSchemeDesigner(did);save();renderCalendar();
+}
+function schemeExtendDur(){
+  if(!schemeMarkCtx)return;
+  const{pid}=schemeMarkCtx;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  let probe=addDay(e.endDate||todayStr(),1);
+  while(!isWorkDay(probe,null)||e.days[probe])probe=addDay(probe,1);
+  e.days[probe]={status:'planned',setBy:'system'};
+  e.endDate=probe;
+  const did=e.schemeDiagCid;
+  schemeMarkCtx=null;closeModal('mMark');
+  rebuildForSchemeDesigner(did);save();renderCalendar();
+}
+function schemeShortenDur(){
+  if(!schemeMarkCtx)return;
+  const{pid}=schemeMarkCtx;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  const planned=Object.entries(e.days||{}).filter(([,v])=>v.status==='planned').map(([d])=>d).sort();
+  if(planned.length<=1){alert('Нельзя сократить — остался только 1 плановый день');return;}
+  delete e.days[planned[planned.length-1]];
+  const remaining=Object.keys(e.days).sort();
+  e.endDate=remaining[remaining.length-1]||e.startDate;
   const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
   rebuildForSchemeDesigner(did);save();renderCalendar();
