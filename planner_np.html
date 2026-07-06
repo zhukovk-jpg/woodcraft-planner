@@ -674,6 +674,13 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mSchemeDes')">Отмена</button><button class="btn btn-green" onclick="saveSchemeDes()">Сохранить</button></div>
 </div></div>
 
+<div class="overlay" id="mAssignSD"><div class="modal" style="width:420px">
+  <h2>📐 Назначить конструктора схем</h2>
+  <div style="color:#555;font-size:13px;margin-bottom:12px">Изделие: <b id="assignSDProdName"></b></div>
+  <div id="assignSDList" style="max-height:320px;overflow-y:auto"></div>
+  <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mAssignSD')">Закрыть</button></div>
+</div></div>
+
 <div class="overlay" id="mAbsence"><div class="modal" style="width:480px">
   <h2 id="mAbsTitle">Отсутствия</h2>
   <input type="hidden" id="mAbsCid">
@@ -1966,6 +1973,45 @@ function rebuildForConstructor(cid){
   }
   save();
 }
+function rebuildSchemeForProd(prod){
+  if(!prod||prod.status==='closed')return;
+  const prmE=(S.schedule[prod.id]||{})['prm'];
+  if(!prmE||!prmE.endDate){delete S.schemeSchedule[prod.id];return;}
+  const dur=2*(prod.qty||1);
+  const prev=S.schemeSchedule[prod.id];
+  const prevMarks={};
+  for(const[d,v]of Object.entries(prev?.days||{}))
+    if(v.status==='done'||v.status==='fail')prevMarks[d]={...v};
+  const prevFR=prev?.failReason||null;
+  const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+  const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+  const stageComplete=doneDays.length>=dur;
+  const start=ensureWork(addDay(prmE.endDate,1),null);
+  const entry={startDate:null,endDate:null,days:{},failReason:prevFR,schemeDiagCid:null};
+  if(stageComplete){
+    const allDays=[...new Set([...failDays,...doneDays])].sort();
+    for(const d of doneDays)entry.days[d]={...prevMarks[d]};
+    for(const d of failDays)if(!entry.days[d])entry.days[d]={...prevMarks[d]};
+    entry.startDate=allDays[0];entry.endDate=allDays[allDays.length-1];
+  }else{
+    for(const d of doneDays)entry.days[d]={...prevMarks[d]};
+    for(const d of failDays)entry.days[d]={...prevMarks[d]};
+    const remaining=dur-doneDays.length;
+    const lastMarked=[...doneDays,...failDays].sort().pop();
+    let probe=lastMarked?ensureWork(addDay(lastMarked,1),null):start;
+    if(probe<start)probe=start;
+    const planned=[];
+    while(planned.length<remaining){
+      if(isWorkDay(probe,null))planned.push(probe);
+      probe=addDay(probe,1);
+      if(probe>addDay(start,500))break;
+    }
+    for(const d of planned)entry.days[d]={status:'planned',setBy:'system'};
+    const allDays=Object.keys(entry.days).sort();
+    entry.startDate=allDays[0]||start;entry.endDate=allDays[allDays.length-1]||start;
+  }
+  S.schemeSchedule[prod.id]=entry;
+}
 function rebuildForSchemeDesigner(did){
   if(!did)return;
   const prods=(S.products||[]).filter(p=>p.schemeDiagCid===did&&p.status!=='closed')
@@ -2015,7 +2061,11 @@ function rebuildForSchemeDesigner(did){
     S.schemeSchedule[prod.id]=entry;
   }
 }
-function rebuildAllScheme(){(S.schemeDesigners||[]).forEach(sd=>rebuildForSchemeDesigner(sd.id));}
+function rebuildAllScheme(){
+  (S.products||[]).filter(p=>!p.schemeDiagCid&&p.status!=='closed').forEach(p=>rebuildSchemeForProd(p));
+  const dids=[...new Set((S.products||[]).filter(p=>p.schemeDiagCid&&p.status!=='closed').map(p=>p.schemeDiagCid))];
+  dids.forEach(did=>rebuildForSchemeDesigner(did));
+}
 function rebuildAll(){
   [...new Set(S.products.map(p=>p.constructorId).filter(Boolean))].forEach(cid=>rebuildForConstructor(cid));
   rebuildAllScheme();
@@ -2055,7 +2105,7 @@ function getActiveStageId(pid){
 }
 // Returns true if all stages before stageId are done (no remaining planned days)
 function isPrevStageDone(pid,stageId){
-  // ВБСП требует завершения схемы сборки (если назначена)
+  // ВБСП требует завершения схемы сборки (планируется для всех изделий после ПРМ)
   if(stageId==='vbsp'){
     const se=S.schemeSchedule[pid];
     if(se&&Object.values(se.days||{}).some(v=>v.status==='planned'))return false;
@@ -6083,75 +6133,86 @@ function renderCalendar(){
   }
 
   // ── СХЕМЫ СБОРКИ ─────────────────────────────────────────────
-  const schemeDes=(S.schemeDesigners||[]);
-  const schemeDesShow=_calFilter
-    ? schemeDes.filter(sd=>S.products.some(p=>p.schemeDiagCid===sd.id&&p.constructorId===_calFilter))
-    : schemeDes;
-  if(schemeDesShow.length){
+  // Collect all products that have a scheme schedule with days visible this month
+  const allProdsForScheme=(S.products||[]).filter(p=>{
+    if(p.status==='closed')return false;
+    if(_calFilter&&p.constructorId!==_calFilter)return false;
+    const schE=S.schemeSchedule[p.id];if(!schE)return false;
+    return Object.keys(schE.days||{}).some(d=>{const dt=parseDate(d);return dt.getFullYear()===viewYear&&dt.getMonth()===viewMonth;});
+  });
+  if(allProdsForScheme.length){
     const sdHdr=document.createElement('tr');
     const sdHt=document.createElement('td');
     sdHt.colSpan=days.length+1;
     sdHt.style.cssText='background:#4a235a;color:#fff;padding:7px 14px;font-weight:700;font-size:13px;position:sticky;left:0;z-index:8;letter-spacing:.5px';
-    sdHt.innerHTML='📐 СХЕМЫ СБОРКИ <span style="font-size:11px;opacity:.7;font-weight:400;margin-left:8px">Начинается после приёмки заказчиком (ПРМ) · 2 дня × кол-во моделей · блокирует ВБСП</span>';
+    sdHt.innerHTML='📐 СХЕМЫ СБОРКИ <span style="font-size:11px;opacity:.7;font-weight:400;margin-left:8px">Начинается после ПРМ · 2 дня × кол-во моделей · блокирует ВБСП</span>';
     sdHdr.appendChild(sdHt);tbl.appendChild(sdHdr);
 
-    for(const sd of schemeDesShow){
-      const sdNameRow=document.createElement('tr');
-      const sdNt=document.createElement('td');
+    const isAdmin=session.role==='admin';
+
+    // Helper: render one product scheme row
+    function renderSchemeProdRow(prod,designerId){
+      const schE=S.schemeSchedule[prod.id];if(!schE)return;
+      const canMark=isAdmin||(session.role==='scheme'&&designerId===session.cid);
+      const dur=2*(prod.qty||1);
+      const doneCnt=Object.values(schE.days||{}).filter(v=>v.status==='done').length;
+      const isDone=doneCnt>=dur;
+      const pr=document.createElement('tr');
+      const pt=document.createElement('td');
+      pt.style.cssText='background:#f3e5f5;padding:2px 8px 2px 18px;font-size:11px;color:#4a235a;position:sticky;left:0;z-index:7;border:1px solid #ce93d8;white-space:nowrap;max-width:260px;min-width:220px';
+      const assignBtn=isAdmin
+        ?`<button onclick="openAssignSchemeDes('${prod.id}')" style="font-size:10px;padding:1px 6px;margin-left:6px;background:#7b1fa2;color:#fff;border:none;border-radius:3px;cursor:pointer">${designerId?'Сменить':'Назначить'}</button>`
+        :'';
+      pt.innerHTML=`<div style="overflow:hidden;text-overflow:ellipsis;font-weight:600">📐 ${prod.name}${assignBtn}</div>`+
+        `<div style="font-size:10px;color:#7b1fa2">до ${fmtShort(schE.endDate)} · ${doneCnt}/${dur} дн.${isDone?' ✔':''}</div>`;
+      pr.appendChild(pt);
+      for(const d of days){
+        const cell=document.createElement('td');
+        const isWknd=isBaseWknd(d);
+        const mark=schE.days?.[d];
+        const status=mark?.status||'';
+        if(!mark){
+          cell.style.cssText='border:1px solid '+(isWknd?'#e1bee7':'#f3e5f5')+';background:'+(isWknd?'#ede7f6':'#fce4ec');
+        }else{
+          if(status==='done')cell.style.cssText='background:#7b1fa2;border:1px solid #6a1b9a;color:#fff';
+          else if(status==='fail')cell.style.cssText='background:#b71c1c;border:1px solid #7f0000;color:#fff';
+          else cell.style.cssText='background:#9c27b0;border:1px solid #7b1fa2;color:#fff';
+          const div=document.createElement('div');div.className='dc-txt';
+          div.textContent=status==='done'?'✔':status==='fail'?'✖':'СС';
+          cell.appendChild(div);
+          if(canMark){
+            cell.classList.add('clickable');
+            const _pid=prod.id,_d=d,_m=mark;
+            cell.onclick=()=>openSchemeMarkModal(_pid,_d,_m);
+          }
+        }
+        pr.appendChild(cell);
+      }
+      tbl.appendChild(pr);
+    }
+
+    // "Не назначено" group
+    const unassigned=allProdsForScheme.filter(p=>!p.schemeDiagCid).sort((a,b)=>a.priority-b.priority);
+    if(unassigned.length){
+      const uHdr=document.createElement('tr');const uHt=document.createElement('td');
+      uHt.colSpan=days.length+1;
+      uHt.style.cssText='background:#6c3483;color:#ffcdd2;padding:4px 14px;font-weight:600;font-size:11px;position:sticky;left:0;z-index:8;font-style:italic';
+      uHt.textContent='Не назначено';
+      uHdr.appendChild(uHt);tbl.appendChild(uHdr);
+      for(const prod of unassigned)renderSchemeProdRow(prod,null);
+    }
+
+    // Per-designer groups
+    const desList=S.schemeDesigners||[];
+    for(const sd of desList){
+      const sdProds=allProdsForScheme.filter(p=>p.schemeDiagCid===sd.id).sort((a,b)=>a.priority-b.priority);
+      if(!sdProds.length)continue;
+      const sdNameRow=document.createElement('tr');const sdNt=document.createElement('td');
       sdNt.colSpan=days.length+1;
-      sdNt.style.cssText='background:#6c3483;color:#fff;padding:4px 12px;font-weight:600;font-size:12px;position:sticky;left:0;z-index:8';
+      sdNt.style.cssText='background:#6c3483;color:#fff;padding:4px 14px;font-weight:600;font-size:11px;position:sticky;left:0;z-index:8';
       sdNt.textContent='📐 '+sd.name;
       sdNameRow.appendChild(sdNt);tbl.appendChild(sdNameRow);
-
-      const sdProds=S.products.filter(p=>p.schemeDiagCid===sd.id&&p.status!=='closed')
-        .sort((a,b)=>a.priority-b.priority);
-      let hasAny=false;
-      for(const prod of sdProds){
-        const schE=S.schemeSchedule[prod.id];if(!schE)continue;
-        const daysInMonth=Object.keys(schE.days||{}).filter(d=>{const dt=parseDate(d);return dt.getFullYear()===viewYear&&dt.getMonth()===viewMonth;});
-        if(!daysInMonth.length)continue;
-        hasAny=true;
-        const canMark=session.role==='admin'||(session.role==='scheme'&&sd.id===session.cid);
-        const dur=2*(prod.qty||1);
-        const doneCnt=Object.values(schE.days||{}).filter(v=>v.status==='done').length;
-        const isDone=doneCnt>=dur;
-        const pr=document.createElement('tr');
-        const pt=document.createElement('td');
-        pt.style.cssText='background:#f3e5f5;padding:2px 10px 2px 20px;font-size:11px;color:#4a235a;position:sticky;left:0;z-index:7;border:1px solid #ce93d8;white-space:nowrap;max-width:260px';
-        pt.innerHTML=`<div style="overflow:hidden;text-overflow:ellipsis;font-weight:600">📐 ${prod.name}</div><div style="font-size:10px;color:#7b1fa2">до ${fmtShort(schE.endDate)} · ${doneCnt}/${dur} дн.${isDone?' ✔':''}</div>`;
-        pr.appendChild(pt);
-        for(const d of days){
-          const cell=document.createElement('td');
-          const isWknd=isBaseWknd(d);
-          const mark=schE.days?.[d];
-          const status=mark?.status||'';
-          if(!mark){
-            cell.style.cssText='border:1px solid '+(isWknd?'#e1bee7':'#f3e5f5')+';background:'+(isWknd?'#ede7f6':'#fce4ec');
-          }else{
-            if(status==='done'){cell.style.cssText='background:#7b1fa2;border:1px solid #6a1b9a';}
-            else if(status==='fail'){cell.style.cssText='background:#b71c1c;border:1px solid #7f0000';}
-            else{cell.style.cssText='background:#9c27b0;border:1px solid #7b1fa2';}
-            cell.style.color='#fff';
-            const div=document.createElement('div');div.className='dc-txt';
-            div.textContent=status==='done'?'✔':status==='fail'?'✖':'СС';
-            cell.appendChild(div);
-            if(canMark){
-              cell.classList.add('clickable');
-              const _pid=prod.id,_d=d,_m=mark;
-              cell.onclick=()=>openSchemeMarkModal(_pid,_d,_m);
-            }
-          }
-          pr.appendChild(cell);
-        }
-        tbl.appendChild(pr);
-      }
-      if(!hasAny){
-        const er=document.createElement('tr');const et=document.createElement('td');
-        et.colSpan=days.length+1;
-        et.style.cssText='padding:5px 18px;color:#ce93d8;font-size:11px;font-style:italic;background:#f3e5f5';
-        et.textContent='Нет изделий с этапом СС в этом месяце';
-        er.appendChild(et);tbl.appendChild(er);
-      }
+      for(const prod of sdProds)renderSchemeProdRow(prod,sd.id);
     }
   }
 }
@@ -6541,12 +6602,15 @@ function saveProd(){
     if(cid)rebuildForConstructor(cid);
     if(oc&&oc!==cid)rebuildForConstructor(oc);
     if(schemeDiagCid)rebuildForSchemeDesigner(schemeDiagCid);
+    else rebuildSchemeForProd(p);
     if(osd&&osd!==schemeDiagCid)rebuildForSchemeDesigner(osd);
   }else{
     const id='p'+Date.now();
     S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
     if(cid)rebuildForConstructor(cid);
+    const newP=S.products.find(x=>x.id===id);
     if(schemeDiagCid)rebuildForSchemeDesigner(schemeDiagCid);
+    else if(newP)rebuildSchemeForProd(newP);
   }
   save();closeModal('mProd');renderProducts();
 }
@@ -6676,23 +6740,27 @@ function openSchemeMarkModal(pid,dateStr,mark){
   document.getElementById('markDayLabel').textContent=`День: ${d.getDate()} ${MONTHS_S[d.getMonth()]}`;
   openModal('mMark');
 }
+function _rebuildSchemeAfterMark(pid){
+  const e=S.schemeSchedule[pid];if(!e)return;
+  const did=e.schemeDiagCid;
+  if(did)rebuildForSchemeDesigner(did);
+  else{const p=S.products.find(x=>x.id===pid);if(p)rebuildSchemeForProd(p);}
+}
 function doSchemeMark(status){
   if(!schemeMarkCtx)return;
   const{pid,dateStr}=schemeMarkCtx;
   const e=S.schemeSchedule[pid];if(!e)return;
   e.days[dateStr]={status,setBy:session.role,at:new Date().toISOString()};
-  const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
-  rebuildForSchemeDesigner(did);save();renderCalendar();
+  _rebuildSchemeAfterMark(pid);save();renderCalendar();
 }
 function doSchemeRevert(){
   if(!schemeMarkCtx)return;
   const{pid,dateStr}=schemeMarkCtx;
   const e=S.schemeSchedule[pid];if(!e)return;
   if(e.days[dateStr])e.days[dateStr]={status:'planned',setBy:'system'};
-  const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
-  rebuildForSchemeDesigner(did);save();renderCalendar();
+  _rebuildSchemeAfterMark(pid);save();renderCalendar();
 }
 function schemePostponeDay(){
   if(!schemeMarkCtx)return;
@@ -6709,9 +6777,8 @@ function schemePostponeDay(){
   }
   const all=Object.keys(e.days).sort();
   e.startDate=all[0]||dateStr;e.endDate=all[all.length-1]||dateStr;
-  const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
-  rebuildForSchemeDesigner(did);save();renderCalendar();
+  _rebuildSchemeAfterMark(pid);save();renderCalendar();
 }
 function schemeExtendDur(){
   if(!schemeMarkCtx)return;
@@ -6721,9 +6788,8 @@ function schemeExtendDur(){
   while(!isWorkDay(probe,null)||e.days[probe])probe=addDay(probe,1);
   e.days[probe]={status:'planned',setBy:'system'};
   e.endDate=probe;
-  const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
-  rebuildForSchemeDesigner(did);save();renderCalendar();
+  _rebuildSchemeAfterMark(pid);save();renderCalendar();
 }
 function schemeShortenDur(){
   if(!schemeMarkCtx)return;
@@ -6734,9 +6800,59 @@ function schemeShortenDur(){
   delete e.days[planned[planned.length-1]];
   const remaining=Object.keys(e.days).sort();
   e.endDate=remaining[remaining.length-1]||e.startDate;
-  const did=e.schemeDiagCid;
   schemeMarkCtx=null;closeModal('mMark');
-  rebuildForSchemeDesigner(did);save();renderCalendar();
+  _rebuildSchemeAfterMark(pid);save();renderCalendar();
+}
+
+let _assignSDPid=null;
+function openAssignSchemeDes(pid){
+  event&&event.stopPropagation();
+  _assignSDPid=pid;
+  const p=S.products.find(x=>x.id===pid);if(!p)return;
+  document.getElementById('assignSDProdName').textContent=p.name;
+  renderAssignSDList(pid);
+  openModal('mAssignSD');
+}
+function renderAssignSDList(pid){
+  const p=S.products.find(x=>x.id===pid);
+  const currentDid=p?.schemeDiagCid||null;
+  const des=S.schemeDesigners||[];
+  let html='';
+  if(!des.length){
+    html='<div style="color:#999;font-size:12px;padding:8px 0">Нет конструкторов схем. Добавьте в разделе Конструкторы.</div>';
+  }else{
+    for(const sd of des){
+      const prods=S.products.filter(x=>x.schemeDiagCid===sd.id&&x.status!=='closed');
+      const wl=prods.length;
+      const isCur=sd.id===currentDid;
+      const schE=S.schemeSchedule[pid];
+      const nextFree=schE?.endDate?`· работы до ${fmtShort(schE.endDate)}`:'';
+      html+=`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #eee">
+        <div style="flex:1;min-width:0">
+          <b style="font-size:13px">${sd.name}</b>
+          <div style="font-size:11px;color:#666">${wl} изд. в работе ${isCur?'<span style="color:#388e3c">· текущий</span>':''}</div>
+        </div>
+        ${isCur
+          ?`<button class="btn btn-gray btn-sm" onclick="doAssignSchemeDes('${pid}',null)">Убрать</button>`
+          :`<button class="btn btn-sm" style="background:#7b1fa2;color:#fff" onclick="doAssignSchemeDes('${pid}','${sd.id}')">Назначить</button>`
+        }
+      </div>`;
+    }
+    if(currentDid){
+      html+=`<div style="padding:10px 0 2px;font-size:12px;color:#555">Или <a href="#" onclick="doAssignSchemeDes('${pid}',null);return false" style="color:#c62828">снять назначение</a> и оставить без конструктора.</div>`;
+    }
+  }
+  document.getElementById('assignSDList').innerHTML=html;
+}
+function doAssignSchemeDes(pid,did){
+  const p=S.products.find(x=>x.id===pid);if(!p)return;
+  const oldDid=p.schemeDiagCid;
+  p.schemeDiagCid=did||null;
+  if(did)rebuildForSchemeDesigner(did);
+  else rebuildSchemeForProd(p);
+  if(oldDid&&oldDid!==did)rebuildForSchemeDesigner(oldDid);
+  closeModal('mAssignSD');
+  save();renderCalendar();
 }
 
 function openAbsences(cid){
