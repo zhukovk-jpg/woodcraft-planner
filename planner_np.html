@@ -404,6 +404,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
       <div id="constructorList"></div>
     </div>
     <div class="panel" style="margin-top:12px">
+      <div class="panel-hdr"><h2>📐 Конструкторы схем сборки</h2><button class="btn btn-green" onclick="openAddSchemeDes()">+ Добавить</button></div>
+      <div id="schemeDesList"></div>
+    </div>
+    <div class="panel" style="margin-top:12px">
       <div class="panel-hdr"><h2>Резервное копирование</h2></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:4px 0">
         <button class="btn btn-blue" onclick="exportData()">⬇ Скачать резервную копию</button>
@@ -517,6 +521,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="fg"><label>Приоритет (1=высший) <span style="font-weight:400;color:#999;font-size:11px">— для очереди в работе или пула</span></label><input type="number" id="pPri" min="1" max="99" value="1"></div>
   <div class="fg"><label>Начать с этапа</label><select id="pStartStage"></select></div>
   <div class="fg"><label>Количество моделей в задаче</label><input type="number" id="pQty" min="1" max="9999" value="1" style="width:100px"></div>
+  <div class="fg"><label>Конструктор схем сборки <span style="font-weight:400;color:#999">(необязательно)</span></label><select id="pSchemeDes"></select></div>
   <div class="fg"><label>Ссылка в Битрикс</label><input type="url" id="pBitrix" placeholder="https://..."></div>
   <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="pSplitMonths"> Разбивать по месяцам (каждый этап — с 1-го числа следующего)</label></div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mProd')">Отмена</button><button class="btn btn-green" onclick="saveProd()">Сохранить</button></div>
@@ -650,6 +655,13 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
     </div>
   </div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mCon')">Отмена</button><button class="btn btn-green" onclick="saveCon()">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="mSchemeDes"><div class="modal" style="width:380px">
+  <h2 id="mSchemeDesTitle">Добавить конструктора схем</h2>
+  <input type="hidden" id="mSchemeDesId">
+  <div class="fg"><label>ФИО</label><input type="text" id="sdName" placeholder="Имя Фамилия"></div>
+  <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mSchemeDes')">Отмена</button><button class="btn btn-green" onclick="saveSchemeDes()">Сохранить</button></div>
 </div></div>
 
 <div class="overlay" id="mAbsence"><div class="modal" style="width:480px">
@@ -1633,7 +1645,7 @@ function restoreBackup(input){
       S.lastModified=new Date().toISOString();
       localStorage.setItem('np4',JSON.stringify(S));
       await cloudPush();
-      fillConSelect();renderConstructors();renderProducts();renderRating();renderCalendar();
+      fillConSelect();renderConstructors();renderSchemeDesigners();renderProducts();renderRating();renderCalendar();
       closeModal('mCloud');
       alert('✅ Данные восстановлены из бэкапа и выгружены на сервер');
     }catch(err){alert('Ошибка: '+err.message);}
@@ -1685,7 +1697,7 @@ function importData(input){
       const data=JSON.parse(e.target.result);
       if(!data.constructors||!Array.isArray(data.constructors))throw new Error('Неверный формат файла');
       S=data;migrate();save();
-      fillConSelect();renderConstructors();renderProducts();renderRating();
+      fillConSelect();renderConstructors();renderSchemeDesigners();renderProducts();renderRating();
       alert('Данные успешно восстановлены! Конструкторов: '+S.constructors.length+', изделий: '+S.products.length);
     }catch(err){alert('Ошибка импорта: '+err.message);}
   };
@@ -1709,6 +1721,8 @@ function migrate(){
   if(!S.extraTaskDefs)S.extraTaskDefs=[];
   if(!S.extraAssignments)S.extraAssignments=[];
   if(!S.assemblyChecks)S.assemblyChecks={};
+  if(!S.schemeDesigners)S.schemeDesigners=[];
+  if(!S.schemeSchedule)S.schemeSchedule={};
   if(!S.acceptanceResults)S.acceptanceResults={};
   if(!S.acceptanceManualItems)S.acceptanceManualItems={};
   if(!S.individualAcceptDates)S.individualAcceptDates={};
@@ -1933,7 +1947,60 @@ function rebuildForConstructor(cid){
   }
   save();
 }
-function rebuildAll(){[...new Set(S.products.map(p=>p.constructorId))].forEach(cid=>rebuildForConstructor(cid));}
+function rebuildForSchemeDesigner(did){
+  if(!did)return;
+  const prods=(S.products||[]).filter(p=>p.schemeDiagCid===did&&p.status!=='closed')
+    .sort((a,b)=>a.priority-b.priority);
+  const busy=new Set();
+  const saved={};
+  for(const prod of prods){
+    const e=S.schemeSchedule[prod.id];if(!e)continue;
+    const marks={};
+    for(const[d,v]of Object.entries(e.days||{}))
+      if(v.status==='done'||v.status==='fail')marks[d]={...v};
+    saved[prod.id]={marks,failReason:e.failReason};
+  }
+  for(const prod of prods)delete S.schemeSchedule[prod.id];
+  for(const prod of prods){
+    const dur=2*(prod.qty||1);
+    const prmE=(S.schedule[prod.id]||{})['prm'];
+    if(!prmE||!prmE.endDate)continue;
+    let start=ensureWork(addDay(prmE.endDate,1),null);
+    const prevMarks=saved[prod.id]?.marks||{};
+    const prevFR=saved[prod.id]?.failReason||null;
+    const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+    const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+    const stageComplete=doneDays.length>=dur;
+    const entry={startDate:null,endDate:null,days:{},failReason:prevFR,schemeDiagCid:did};
+    if(stageComplete){
+      const allDays=[...new Set([...failDays,...doneDays])].sort();
+      for(const d of doneDays){entry.days[d]={...prevMarks[d]};busy.add(d);}
+      for(const d of failDays){if(!entry.days[d])entry.days[d]={...prevMarks[d]};busy.add(d);}
+      entry.startDate=allDays[0];entry.endDate=allDays[allDays.length-1];
+    }else{
+      for(const d of doneDays){entry.days[d]={...prevMarks[d]};busy.add(d);}
+      for(const d of failDays){entry.days[d]={...prevMarks[d]};busy.add(d);}
+      const remaining=dur-doneDays.length;
+      const lastMarked=[...doneDays,...failDays].sort().pop();
+      let probe=lastMarked?ensureWork(addDay(lastMarked,1),null):start;
+      if(probe<start)probe=start;
+      const planned=[];
+      while(planned.length<remaining){
+        if(isWorkDay(probe,null)&&!busy.has(probe)){planned.push(probe);busy.add(probe);}
+        probe=addDay(probe,1);
+      }
+      for(const d of planned)entry.days[d]={status:'planned',setBy:'system'};
+      const allDays=Object.keys(entry.days).sort();
+      entry.startDate=allDays[0]||start;entry.endDate=allDays[allDays.length-1]||start;
+    }
+    S.schemeSchedule[prod.id]=entry;
+  }
+}
+function rebuildAllScheme(){(S.schemeDesigners||[]).forEach(sd=>rebuildForSchemeDesigner(sd.id));}
+function rebuildAll(){
+  [...new Set(S.products.map(p=>p.constructorId).filter(Boolean))].forEach(cid=>rebuildForConstructor(cid));
+  rebuildAllScheme();
+}
 
 function shiftFromDate(cid,fromDate,logEntry){
   const prods=S.products.filter(p=>p.constructorId===cid);
@@ -1969,12 +2036,17 @@ function getActiveStageId(pid){
 }
 // Returns true if all stages before stageId are done (no remaining planned days)
 function isPrevStageDone(pid,stageId){
+  // ВБСП требует завершения схемы сборки (если назначена)
+  if(stageId==='vbsp'){
+    const se=S.schemeSchedule[pid];
+    if(se&&Object.values(se.days||{}).some(v=>v.status==='planned'))return false;
+  }
   const sched=S.schedule[pid];if(!sched)return true;
   const idx=STAGES.findIndex(s=>s.id===stageId);
   if(idx<=0)return true;
   for(let i=idx-1;i>=0;i--){
     const e=sched[STAGES[i].id];
-    if(!e||e.skipped)continue; // skip absent/skipped stages
+    if(!e||e.skipped)continue;
     return!Object.values(e.days||{}).some(v=>v.status==='planned');
   }
   return true;
@@ -3037,7 +3109,7 @@ function switchKMTab(el,id){
   if(id==='calendar')renderCalendar();
   else if(id==='products')renderProducts();
   else if(id==='shifts')renderShifts();
-  else if(id==='constructors')renderConstructors();
+  else if(id==='constructors'){renderConstructors();renderSchemeDesigners();}
   else if(id==='configurator')renderConfigurator();
   else if(id==='extratasks')renderExtraTaskDefs();
   else if(id==='assembly')renderAssembly();
@@ -5960,6 +6032,79 @@ function renderCalendar(){
       tbl.appendChild(asmRow);
     }
   }
+
+  // ── СХЕМЫ СБОРКИ ─────────────────────────────────────────────
+  const schemeDes=(S.schemeDesigners||[]);
+  const schemeDesShow=_calFilter
+    ? schemeDes.filter(sd=>S.products.some(p=>p.schemeDiagCid===sd.id&&p.constructorId===_calFilter))
+    : schemeDes;
+  if(schemeDesShow.length){
+    const sdHdr=document.createElement('tr');
+    const sdHt=document.createElement('td');
+    sdHt.colSpan=days.length+1;
+    sdHt.style.cssText='background:#4a235a;color:#fff;padding:7px 14px;font-weight:700;font-size:13px;position:sticky;left:0;z-index:8;letter-spacing:.5px';
+    sdHt.innerHTML='📐 СХЕМЫ СБОРКИ <span style="font-size:11px;opacity:.7;font-weight:400;margin-left:8px">Начинается после приёмки заказчиком (ПРМ) · 2 дня × кол-во моделей · блокирует ВБСП</span>';
+    sdHdr.appendChild(sdHt);tbl.appendChild(sdHdr);
+
+    for(const sd of schemeDesShow){
+      const sdNameRow=document.createElement('tr');
+      const sdNt=document.createElement('td');
+      sdNt.colSpan=days.length+1;
+      sdNt.style.cssText='background:#6c3483;color:#fff;padding:4px 12px;font-weight:600;font-size:12px;position:sticky;left:0;z-index:8';
+      sdNt.textContent='📐 '+sd.name;
+      sdNameRow.appendChild(sdNt);tbl.appendChild(sdNameRow);
+
+      const sdProds=S.products.filter(p=>p.schemeDiagCid===sd.id&&p.status!=='closed')
+        .sort((a,b)=>a.priority-b.priority);
+      let hasAny=false;
+      for(const prod of sdProds){
+        const schE=S.schemeSchedule[prod.id];if(!schE)continue;
+        const daysInMonth=Object.keys(schE.days||{}).filter(d=>{const dt=parseDate(d);return dt.getFullYear()===viewYear&&dt.getMonth()===viewMonth;});
+        if(!daysInMonth.length)continue;
+        hasAny=true;
+        const canMark=session.role==='admin';
+        const dur=2*(prod.qty||1);
+        const doneCnt=Object.values(schE.days||{}).filter(v=>v.status==='done').length;
+        const isDone=doneCnt>=dur;
+        const pr=document.createElement('tr');
+        const pt=document.createElement('td');
+        pt.style.cssText='background:#f3e5f5;padding:2px 10px 2px 20px;font-size:11px;color:#4a235a;position:sticky;left:0;z-index:7;border:1px solid #ce93d8;white-space:nowrap;max-width:260px';
+        pt.innerHTML=`<div style="overflow:hidden;text-overflow:ellipsis;font-weight:600">📐 ${prod.name}</div><div style="font-size:10px;color:#7b1fa2">до ${fmtShort(schE.endDate)} · ${doneCnt}/${dur} дн.${isDone?' ✔':''}</div>`;
+        pr.appendChild(pt);
+        for(const d of days){
+          const cell=document.createElement('td');
+          const isWknd=isBaseWknd(d);
+          const mark=schE.days?.[d];
+          const status=mark?.status||'';
+          if(!mark){
+            cell.style.cssText='border:1px solid '+(isWknd?'#e1bee7':'#f3e5f5')+';background:'+(isWknd?'#ede7f6':'#fce4ec');
+          }else{
+            if(status==='done'){cell.style.cssText='background:#7b1fa2;border:1px solid #6a1b9a';}
+            else if(status==='fail'){cell.style.cssText='background:#b71c1c;border:1px solid #7f0000';}
+            else{cell.style.cssText='background:#9c27b0;border:1px solid #7b1fa2';}
+            cell.style.color='#fff';
+            const div=document.createElement('div');div.className='dc-txt';
+            div.textContent=status==='done'?'✔':status==='fail'?'✖':'СС';
+            cell.appendChild(div);
+            if(canMark){
+              cell.classList.add('clickable');
+              const _pid=prod.id,_d=d,_m=mark;
+              cell.onclick=()=>openSchemeMarkModal(_pid,_d,_m);
+            }
+          }
+          pr.appendChild(cell);
+        }
+        tbl.appendChild(pr);
+      }
+      if(!hasAny){
+        const er=document.createElement('tr');const et=document.createElement('td');
+        et.colSpan=days.length+1;
+        et.style.cssText='padding:5px 18px;color:#ce93d8;font-size:11px;font-style:italic;background:#f3e5f5';
+        et.textContent='Нет изделий с этапом СС в этом месяце';
+        er.appendChild(et);tbl.appendChild(er);
+      }
+    }
+  }
 }
 
 function togglePDay(cid,d){
@@ -5974,9 +6119,9 @@ function togglePDay(cid,d){
   rebuildForConstructor(cid);renderCalendar();
 }
 
-function dispatchMarkDone(){if(extraMarkCtx)doExtraMark('done');else doMarkDay('done');}
-function dispatchMarkFail(){if(extraMarkCtx)doExtraMark('fail');else showFailForm();}
-function dispatchRevert(){if(extraMarkCtx)doExtraRevert();else doRevert();}
+function dispatchMarkDone(){if(schemeMarkCtx)doSchemeMark('done');else if(extraMarkCtx)doExtraMark('done');else doMarkDay('done');}
+function dispatchMarkFail(){if(schemeMarkCtx)doSchemeMark('fail');else if(extraMarkCtx)doExtraMark('fail');else showFailForm();}
+function dispatchRevert(){if(schemeMarkCtx)doSchemeRevert();else if(extraMarkCtx)doExtraRevert();else doRevert();}
 
 // ─── EXTRA MARK MODAL ─────────────────────────────────────────
 // Reuses mMark but wired to extra assignment
@@ -6052,7 +6197,7 @@ function getStageList(type){
   return result;
 }
 function openMarkModal(pid,sid,dateStr,mark,prodName,stageName,isActiveStage,prodCid){
-  extraMarkCtx=null; // ensure extra context cleared
+  extraMarkCtx=null;schemeMarkCtx=null;
   markCtx={pid,sid,dateStr,mark,prodCid,plannedEnd:S.schedule[pid]?.[sid]?.endDate};
   const stage=STAGES.find(s=>s.id===sid);
   const entry=S.schedule[pid]?.[sid]||{};
@@ -6309,6 +6454,7 @@ function openAddProd(){
   document.getElementById('pSplitMonths').checked=false;
   document.getElementById('pBitrix').value='';
   document.getElementById('pQty').value=1;
+  fillSchemeDesSelect();document.getElementById('pSchemeDes').value='';
   fillConSelect2(null);openModal('mProd');
 }
 function openEditProd(id){
@@ -6320,6 +6466,7 @@ function openEditProd(id){
   document.getElementById('pSplitMonths').checked=!!p.splitByMonths;
   document.getElementById('pBitrix').value=p.bitrixUrl||'';
   document.getElementById('pQty').value=p.qty||1;
+  fillSchemeDesSelect();document.getElementById('pSchemeDes').value=p.schemeDiagCid||'';
   fillConSelect2(p.constructorId||null);openModal('mProd');
 }
 function fillConSelect2(sel){
@@ -6335,25 +6482,32 @@ function saveProd(){
   const splitByMonths=document.getElementById('pSplitMonths').checked;
   const bitrixUrl=document.getElementById('pBitrix').value.trim();
   const qty=Math.max(1,parseInt(document.getElementById('pQty').value)||1);
+  const schemeDiagCid=document.getElementById('pSchemeDes').value||null;
   if(!name)return alert('Введите название');if(!startDate)return alert('Укажите дату');
   const eid=document.getElementById('mProdId').value;
   if(eid){
-    const p=S.products.find(x=>x.id===eid);const oc=p.constructorId;
-    Object.assign(p,{name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty});
-    delete S.schedule[eid];
+    const p=S.products.find(x=>x.id===eid);const oc=p.constructorId;const osd=p.schemeDiagCid;
+    Object.assign(p,{name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
+    delete S.schedule[eid];delete S.schemeSchedule[eid];
     if(cid)rebuildForConstructor(cid);
     if(oc&&oc!==cid)rebuildForConstructor(oc);
+    if(schemeDiagCid)rebuildForSchemeDesigner(schemeDiagCid);
+    if(osd&&osd!==schemeDiagCid)rebuildForSchemeDesigner(osd);
   }else{
     const id='p'+Date.now();
-    S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty});
+    S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
     if(cid)rebuildForConstructor(cid);
+    if(schemeDiagCid)rebuildForSchemeDesigner(schemeDiagCid);
   }
   save();closeModal('mProd');renderProducts();
 }
 function delProd(id){
   if(!confirm('Удалить изделие?'))return;
-  const p=S.products.find(x=>x.id===id);S.products=S.products.filter(x=>x.id!==id);delete S.schedule[id];
-  if(p)rebuildForConstructor(p.constructorId);renderProducts();
+  const p=S.products.find(x=>x.id===id);S.products=S.products.filter(x=>x.id!==id);
+  delete S.schedule[id];delete S.schemeSchedule[id];
+  if(p?.constructorId)rebuildForConstructor(p.constructorId);
+  if(p?.schemeDiagCid)rebuildForSchemeDesigner(p.schemeDiagCid);
+  renderProducts();
 }
 
 // ─── CONSTRUCTORS + ABSENCES ──────────────────────────────────
@@ -6389,6 +6543,99 @@ function delCon(id){
   if(S.products.some(p=>p.constructorId===id))return alert('Сначала удалите изделия этого конструктора');
   if(!confirm('Удалить?'))return;
   S.constructors=S.constructors.filter(x=>x.id!==id);save();fillConSelect();renderConstructors();
+}
+
+// ─── SCHEME DESIGNERS ─────────────────────────────────────────
+function renderSchemeDesigners(){
+  const el=document.getElementById('schemeDesList');if(!el)return;
+  const sds=S.schemeDesigners||[];
+  if(!sds.length){el.innerHTML='<div class="empty"><p>Нет конструкторов схем сборки. Добавьте первого.</p></div>';return;}
+  el.innerHTML=sds.map(sd=>{
+    const cnt=S.products.filter(p=>p.schemeDiagCid===sd.id).length;
+    return`<div class="card">
+      <div style="width:36px;height:36px;border-radius:50%;background:#6c3483;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📐</div>
+      <div style="flex:1"><div style="font-weight:600">${sd.name}</div>
+      <div style="color:#888;font-size:12px">${cnt} изд.</div></div>
+      <button class="btn btn-gray btn-sm" onclick="openEditSchemeDes('${sd.id}')">✏️</button>
+      <button class="btn btn-red btn-sm" onclick="delSchemeDes('${sd.id}')">🗑</button>
+    </div>`;
+  }).join('');
+}
+function openAddSchemeDes(){
+  document.getElementById('mSchemeDesId').value='';
+  document.getElementById('mSchemeDesTitle').textContent='Добавить конструктора схем';
+  document.getElementById('sdName').value='';
+  openModal('mSchemeDes');
+}
+function openEditSchemeDes(id){
+  const sd=(S.schemeDesigners||[]).find(x=>x.id===id);if(!sd)return;
+  document.getElementById('mSchemeDesId').value=id;
+  document.getElementById('mSchemeDesTitle').textContent='Редактировать';
+  document.getElementById('sdName').value=sd.name;
+  openModal('mSchemeDes');
+}
+function saveSchemeDes(){
+  const name=document.getElementById('sdName').value.trim();if(!name)return alert('Введите имя');
+  const eid=document.getElementById('mSchemeDesId').value;
+  if(!S.schemeDesigners)S.schemeDesigners=[];
+  if(eid){
+    const sd=S.schemeDesigners.find(x=>x.id===eid);if(sd)sd.name=name;
+  }else{
+    S.schemeDesigners.push({id:'sd'+Date.now(),name});
+  }
+  save();fillSchemeDesSelect();renderSchemeDesigners();closeModal('mSchemeDes');
+}
+function delSchemeDes(id){
+  if(S.products.some(p=>p.schemeDiagCid===id))return alert('Снимите конструктора со всех изделий перед удалением');
+  if(!confirm('Удалить конструктора схем?'))return;
+  S.schemeDesigners=(S.schemeDesigners||[]).filter(x=>x.id!==id);
+  save();fillSchemeDesSelect();renderSchemeDesigners();
+}
+function fillSchemeDesSelect(){
+  const sds=S.schemeDesigners||[];
+  const sel=document.getElementById('pSchemeDes');if(!sel)return;
+  sel.innerHTML='<option value="">— Не назначен —</option>'+
+    sds.map(sd=>`<option value="${sd.id}">${sd.name}</option>`).join('');
+}
+
+// ─── SCHEME MARK ──────────────────────────────────────────────
+let schemeMarkCtx=null;
+function openSchemeMarkModal(pid,dateStr,mark){
+  schemeMarkCtx={pid,dateStr};extraMarkCtx=null;
+  const prod=S.products.find(p=>p.id===pid);
+  const d=parseDate(dateStr);
+  const status=mark?.status||'planned';
+  document.getElementById('markTitle').textContent='📐 СС — Схема сборки';
+  document.getElementById('markInfo').innerHTML=
+    `<b>Изделие:</b> ${prod?.name||'—'}<br><b>Дата:</b> ${d.getDate()} ${MONTHS_G[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById('markStageSection').style.display='none';
+  document.getElementById('markDayBtns').style.display=status==='planned'?'flex':'none';
+  document.getElementById('markRevertRow').style.display=status!=='planned'?'':'none';
+  document.getElementById('markFailForm').style.display='none';
+  document.getElementById('markEarlyForm').style.display='none';
+  document.getElementById('markFooter').style.display='flex';
+  document.getElementById('markPostponeSection').style.display='none';
+  if(document.getElementById('markRejectSection'))document.getElementById('markRejectSection').style.display='none';
+  document.getElementById('markDayLabel').textContent=`День: ${d.getDate()} ${MONTHS_S[d.getMonth()]}`;
+  openModal('mMark');
+}
+function doSchemeMark(status){
+  if(!schemeMarkCtx)return;
+  const{pid,dateStr}=schemeMarkCtx;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  e.days[dateStr]={status,setBy:'admin',at:new Date().toISOString()};
+  const did=e.schemeDiagCid;
+  schemeMarkCtx=null;closeModal('mMark');
+  rebuildForSchemeDesigner(did);save();renderCalendar();
+}
+function doSchemeRevert(){
+  if(!schemeMarkCtx)return;
+  const{pid,dateStr}=schemeMarkCtx;
+  const e=S.schemeSchedule[pid];if(!e)return;
+  if(e.days[dateStr])e.days[dateStr]={status:'planned',setBy:'system'};
+  const did=e.schemeDiagCid;
+  schemeMarkCtx=null;closeModal('mMark');
+  rebuildForSchemeDesigner(did);save();renderCalendar();
 }
 
 function openAbsences(cid){
