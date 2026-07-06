@@ -6778,7 +6778,7 @@ function schemePostponeDay(){
   const all=Object.keys(e.days).sort();
   e.startDate=all[0]||dateStr;e.endDate=all[all.length-1]||dateStr;
   schemeMarkCtx=null;closeModal('mMark');
-  _rebuildSchemeAfterMark(pid);save();renderCalendar();
+  save();renderCalendar();
 }
 function schemeExtendDur(){
   if(!schemeMarkCtx)return;
@@ -6789,7 +6789,7 @@ function schemeExtendDur(){
   e.days[probe]={status:'planned',setBy:'system'};
   e.endDate=probe;
   schemeMarkCtx=null;closeModal('mMark');
-  _rebuildSchemeAfterMark(pid);save();renderCalendar();
+  save();renderCalendar();
 }
 function schemeShortenDur(){
   if(!schemeMarkCtx)return;
@@ -6801,7 +6801,7 @@ function schemeShortenDur(){
   const remaining=Object.keys(e.days).sort();
   e.endDate=remaining[remaining.length-1]||e.startDate;
   schemeMarkCtx=null;closeModal('mMark');
-  _rebuildSchemeAfterMark(pid);save();renderCalendar();
+  save();renderCalendar();
 }
 
 let _assignSDPid=null;
