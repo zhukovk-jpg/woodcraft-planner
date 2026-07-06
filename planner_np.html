@@ -8480,7 +8480,8 @@ function bootAfterData(){
     if(_cloudUrl&&_cloudWasEmpty)cloudPush();
     else if(!_cloudUrl)localStorage.setItem('np4',JSON.stringify(S));
   } else {
-    const needsRebuild=S.products.some(p=>!S.schedule[p.id]||!Object.keys(S.schedule[p.id]).length);
+    const needsRebuild=S.products.some(p=>!S.schedule[p.id]||!Object.keys(S.schedule[p.id]).length)
+      ||S.products.some(p=>p.status!=='closed'&&(S.schedule[p.id]||{})['prm']?.endDate&&!S.schemeSchedule[p.id]);
     if(needsRebuild){rebuildAll();}
     localStorage.setItem('np4',JSON.stringify(S));
   }
