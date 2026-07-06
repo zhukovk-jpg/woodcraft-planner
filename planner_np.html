@@ -1903,6 +1903,9 @@ function rebuildForConstructor(cid){
           }
           // Compute naive end in parallel (as if vacation didn't block doing days)
           // so ctrl stages after this aren't pushed by vacation-extension of cursor.
+          // Don't let naiveCursor fall behind the actual start of this doing stage —
+          // otherwise ctrl stages after it can end up scheduled before it even begins.
+          if(planned.length>0){const dst=ensureCtrlWork(planned[0],cid);if(dst>naiveCursor)naiveCursor=dst;}
           let naiveProbe=afterMarkedCtrl&&afterMarkedCtrl>naiveCursor?afterMarkedCtrl:naiveCursor;
           let naivePlanned=[],np2=naiveProbe;
           while(naivePlanned.length<remaining){if(isCtrlWorkDay(np2,cid))naivePlanned.push(np2);np2=addDay(np2,1);}
