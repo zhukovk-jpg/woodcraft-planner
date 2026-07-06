@@ -7036,56 +7036,119 @@ function renderPlanFact(){
   if(lbl)lbl.textContent=MONTHS_NOM[_pfMonth]+' '+_pfYear;
   const filter=document.getElementById('pfConFilter');
   if(filter&&filter.options.length<=1){
-    (S.constructors||[]).forEach(c=>{
-      const o=document.createElement('option');o.value=c.id;o.textContent=c.name;filter.appendChild(o);
-    });
+    (S.constructors||[]).forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;filter.appendChild(o);});
   }
   const el=document.getElementById('pfTable');if(!el)return;
   const mk=pfMonthKey();
   const conFilter=filter?.value||'';
   const canEdit=session.role==='admin'||session.role==='manager';
-  const prods=(S.products||[])
-    .filter(p=>p.status!=='closed'&&(!conFilter||p.constructorId===conFilter))
+  const allProds=(S.products||[]).filter(p=>p.status!=='closed'&&(!conFilter||p.constructorId===conFilter))
     .sort((a,b)=>a.priority-b.priority);
-  if(!prods.length){el.innerHTML='<div class="empty"><p>Нет изделий</p></div>';return;}
-  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
-    <thead><tr style="background:#e8f0fa;color:#1a3a5c;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px">
-      <th style="padding:8px 12px;text-align:left">Изделие</th>
-      <th style="padding:8px 12px;text-align:left">Конструктор</th>
-      <th style="padding:8px 12px;text-align:left">Факт сейчас</th>
-      <th style="padding:8px 12px;text-align:left">План на ${MONTHS_NOM[_pfMonth]}</th>
-      <th style="padding:8px 12px;text-align:left">Дата по плану</th>
-      <th style="padding:8px 12px;text-align:center">Дней осталось</th>
-      <th style="padding:8px 12px;text-align:left">Статус</th>
-    </tr></thead><tbody>`;
-  for(const prod of prods){
-    const con=(S.constructors||[]).find(c=>c.id===prod.constructorId);
+  if(!allProds.length){el.innerHTML='<div class="empty"><p>Нет изделий</p></div>';return;}
+
+  function groupStats(prods){
+    let withPlan=0,done=0,onTrack=0,behind=0;
+    for(const p of prods){
+      const sid=((S.planFact||{})[p.id]||{})[mk]||null;if(!sid)continue;
+      withPlan++;
+      const st=getPFStatus(p.id,mk,sid);
+      if(st.cls==='ok'&&st.days===0)done++;else if(st.cls==='ok')onTrack++;else behind++;
+    }
+    return{total:prods.length,withPlan,done,onTrack,behind,pct:withPlan>0?Math.round((done+onTrack)/withPlan*100):null};
+  }
+  function pctBadge(pct,light){
+    if(pct===null)return'';
+    const col=pct>=75?(light?'#1b5e20':'#a5d6a7'):pct>=50?(light?'#b84e00':'#ffcc80'):(light?'#b71c1c':'#ef9a9a');
+    return`<span style="font-size:16px;font-weight:700;color:${col};margin-left:auto;padding-right:4px">${pct}%</span>`;
+  }
+  function statChips(s,light){
+    let r='';
+    const mk2=(bg,fg,txt)=>`<span style="background:${bg};color:${fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap">${txt}</span>`;
+    if(s.done>0)r+=mk2(light?'#e8f5e9':'rgba(255,255,255,.18)',light?'#1b5e20':'#c8e6c9',`✔ ${s.done} выполнено`)+' ';
+    if(s.onTrack>0)r+=mk2(light?'#e3f2fd':'rgba(255,255,255,.15)',light?'#0d47a1':'#bbdefb',`✅ ${s.onTrack} укл.`)+' ';
+    if(s.behind>0)r+=mk2(light?'#fde8e8':'rgba(255,255,255,.15)',light?'#b71c1c':'#ffcdd2',`❌ ${s.behind} не укл.`)+' ';
+    if(s.withPlan===0)r+=`<span style="color:${light?'#bbb':'rgba(255,255,255,.4)'};font-size:11px">план не задан</span>`;
+    return r;
+  }
+  function prodRow(prod){
     const factSt=getFactStage(prod.id);
     const planStageId=((S.planFact||{})[prod.id]||{})[mk]||null;
     const planSt=planStageId?getStageList(prod.type).find(s=>s.id===planStageId):null;
     const planEndDate=planStageId?((S.schedule[prod.id]||{})[planStageId]||{}).endDate:null;
     const st=getPFStatus(prod.id,mk,planStageId);
-    const rowBg=st.cls==='ok'?'#f0faf4':st.cls==='fail'?'#fdf2f2':'';
-    const daysCell=st.days===null?'—':st.days===0?'—':st.days>0
+    const rowBg=st.cls==='ok'?'#f5fdf7':st.cls==='fail'?'#fdf5f5':'';
+    const daysCell=st.days===null||st.days===0?'—':st.days>0
       ?`<b style="color:#1a5276">${st.days}</b>`
-      :`<b style="color:#c0392b">${Math.abs(st.days)} просроч.</b>`;
-    const statusCell=!planStageId?'<span style="color:#aaa">не задан</span>'
-      :st.cls==='ok'&&st.days===0?'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px">✔ Выполнено</span>'
-      :st.cls==='ok'?'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:10px;font-size:11px">✅ Укладываемся</span>'
-      :'<span style="background:#fde8e8;color:#c0392b;padding:2px 8px;border-radius:10px;font-size:11px">❌ '+st.label+'</span>';
+      :`<b style="color:#b71c1c">${Math.abs(st.days)} пр.</b>`;
+    const statusCell=!planStageId?'<span style="color:#ccc;font-size:11px">не задан</span>'
+      :st.cls==='ok'&&st.days===0?'<span style="background:#e8f5e9;color:#1b5e20;padding:2px 7px;border-radius:10px;font-size:11px">✔ Выполнено</span>'
+      :st.cls==='ok'?'<span style="background:#e3f2fd;color:#0d47a1;padding:2px 7px;border-radius:10px;font-size:11px">✅ Укладываемся</span>'
+      :`<span style="background:#fde8e8;color:#b71c1c;padding:2px 7px;border-radius:10px;font-size:11px">❌ ${st.label}</span>`;
     const planCell=canEdit
-      ?`<span style="cursor:pointer;color:#2471a3;border-bottom:1px dashed #2471a3" onclick="openSetPlan('${prod.id}','${mk}')">${planSt?planSt.abbr+' · '+planSt.name:'Нажмите, чтобы задать'}</span>`
+      ?`<span style="cursor:pointer;color:#2471a3;border-bottom:1px dashed #90caf9" onclick="openSetPlan('${prod.id}','${mk}')">${planSt?planSt.abbr+' · '+planSt.name:'<span style="color:#ccc">задать план ↗</span>'}</span>`
       :(planSt?`<b>${planSt.abbr}</b> · ${planSt.name}`:'—');
-    html+=`<tr style="border-bottom:1px solid #e8ecf0;background:${rowBg}">
-      <td style="padding:8px 12px"><div style="font-weight:600;color:#1a3a5c">${prod.name}</div><div style="font-size:10px;color:#999">${TYPE_LABEL[prod.type]||prod.type}</div></td>
-      <td style="padding:8px 12px;color:#555">${con?con.name:'—'}</td>
-      <td style="padding:8px 12px">${factSt?`<b>${factSt.abbr}</b> <span style="color:#555">· ${factSt.name}</span>`:'<span style="color:#aaa">Не начато</span>'}</td>
-      <td style="padding:8px 12px">${planCell}</td>
-      <td style="padding:8px 12px;color:#555">${planEndDate?fmtFull(planEndDate):'—'}</td>
-      <td style="padding:8px 12px;text-align:center">${daysCell}</td>
-      <td style="padding:8px 12px">${statusCell}</td>
+    return`<tr style="border-bottom:1px solid #eef1f5;background:${rowBg}">
+      <td style="padding:7px 12px 7px 28px"><div style="font-weight:600;color:#1a3a5c;font-size:12px">${prod.name}</div><div style="font-size:10px;color:#bbb">${TYPE_LABEL[prod.type]||prod.type}</div></td>
+      <td style="padding:7px 12px">${factSt?`<b>${factSt.abbr}</b> <span style="color:#777;font-size:11px">· ${factSt.name}</span>`:'<span style="color:#ccc;font-size:11px">Не начато</span>'}</td>
+      <td style="padding:7px 12px">${planCell}</td>
+      <td style="padding:7px 12px;color:#777;font-size:11px">${planEndDate?fmtFull(planEndDate):'—'}</td>
+      <td style="padding:7px 12px;text-align:center;font-size:12px">${daysCell}</td>
+      <td style="padding:7px 12px">${statusCell}</td>
     </tr>`;
   }
+
+  let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+  <thead><tr style="background:#dce8f5;color:#1a3a5c;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">
+    <th style="padding:7px 12px;text-align:left">Изделие</th>
+    <th style="padding:7px 12px;text-align:left">Факт сейчас</th>
+    <th style="padding:7px 12px;text-align:left">План на ${MONTHS_NOM[_pfMonth]}</th>
+    <th style="padding:7px 12px;text-align:left">Дата по плану</th>
+    <th style="padding:7px 12px;text-align:center">Дней ост.</th>
+    <th style="padding:7px 12px;text-align:left">Статус</th>
+  </tr></thead><tbody>`;
+
+  const cons=(conFilter?(S.constructors||[]).filter(c=>c.id===conFilter):(S.constructors||[]));
+  for(const con of cons){
+    const prods=allProds.filter(p=>p.constructorId===con.id);
+    if(!prods.length)continue;
+    const s=groupStats(prods);
+    html+=`<tr style="background:#d0dff0;border-top:2px solid #a0bcd8">
+      <td colspan="6" style="padding:9px 14px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="font-size:13px;color:#1a3a5c">👷 ${con.name}</b>
+          <span style="font-size:11px;color:#4a6080;white-space:nowrap">${s.total} изд. · ${s.withPlan} в плане</span>
+          ${statChips(s,true)}${pctBadge(s.pct,true)}
+        </div>
+      </td></tr>`;
+    for(const prod of prods)html+=prodRow(prod);
+  }
+
+  const noCon=allProds.filter(p=>!p.constructorId);
+  if(noCon.length){
+    const s=groupStats(noCon);
+    html+=`<tr style="background:#f0f0f0;border-top:2px solid #ccc">
+      <td colspan="6" style="padding:9px 14px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="font-size:13px;color:#666">Без конструктора</b>
+          <span style="font-size:11px;color:#999">${s.total} изд.</span>
+          ${statChips(s,true)}${pctBadge(s.pct,true)}
+        </div>
+      </td></tr>`;
+    for(const prod of noCon)html+=prodRow(prod);
+  }
+
+  if(!conFilter){
+    const s=groupStats(allProds);
+    html+=`<tr style="background:#1a3a5c;border-top:3px solid #0d2137">
+      <td colspan="6" style="padding:10px 16px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <b style="font-size:14px;color:#fff">ИТОГО по отделу</b>
+          <span style="font-size:11px;color:#8aacc8;white-space:nowrap">${s.total} изделий · ${s.withPlan} в плане</span>
+          ${statChips(s,false)}${pctBadge(s.pct,false)}
+        </div>
+      </td></tr>`;
+  }
+
   html+='</tbody></table>';
   el.innerHTML=html;
 }
