@@ -1805,6 +1805,7 @@ function migrate(){
   if(!S.acceptanceResults)S.acceptanceResults={};
   if(!S.acceptanceManualItems)S.acceptanceManualItems={};
   if(!S.individualAcceptDates)S.individualAcceptDates={};
+  if(!S.acceptanceTiming)S.acceptanceTiming={};
   if(!S.factory)S.factory={contributions:[],items:{}};
   if(!S.factory.contributions)S.factory.contributions=[];
   if(!S.factory.items)S.factory.items={};
@@ -3329,6 +3330,39 @@ function getProductAccResult(pid){
 }
 
 // ─── ACCEPTANCE KM TAB ────────────────────────────────────────
+const TYPE_MIN_DEF={simple:15,medium:20,complex:30,series:45};
+function accTimingLive(accDate,inp){
+  const totEl=document.getElementById('acctot'+accDate.replace(/-/g,''));
+  if(!totEl)return;
+  let total=0;
+  document.querySelectorAll('.acc-timing-input[data-acc-date="'+accDate+'"]').forEach(i=>total+=parseInt(i.value)||0);
+  const h=Math.floor(total/60),m=total%60;
+  totEl.textContent=(h?h+'ч ':'')+m+' мин';
+}
+function accTimingSave(accDate,itemKey,val){
+  if(!S.acceptanceTiming)S.acceptanceTiming={};
+  S.acceptanceTiming[`${accDate}_${itemKey}`]=parseInt(val)||15;save();
+}
+function _accTimingInput(accDate,itemKey,type){
+  const v=(S.acceptanceTiming||{})[`${accDate}_${itemKey}`]||TYPE_MIN_DEF[type]||15;
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;min-width:62px">
+    <div style="font-size:9px;color:#999;letter-spacing:.5px">⏱ МИН</div>
+    <input type="number" class="acc-timing-input" data-acc-date="${accDate}"
+      value="${v}" min="5" max="480" step="5"
+      style="width:52px;font-size:13px;font-weight:700;color:#1a3a5c;border:1px solid #d0d8e4;border-radius:6px;text-align:center;padding:2px"
+      oninput="accTimingLive('${accDate}',this)"
+      onblur="accTimingSave('${accDate}','${itemKey}',this.value)">
+  </div>`;
+}
+function _accTimingTotal(accDate,autoProds,manualItems,acceptedProds){
+  const T=S.acceptanceTiming||{};
+  let tot=0;
+  for(const p of autoProds)tot+=T[`${accDate}_${p.id}`]||TYPE_MIN_DEF[p.type]||15;
+  for(const i of manualItems)tot+=T[`${accDate}_mi_${i.id}`]||15;
+  for(const p of acceptedProds)tot+=T[`${accDate}_${p.id}`]||TYPE_MIN_DEF[p.type]||15;
+  const h=Math.floor(tot/60),m=tot%60;
+  return (h?h+'ч ':'')+m+' мин';
+}
 function renderAcceptanceKM(){
   const el=document.getElementById('acceptanceKmList');
   const accDates=[...S.acceptanceDates].sort((a,b)=>a.date.localeCompare(b.date));
@@ -3451,6 +3485,7 @@ function renderAcceptanceKM(){
           </div>
           ${res?.note?`<div style="font-size:11px;color:#555;font-style:italic;margin-top:3px">💬 ${res.note}</div>`:''}
         </div>
+        ${_accTimingInput(acc.date,prod.id,prod.type)}
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">
           <span style="background:${resBg};color:${resColor};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">${resBadge}</span>
           ${canMark?`<button onclick="openAccResult('${acc.date}','${prod.id}')" style="font-size:11px;padding:3px 10px;background:#eaf4fb;border:1px solid #aed6f1;color:#1a5276;border-radius:6px;cursor:pointer">${res?'✏️ Изменить':'📝 Отметить'}</button>`:''}
@@ -3466,6 +3501,7 @@ function renderAcceptanceKM(){
           <div style="font-size:13px;color:#5d4037">📝 ${item.text}</div>
           <div style="font-size:10px;color:#aaa">Добавлено вручную</div>
         </div>
+        ${_accTimingInput(acc.date,'mi_'+item.id,'simple')}
         ${isAdmin?`<button onclick="delAccManual('${acc.date}','${item.id}')" style="font-size:11px;padding:3px 8px;background:#fce4ec;border:none;color:#c62828;border-radius:6px;cursor:pointer">✕</button>`:''}
       </div>`;
     }
@@ -3474,6 +3510,13 @@ function renderAcceptanceKM(){
     if(acceptedProds.length){
       html+=`<div style="padding:8px 16px;background:#f0fff4;font-size:12px;color:#1e8449">
         ✅ Принято на этой приёмке: ${acceptedProds.map(p=>`<b>${p.name}</b>`).join(', ')}
+      </div>`;
+    }
+
+    if(totalItems>0){
+      html+=`<div style="padding:10px 16px;background:#eaf4fb;border-top:2px solid #aed6f1;display:flex;align-items:center;gap:10px;font-weight:700;color:#1a5276">
+        <span>⏱</span><span>Итоговое время приёмки:</span>
+        <span id="acctot${acc.date.replace(/-/g,'')}" style="font-size:15px">${_accTimingTotal(acc.date,autoProds,manualItems,acceptedProds)}</span>
       </div>`;
     }
 
@@ -3671,14 +3714,14 @@ function printAcceptanceProtocol(){
       const key=`${acc.date}_${prod.id}`;
       const res=S.acceptanceResults[key];
       const con=S.constructors.find(x=>x.id===prod.constructorId);
-      items.push({name:prod.name,type:TYPE_LABEL[prod.type],typeKey:prod.type,con:con?.name||'—',
+      items.push({name:prod.name,type:TYPE_LABEL[prod.type],typeKey:prod.type,id:prod.id,con:con?.name||'—',
         result:res?.result||null,note:res?.note||''});
     });
     (S.acceptanceManualItems[acc.date]||[]).forEach(i=>
-      items.push({name:i.text,type:'—',typeKey:'simple',con:'—',result:null,note:''}));
+      items.push({name:i.text,type:'—',typeKey:'simple',id:'mi_'+i.id,con:'—',result:null,note:''}));
     if(!items.length)continue;
 
-    const totalMin=items.reduce((s,i)=>s+(TYPE_MIN[i.typeKey]||15),0);
+    const totalMin=items.reduce((s,i)=>s+((S.acceptanceTiming||{})[`${acc.date}_${i.id}`]||TYPE_MIN[i.typeKey]||15),0);
     const hh=Math.floor(totalMin/60),mm=totalMin%60;
     const totalStr=hh?`${hh} ч ${mm} мин`:`${mm} мин`;
 
@@ -3711,7 +3754,7 @@ function printAcceptanceProtocol(){
         <td class="col-name" style="font-weight:600">${i.name}</td>
         <td class="col-type">${i.type}</td>
         <td class="col-con">${i.con}</td>
-        <td class="col-timing"><input type="number" value="${TYPE_MIN[i.typeKey]||15}" min="5" max="120" step="5"
+        <td class="col-timing"><input type="number" value="${(S.acceptanceTiming||{})[`${acc.date}_${i.id}`]||TYPE_MIN[i.typeKey]||15}" min="5" max="480" step="5"
           style="width:52px;font-size:13px;font-weight:700;color:#1a3a5c;border:1px solid #bbb;border-radius:4px;text-align:center;padding:2px"
           oninput="recalcTotal('${accId}')"> мин</td>
         <td class="col-result">
