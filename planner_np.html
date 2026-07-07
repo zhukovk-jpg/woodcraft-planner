@@ -8136,6 +8136,16 @@ function renderMMProducts(){
     </div>`;}).join('');
 }
 
+function updateMMProdPhaseOptions(){
+  const tmplId=document.getElementById('mmProdTemplate').value;
+  const tmpl=S.mm.templates.find(t=>t.id===tmplId);
+  const phases=[...new Set((tmpl?.stages||[]).map(s=>s.phase||'1'))].map(Number).sort((a,b)=>a-b);
+  const labels={1:'1 — Черновой образец',2:'2 — Чистовой образец',3:'3 — КТД',4:'4 — Производство'};
+  const sel=document.getElementById('mmProdStartPhase');
+  const cur=sel.value;
+  sel.innerHTML=(phases.length?phases:[1,2,3,4]).map(ph=>`<option value="${ph}">${labels[ph]||'Фаза '+ph}</option>`).join('');
+  if(cur&&sel.querySelector(`option[value="${cur}"]`))sel.value=cur;
+}
 function openAddMMProd(){
   document.getElementById('mMMProdTitle').textContent='Добавить задачу ММ';
   document.getElementById('mMMProdId').value='';
@@ -8147,6 +8157,7 @@ function openAddMMProd(){
   document.getElementById('mmProdStatus').value='active';
   document.querySelector('input[name=mmProdPair][value=both]').checked=true;
   fillMMProdSelects();updateMMProdPairUI();
+  document.getElementById('mmProdStartPhase').value='1';
   openModal('mMMProd');
 }
 function openEditMMProd(id){
@@ -8162,6 +8173,7 @@ function openEditMMProd(id){
   const pairVal=p.pairType||'both';
   document.querySelector(`input[name=mmProdPair][value=${pairVal}]`).checked=true;
   fillMMProdSelects(p);updateMMProdPairUI();
+  document.getElementById('mmProdStartPhase').value=p.startPhase||'1';
   openModal('mMMProd');
 }
 function updateMMProdPairUI(){
@@ -8189,6 +8201,7 @@ function saveMMProd(){
   const cidA=pairType==='sewing'?'':document.getElementById('mmProdCidA').value;
   const cidB=pairType==='frame'?'':document.getElementById('mmProdCidB').value;
   const startDate=document.getElementById('mmProdStart').value;
+  const startPhase=document.getElementById('mmProdStartPhase').value||'1';
   const priority=parseInt(document.getElementById('mmProdPri').value)||1;
   const qty=parseInt(document.getElementById('mmProdQty').value)||1;
   const bitrixUrl=document.getElementById('mmProdBitrix').value.trim();
@@ -8197,12 +8210,12 @@ function saveMMProd(){
   if(id){
     const p=S.mm.products.find(x=>x.id===id);
     if(p){
-      const changed=p.templateId!==templateId||p.cidA!==cidA||p.cidB!==cidB||p.startDate!==startDate;
-      Object.assign(p,{name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status});
-      if(changed)delete S.mm.schedule[id]; // clear so rebuildAllMM rebuilds fresh
+      const changed=p.templateId!==templateId||p.cidA!==cidA||p.cidB!==cidB||p.startDate!==startDate||p.startPhase!==startPhase;
+      Object.assign(p,{name,templateId,cidA,cidB,pairType,startDate,startPhase,priority,qty,bitrixUrl,status});
+      if(changed)delete S.mm.schedule[id];
     }
   }else{
-    S.mm.products.push({id:'mp'+Date.now(),name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status:'active'});
+    S.mm.products.push({id:'mp'+Date.now(),name,templateId,cidA,cidB,pairType,startDate,startPhase,priority,qty,bitrixUrl,status:'active'});
   }
   rebuildAllMM();save();closeModal('mMMProd');renderMMProducts();
 }
@@ -8434,7 +8447,7 @@ function rebuildAllMM(force=false){
     let cursorA=cidA?mmEnsureWork(prod.startDate,cidA):prod.startDate;
     let cursorB=cidB?mmEnsureWork(prod.startDate,cidB):prod.startDate;
     let snapA=cursorA,snapB=cursorB;
-    for(const stage of tmpl.stages.filter(s=>s&&s.id)){
+    for(const stage of tmpl.stages.filter(s=>s&&s.id&&parseInt(s.phase||'1')>=parseInt(prod.startPhase||'1'))){
       const sv=saved[prod.id]?.[stage.id]||{};
       const spec=stage.spec||'both';
       const dur=(S.mm.customDurations[prod.id]||{})[stage.id]??stage.days??1;
@@ -9097,7 +9110,15 @@ function tryAutoLogin(){
   <h2 id="mMMProdTitle">Задача ММ</h2>
   <input type="hidden" id="mMMProdId">
   <div class="fg"><label>Название</label><input type="text" id="mmProdName"></div>
-  <div class="fg"><label>Шаблон</label><select id="mmProdTemplate"></select></div>
+  <div class="fg"><label>Шаблон</label><select id="mmProdTemplate" onchange="updateMMProdPhaseOptions()"></select></div>
+  <div class="fg"><label>Начать с фазы</label>
+    <select id="mmProdStartPhase" style="border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:13px;width:100%">
+      <option value="1">1 — Черновой образец</option>
+      <option value="2">2 — Чистовой образец</option>
+      <option value="3">3 — КТД</option>
+      <option value="4">4 — Производство</option>
+    </select>
+  </div>
   <div style="display:flex;gap:12px;margin-bottom:8px">
     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
       <input type="radio" name="mmProdPair" value="both" checked onchange="updateMMProdPairUI()"> 👥 Пара (каркас + швейка)
