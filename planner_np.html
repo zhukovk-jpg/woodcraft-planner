@@ -477,7 +477,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
         <h2 id="mmMonthTitle"></h2>
         <button class="btn btn-gray btn-sm" onclick="changeMMMonth(1)">▶</button>
         <button class="btn btn-blue btn-sm" style="margin-left:auto" onclick="changeMMMonth(0)">Сегодня</button>
-        <button class="btn btn-sm" style="background:#9b59b6;color:#fff;font-weight:700" onclick="rebuildAllMM();save();renderMMCalendar();alert('✅ График ММ пересчитан')">🔄 Пересчитать</button>
+        <button class="btn btn-sm" style="background:#9b59b6;color:#fff;font-weight:700" onclick="forceRebuildAllMM()">🔄 Пересчитать с нуля</button>
       </div>
       <div id="mmFilterBar" style="display:none;align-items:center;gap:8px;padding:8px 14px;background:#1e2d40;border-bottom:1px solid #2d3f55;flex-wrap:wrap">
         <span style="font-size:12px;color:#90caf9;font-weight:600">👤 Фильтр по конструктору:</span>
@@ -7960,12 +7960,12 @@ function delMMCon(id){
 
 // ── MM Templates ──────────────────────────────────────────────
 function mmPhaseHeaders(t){
-  const PN={'1':'ЧЕРНОВОЙ ОБРАЗЕЦ','2':'ЧИСТОВОЙ И РАСЧЁТЫ','3':'КТД','4':'ПРОИЗВОДСТВО'};
-  const ML={ctrl:'Контроль',seq:'Посл.',par:'Парал.',combined:'Совм.'};
-  const MC={ctrl:'#e67e22',seq:'#2471a3',par:'#8e44ad',combined:'#1e8449'};
-  const SL={frame:'🪵 Каркас',sewing:'🧵 Швейка',both:'👥 Оба',merge:'🔀 Слияние'};
-  const SB={frame:'#efebe9',sewing:'#f3e5f5',both:'#e8f5e9',merge:'#e3f2fd'};
-  const SC={frame:'#4e342e',sewing:'#6a1b9a',both:'#1b5e20',merge:'#0d47a1'};
+  const PN={'1':'ЧЕРНОВОЙ ОБРАЗЕЦ','2':'ЧИСТОВОЙ ОБРАЗЕЦ','3':'КТД','4':'ПРОИЗВОДСТВО'};
+  const ML={ctrl:'Контроль',exec:'Выполняет',seq:'Выполняет',combined:'Выполняет',par:'Выполняет'};
+  const MC={ctrl:'#e67e22',exec:'#2471a3',seq:'#2471a3',combined:'#1e8449',par:'#8e44ad'};
+  const SL={frame:'🪵 Каркасник',sewing:'🧵 Швейник',both:'👥 Оба',merge:'👥 Оба'};
+  const SB={frame:'#efebe9',sewing:'#f3e5f5',both:'#e8f5e9',merge:'#e8f5e9'};
+  const SC={frame:'#4e342e',sewing:'#6a1b9a',both:'#1b5e20',merge:'#1b5e20'};
   let lp=null,html='';
   (t.stages||[]).filter(st=>st&&st.id).forEach((st,i)=>{
     const ph=st.phase||'1';
@@ -7991,66 +7991,89 @@ function mmPhaseHeaders(t){
 function renderMMTemplates(){
   const el=document.getElementById('mmTemplateList');
   if(!el)return;
-  el.innerHTML=S.mm.templates.map(t=>`
+  let html=`<div style="margin-bottom:16px">
+    <button class="btn btn-green" onclick="openAddMMTemplate()">+ Создать шаблон</button>
+  </div>`;
+  html+=S.mm.templates.map(t=>`
     <div style="background:#fff;border-radius:9px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <input type="text" value="${t.name}" style="font-weight:700;font-size:15px;border:none;border-bottom:1px solid #ddd;width:220px;padding:2px 4px"
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <input type="text" value="${t.name}" style="font-weight:700;font-size:15px;border:none;border-bottom:1px solid #ddd;flex:1;min-width:180px;padding:2px 4px"
           onchange="S.mm.templates.find(x=>x.id==='${t.id}').name=this.value;save()">
-        <span style="font-size:12px;color:#888">Очков: делает=${t.pointsDoing||2}, контроль=${t.pointsCtrl||1}</span>
-        <button class="btn btn-green btn-sm" onclick="openAddMMStage('${t.id}')">+ Этап</button>
+        <button class="btn btn-green btn-sm" onclick="openAddMMStage('${t.id}')">+ Операция</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMMTemplate('${t.id}')">🗑 Удалить</button>
       </div>
-      ${!(t.stages||[]).length?'<div style="color:#aaa;font-size:12px;padding:6px 0">Нет этапов. Добавьте первый.</div>':mmPhaseHeaders(t)}
+      ${!(t.stages||[]).length?'<div style="color:#aaa;font-size:12px;padding:6px 0">Нет операций. Нажмите «+ Операция».</div>':mmPhaseHeaders(t)}
     </div>`).join('');
+  el.innerHTML=html;
+}
+function openAddMMTemplate(){
+  document.getElementById('mmNewTmplName').value='';
+  const sel=document.getElementById('mmNewTmplCopyId');
+  sel.innerHTML='<option value="">— начать с нуля —</option>'+
+    S.mm.templates.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  sel.value='';
+  openModal('mMMNewTemplate');
+}
+function saveMMTemplate(){
+  const name=document.getElementById('mmNewTmplName').value.trim();
+  if(!name)return alert('Введите название шаблона');
+  const copyId=document.getElementById('mmNewTmplCopyId').value;
+  const copyTmpl=copyId?S.mm.templates.find(t=>t.id===copyId):null;
+  const stages=copyTmpl?JSON.parse(JSON.stringify(copyTmpl.stages)).map(s=>({...s,id:'mms'+Date.now()+Math.random().toString(36).slice(2)})):[];
+  S.mm.templates.push({id:'mmt'+Date.now(),name,pointsDoing:2,pointsCtrl:1,stages});
+  save();closeModal('mMMNewTemplate');renderMMTemplates();
+}
+function deleteMMTemplate(id){
+  const t=S.mm.templates.find(x=>x.id===id);if(!t)return;
+  if(!confirm(`Удалить шаблон «${t.name}»?\nИзделия, использующие его, потеряют расписание.`))return;
+  S.mm.templates=S.mm.templates.filter(x=>x.id!==id);
+  save();renderMMTemplates();
 }
 let _mmStageEditTemplateId=null,_mmStageEditId=null;
 function openAddMMStage(templateId){
   _mmStageEditTemplateId=templateId;_mmStageEditId=null;
-  document.getElementById('mMMStageTitle').textContent='Добавить этап';
+  document.getElementById('mMMStageTitle').textContent='Добавить операцию';
   document.getElementById('mmStageId').value='';
   document.getElementById('mmStageName').value='';
   document.getElementById('mmStageAbbr').value='';
   document.getElementById('mmStageDays').value='1';
-  document.querySelectorAll('input[name=mmStageMode]')[0].checked=true;
-  document.querySelectorAll('input[name=mmStageSpec]')[0].checked=true;
-  document.getElementById('mmStageEW').checked=false;
-  document.getElementById('mmStageEWSlots').value='1';
-  document.getElementById('mmStageEWRow').style.display='none';
-  document.getElementById('mmStageParallel').checked=false;
+  document.getElementById('mmStagePhase').value='1';
+  document.querySelectorAll('input[name=mmStageMode]').forEach((r,i)=>r.checked=i===0);
+  document.querySelectorAll('input[name=mmStageSpec]').forEach((r,i)=>r.checked=i===0);
   openModal('mMMStage');
 }
 function openEditMMStage(templateId,stageId){
   _mmStageEditTemplateId=templateId;_mmStageEditId=stageId;
   const t=S.mm.templates.find(x=>x.id===templateId);
   const st=t?.stages.find(x=>x.id===stageId);if(!st)return;
-  document.getElementById('mMMStageTitle').textContent='Редактировать этап';
+  document.getElementById('mMMStageTitle').textContent='Редактировать операцию';
   document.getElementById('mmStageId').value=stageId;
   document.getElementById('mmStageName').value=st.name;
   document.getElementById('mmStageAbbr').value=st.abbr;
   document.getElementById('mmStageDays').value=st.days;
-  document.querySelectorAll('input[name=mmStageMode]').forEach(r=>r.checked=r.value===st.mode);
-  document.querySelectorAll('input[name=mmStageSpec]').forEach(r=>r.checked=r.value===(st.spec||'frame'));
-  document.getElementById('mmStageEW').checked=!!st.expWorkshop;
-  document.getElementById('mmStageEWSlots').value=st.expWorkshopSlots||1;
-  document.getElementById('mmStageEWRow').style.display=st.expWorkshop?'':'none';
-  document.getElementById('mmStageParallel').checked=!!st.parallelWithPrev;
+  document.getElementById('mmStagePhase').value=st.phase||'1';
+  // map old modes: seq/combined/par → exec
+  const modeVal=st.mode==='ctrl'?'ctrl':'exec';
+  document.querySelectorAll('input[name=mmStageMode]').forEach(r=>r.checked=r.value===modeVal);
+  // map old specs: merge → both
+  const specVal=st.spec==='merge'?'both':(st.spec||'frame');
+  document.querySelectorAll('input[name=mmStageSpec]').forEach(r=>r.checked=r.value===specVal);
   openModal('mMMStage');
 }
 function saveMMStage(){
   const name=document.getElementById('mmStageName').value.trim();
   const abbr=document.getElementById('mmStageAbbr').value.trim().toUpperCase().slice(0,5);
   const days=Math.max(1,parseInt(document.getElementById('mmStageDays').value)||1);
+  const phase=document.getElementById('mmStagePhase').value||'1';
   const mode=document.querySelector('input[name=mmStageMode]:checked')?.value||'ctrl';
   const spec=document.querySelector('input[name=mmStageSpec]:checked')?.value||'frame';
-  const expWorkshop=document.getElementById('mmStageEW').checked;
-  const expWorkshopSlots=parseInt(document.getElementById('mmStageEWSlots').value)||1;
-  const parallelWithPrev=document.getElementById('mmStageParallel').checked;
   if(!name)return alert('Введите название');if(!abbr)return alert('Введите аббревиатуру');
   const t=S.mm.templates.find(x=>x.id===_mmStageEditTemplateId);if(!t)return;
   if(_mmStageEditId){
     const st=t.stages.find(x=>x.id===_mmStageEditId);
-    if(st){Object.assign(st,{name,abbr,days,mode,spec,expWorkshop,expWorkshopSlots,parallelWithPrev});}
+    if(st)Object.assign(st,{name,abbr,days,mode,spec,phase});
   }else{
-    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,spec,expWorkshop,expWorkshopSlots,parallelWithPrev});
+    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,spec,phase});
   }
   save();closeModal('mMMStage');renderMMTemplates();
 }
@@ -8167,7 +8190,11 @@ function saveMMProd(){
   const id=document.getElementById('mMMProdId').value;
   if(id){
     const p=S.mm.products.find(x=>x.id===id);
-    if(p)Object.assign(p,{name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status});
+    if(p){
+      const changed=p.templateId!==templateId||p.cidA!==cidA||p.cidB!==cidB||p.startDate!==startDate;
+      Object.assign(p,{name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status});
+      if(changed)delete S.mm.schedule[id]; // clear so rebuildAllMM rebuilds fresh
+    }
   }else{
     S.mm.products.push({id:'mp'+Date.now(),name,templateId,cidA,cidB,pairType,startDate,priority,qty,bitrixUrl,status:'active'});
   }
@@ -8182,6 +8209,98 @@ function delMMProd(id){
 }
 
 // ── MM Scheduling ─────────────────────────────────────────────
+// ── MM Independent-stage helpers ─────────────────────────────
+function _mmSchedFree(prevMarks,dur,cursor,cid){
+  const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+  const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+  const complete=doneDays.length>=dur;
+  const days={};let endDate;
+  if(complete){
+    const allD=[...new Set([...failDays,...doneDays])].sort();
+    for(const d of allD)days[d]={...prevMarks[d]};
+    endDate=doneDays[doneDays.length-1];
+  }else{
+    const remaining=dur-doneDays.length;
+    const lastMarked=[...doneDays,...failDays].sort().pop();
+    const afterMarked=lastMarked?(cid?mmEnsureWork(addDay(lastMarked,1),cid):addDay(lastMarked,1)):null;
+    let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
+    const planned=[];
+    while(planned.length<remaining){
+      if(cid?isMMWorkDay(probe,cid):!isBaseWknd(probe))planned.push(probe);
+      probe=addDay(probe,1);
+    }
+    for(const d of failDays)days[d]={...prevMarks[d]};
+    for(const d of doneDays)days[d]={...prevMarks[d]};
+    for(const d of planned)days[d]=prevMarks[d]||{status:'planned',setBy:'system'};
+    endDate=doneDays.length?doneDays[doneDays.length-1]:planned[planned.length-1]||cursor;
+  }
+  const allD=Object.keys(days).sort();
+  return{days,startDate:allD[0]||cursor,endDate};
+}
+function _mmSchedFreeBoth(prevMarks,dur,cursor,cidA,cidB){
+  const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
+  const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
+  const complete=doneDays.length>=dur;
+  const days={};let endDate;
+  if(complete){
+    const allD=[...new Set([...failDays,...doneDays])].sort();
+    for(const d of allD)days[d]={...prevMarks[d]};
+    endDate=doneDays[doneDays.length-1];
+  }else{
+    const remaining=dur-doneDays.length;
+    const lastMarked=[...doneDays,...failDays].sort().pop();
+    const afterMarked=lastMarked?(cidA?mmEnsureWork(addDay(lastMarked,1),cidA):addDay(lastMarked,1)):null;
+    let probe=afterMarked&&afterMarked>cursor?afterMarked:cursor;
+    const planned=[];
+    while(planned.length<remaining){
+      const okA=cidA?isMMWorkDay(probe,cidA):!isBaseWknd(probe);
+      const okB=cidB?isMMWorkDay(probe,cidB):!isBaseWknd(probe);
+      if(okA&&okB)planned.push(probe);
+      probe=addDay(probe,1);
+    }
+    for(const d of failDays)days[d]={...prevMarks[d]};
+    for(const d of doneDays)days[d]={...prevMarks[d]};
+    for(const d of planned)days[d]=prevMarks[d]||{status:'planned',setBy:'system'};
+    endDate=doneDays.length?doneDays[doneDays.length-1]:planned[planned.length-1]||cursor;
+  }
+  const allD=Object.keys(days).sort();
+  return{days,startDate:allD[0]||cursor,endDate};
+}
+function _mmRebuildOneStage(pid,stageId,newStartDate){
+  const prod=S.mm.products.find(p=>p.id===pid);
+  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
+  const stage=tmpl?.stages.find(s=>s.id===stageId);
+  if(!prod||!stage)return;
+  const cidA=prod.cidA||'',cidB=prod.cidB||cidA;
+  const dur=(S.mm.customDurations[pid]||{})[stageId]??stage.days??1;
+  const spec=(stage.spec==='merge'?'both':stage.spec)||'both';
+  const isCtrl=stage.mode==='ctrl';
+  if(!S.mm.schedule[pid])S.mm.schedule[pid]={};
+  const existing=S.mm.schedule[pid][stageId];
+  const prevMarks={};
+  for(const[d,v]of Object.entries(existing?.days||{}))
+    if(v.status==='done'||v.status==='fail')prevMarks[d]={...v};
+  const start=newStartDate||existing?.startDate||prod.startDate;
+  const fr=existing?.failReason||null;
+  if(spec==='frame'){
+    const r=_mmSchedFree(prevMarks,dur,start,cidA);
+    S.mm.schedule[pid][stageId]={startDate:r.startDate,endDate:r.endDate,days:r.days,
+      track0:{constructorId:cidA,days:r.days},failReason:fr};
+  }else if(spec==='sewing'){
+    const r=_mmSchedFree(prevMarks,dur,start,cidB);
+    S.mm.schedule[pid][stageId]={startDate:r.startDate,endDate:r.endDate,days:r.days,
+      track1:{constructorId:cidB,days:r.days},failReason:fr};
+  }else{
+    const r=_mmSchedFreeBoth(prevMarks,dur,start,cidA,cidB);
+    S.mm.schedule[pid][stageId]={startDate:r.startDate,endDate:r.endDate,days:r.days,
+      track0:{constructorId:cidA,days:{...r.days}},
+      track1:{constructorId:cidB,days:{...r.days}},failReason:fr};
+  }
+}
+function forceRebuildAllMM(){
+  if(!confirm('Пересчитать весь график ММ с нуля?\nВсе ручные переносы будут сброшены.'))return;
+  rebuildAllMM(true);save();renderMMCalendar();
+}
 function _mmSchedSingle(prevMarks,dur,cursor,cid,isCtrl,ew,ewSlots,doingBusy,expBusy){
   const doneDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='done').sort();
   const failDays=Object.keys(prevMarks).filter(d=>prevMarks[d].status==='fail').sort();
@@ -8256,7 +8375,7 @@ function _mmSchedBoth(prevMarks,dur,cursor,cidA,cidB,isCtrl,ew,ewSlots,doingBusy
   const allD=Object.keys(days).sort();
   return{days,startDate:allD[0]||cursor,endDate,nextCursor};
 }
-function rebuildAllMM(){
+function rebuildAllMM(force=false){
   const saved={};
   for(const pid in S.mm.schedule){
     saved[pid]={};
@@ -8269,11 +8388,12 @@ function rebuildAllMM(){
       saved[pid][sid]={marks,marks0,marks1,failReason:e.failReason||null};
     }
   }
-  S.mm.schedule={};
+  if(force)S.mm.schedule={};
   const prods=[...S.mm.products].sort((a,b)=>a.priority-b.priority);
   const mmDoingBusy={},expBusy={};
   for(const prod of prods){
     if(prod.status==='closed')continue;
+    if(!force&&S.mm.schedule[prod.id]&&Object.keys(S.mm.schedule[prod.id]).length>0)continue;
     const tmpl=S.mm.templates.find(x=>x.id===prod.templateId);if(!tmpl)continue;
     const cidA=prod.cidA||'';const cidB=prod.cidB||cidA;
     if(cidA&&!mmDoingBusy[cidA])mmDoingBusy[cidA]=new Set();
@@ -8388,7 +8508,9 @@ function adjustMMDur(pid,stageId,delta){
     type:delta>0?'extend':'shorten',productId:pid,stageId,
     productName:prod?.name||'',stageName:stage.name,
     reason:`${delta>0?'Удлинение':'Сокращение'} этапа на ${Math.abs(delta)} дн. (${curDur}→${newDur})`});
-  rebuildAllMM();save();renderMMCalendar();
+  const existStart=S.mm.schedule[pid]?.[stageId]?.startDate||prod.startDate;
+  _mmRebuildOneStage(pid,stageId,existStart);
+  save();renderMMCalendar();
   if(mmDurPopupEl&&mmDurPopupEl.style.display!=='none')
     showMMDurPopup(pid,stageId,parseInt(mmDurPopupEl.style.left)-10,parseInt(mmDurPopupEl.style.top)-10);
 }
@@ -8405,25 +8527,25 @@ function addMMAccDate(){
   if(S.mm.acceptanceDates.find(a=>a.date===d))return alert('Такая дата уже есть');
   S.mm.acceptanceDates.push({id:'mmac'+Date.now(),date:d});
   S.mm.acceptanceDates.sort((a,b)=>a.date.localeCompare(b.date));
-  save();rebuildAllMM();save();renderMMAcceptance();
+  save();renderMMAcceptance();
 }
 function deleteMMAccDate(id){
   if(!confirm('Удалить дату приёмки?'))return;
   S.mm.acceptanceDates=S.mm.acceptanceDates.filter(a=>a.id!==id);
-  save();rebuildAllMM();save();renderMMAcceptance();
+  save();renderMMAcceptance();
 }
 function setMMIndividualAccDate(pid,type,date){
   if(!S.mm.individualAcceptDates[pid])S.mm.individualAcceptDates[pid]={};
   if(date)S.mm.individualAcceptDates[pid][type]=date;
   else delete S.mm.individualAcceptDates[pid][type];
-  save();rebuildAllMM();save();renderMMAcceptance();
+  save();renderMMAcceptance();
 }
 function markMMAccResult(dateKey,pid,type,result){
   const key=dateKey+'_'+pid+'_'+type;
   const existing=S.mm.acceptanceResults[key];
   if(existing&&existing.result===result){delete S.mm.acceptanceResults[key];}
   else{S.mm.acceptanceResults[key]={result,markedBy:session.name||'admin',markedAt:new Date().toISOString()};}
-  save();rebuildAllMM();save();renderMMAcceptance();
+  save();renderMMAcceptance();
 }
 function renderMMAcceptance(){
   const el=document.getElementById('mmAcceptanceList');if(!el)return;
@@ -8713,17 +8835,12 @@ function openMMMarkDay(pid,stageId,trackIdx,date){
   document.getElementById('mmMarkTitle').textContent=`${prod?.name||'?'} / ${stage?.abbr||'?'} — ${fmtShort(date)}`;
   document.getElementById('mmMarkStatus').textContent=st==='done'?'✔ Выполнен':st==='fail'?'✖ Не выполнен':st==='planned'?'Запланирован':'Нет данных';
   document.getElementById('mmMarkRevertRow').style.display=(st==='done'||st==='fail')?'':'none';
-  // shift controls
-  const pinned=(S.mm.stageConstraints[pid]||{})[stageId]||null;
   const shiftRow=document.getElementById('mmShiftRow');
-  const unpinBtn=document.getElementById('mmUnpinBtn');
-  const pinnedNote=document.getElementById('mmPinnedNote');
   const shiftDate=document.getElementById('mmShiftDate');
   const shiftReason=document.getElementById('mmShiftReason');
   if(shiftRow)shiftRow.style.display=session.role==='admin'?'':'none';
-  if(pinned){unpinBtn&&(unpinBtn.style.display='');pinnedNote&&(pinnedNote.style.display='',pinnedNote.textContent='📌 Зафиксирован на '+fmtFull(pinned));}
-  else{unpinBtn&&(unpinBtn.style.display='none');pinnedNote&&(pinnedNote.style.display='none');}
-  if(shiftDate)shiftDate.value=pinned||date;
+  const existStart=S.mm.schedule[pid]?.[stageId]?.startDate||date;
+  if(shiftDate)shiftDate.value=existStart;
   if(shiftReason)shiftReason.value='';
   openModal('mMMMarkDay');
 }
@@ -8731,51 +8848,34 @@ function mmMarkDone(){
   if(!_mmMarkCtx)return;
   const {pid,stageId,trackIdx,date}=_mmMarkCtx;
   setMMDayMark(pid,stageId,trackIdx,date,'done');
-  closeModal('mMMMarkDay');
-  rebuildAllMM();save();renderMMCalendar();
+  closeModal('mMMMarkDay');save();renderMMCalendar();
 }
 function mmMarkFail(){
   if(!_mmMarkCtx)return;
   const {pid,stageId,trackIdx,date}=_mmMarkCtx;
   setMMDayMark(pid,stageId,trackIdx,date,'fail');
-  closeModal('mMMMarkDay');
-  rebuildAllMM();save();renderMMCalendar();
+  closeModal('mMMMarkDay');save();renderMMCalendar();
 }
 function mmMarkRevert(){
   if(!_mmMarkCtx)return;
   const {pid,stageId,trackIdx,date}=_mmMarkCtx;
   setMMDayMark(pid,stageId,trackIdx,date,'planned');
-  closeModal('mMMMarkDay');
-  rebuildAllMM();save();renderMMCalendar();
+  closeModal('mMMMarkDay');save();renderMMCalendar();
 }
-function doMMPinStage(){
+function doMMMoveStage(){
   if(!_mmMarkCtx)return;
   const{pid,stageId}=_mmMarkCtx;
   const date=document.getElementById('mmShiftDate')?.value;
   if(!date)return alert('Укажите дату');
   const reason=document.getElementById('mmShiftReason')?.value.trim();
-  if(!reason)return alert('Укажите причину переноса');
-  if(!S.mm.stageConstraints[pid])S.mm.stageConstraints[pid]={};
-  S.mm.stageConstraints[pid][stageId]=date;
+  _mmRebuildOneStage(pid,stageId,date);
   const prod=S.mm.products.find(p=>p.id===pid);
   const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
   const stage=tmpl?.stages.find(s=>s.id===stageId);
   S.mm.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
-    type:'pin',productId:pid,stageId,productName:prod?.name||'',stageName:stage?.name||'',
-    fromDate:date,reason});
-  rebuildAllMM();save();closeModal('mMMMarkDay');renderMMCalendar();
-}
-function doMMUnpinStage(){
-  if(!_mmMarkCtx)return;
-  const{pid,stageId}=_mmMarkCtx;
-  if(S.mm.stageConstraints[pid])delete S.mm.stageConstraints[pid][stageId];
-  const prod=S.mm.products.find(p=>p.id===pid);
-  const tmpl=S.mm.templates.find(t=>t.id===prod?.templateId);
-  const stage=tmpl?.stages.find(s=>s.id===stageId);
-  S.mm.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
-    type:'unpin',productId:pid,stageId,productName:prod?.name||'',stageName:stage?.name||'',
-    fromDate:todayStr(),reason:'Снят перенос — возврат в план'});
-  rebuildAllMM();save();closeModal('mMMMarkDay');renderMMCalendar();
+    type:'move',productId:pid,stageId,productName:prod?.name||'',stageName:stage?.name||'',
+    fromDate:date,reason:reason||'Ручной перенос'});
+  save();closeModal('mMMMarkDay');renderMMCalendar();
 }
 function setMMDayMark(pid,stageId,trackIdx,date,status){
   if(!S.mm.schedule[pid])S.mm.schedule[pid]={};
@@ -8992,35 +9092,47 @@ function tryAutoLogin(){
 </div></div>
 
 <div class="overlay" id="mMMStage"><div class="modal" style="width:480px">
-  <h2 id="mMMStageTitle">Этап ММ</h2>
+  <h2 id="mMMStageTitle">Операция ММ</h2>
   <input type="hidden" id="mmStageId">
   <div class="fg"><label>Полное название</label><input type="text" id="mmStageName"></div>
   <div class="fg"><label>Аббревиатура (до 5 симв.)</label><input type="text" id="mmStageAbbr" maxlength="5"></div>
+  <div class="fg"><label>Фаза</label>
+    <select id="mmStagePhase" style="border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:13px;width:100%">
+      <option value="1">1 — Черновой образец</option>
+      <option value="2">2 — Чистовой образец</option>
+      <option value="3">3 — КТД</option>
+      <option value="4">4 — Производство</option>
+    </select>
+  </div>
   <div class="fg"><label>Исполнитель</label>
-    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="frame" checked> 🪵 Каркасника</label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="sewing"> 🧵 Швейника</label>
+    <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="frame" checked> 🪵 Каркасник</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="sewing"> 🧵 Швейник</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="both"> 👥 Оба</label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageSpec" value="merge"> 🔀 Слияние (ждёт обоих)</label>
     </div>
   </div>
-  <div class="fg"><label>Режим</label>
-    <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="ctrl" checked> Контроль</label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="seq"> Последовательный (A→B)</label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="par"> Параллельный (A‖B)</label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="combined"> Совместный (A+B)</label>
+  <div class="fg"><label>Тип участия</label>
+    <div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="exec" checked> ✋ Выполняет</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="mmStageMode" value="ctrl"> 👁 Контролирует</label>
     </div>
   </div>
-  <div class="fg"><label>Дней</label><input type="number" id="mmStageDays" min="1" max="90" value="1"></div>
-  <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" id="mmStageEW" onchange="document.getElementById('mmStageEWRow').style.display=this.checked?'':'none'"> Экспериментальный участок (ЭУ)
-  </label></div>
-  <div id="mmStageEWRow" style="display:none" class="fg"><label>Слотов ЭУ</label><input type="number" id="mmStageEWSlots" min="1" max="10" value="1"></div>
-  <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" id="mmStageParallel"> Параллельно с предыдущим (тот же день)
-  </label></div>
+  <div class="fg"><label>Рабочих дней</label><input type="number" id="mmStageDays" min="1" max="90" value="1"></div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mMMStage')">Отмена</button><button class="btn btn-green" onclick="saveMMStage()">Сохранить</button></div>
+</div></div>
+
+<div class="overlay" id="mMMNewTemplate"><div class="modal" style="width:420px">
+  <h2>📋 Новый шаблон ММ</h2>
+  <div class="fg"><label>Название шаблона</label><input type="text" id="mmNewTmplName" placeholder="Например: Диван угловой XL"></div>
+  <div class="fg"><label>Скопировать операции из шаблона (необязательно)</label>
+    <select id="mmNewTmplCopyId" style="border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:13px;width:100%">
+      <option value="">— начать с нуля —</option>
+    </select>
+  </div>
+  <div class="mfooter">
+    <button class="btn btn-gray" onclick="closeModal('mMMNewTemplate')">Отмена</button>
+    <button class="btn btn-green" onclick="saveMMTemplate()">Создать</button>
+  </div>
 </div></div>
 
 <div class="overlay" id="mMMMarkDay"><div class="modal" style="width:420px">
@@ -9034,14 +9146,12 @@ function tryAutoLogin(){
     <button class="btn btn-gray btn-sm" onclick="mmMarkRevert()" style="width:100%">↩ Отменить отметку</button>
   </div>
   <div id="mmShiftRow" style="border-top:1px solid #eee;padding-top:10px;margin-top:4px">
-    <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px">📅 Перенос этапа</div>
+    <div style="font-size:12px;font-weight:700;color:#1a3a5c;margin-bottom:6px">📅 Переставить этап на другую дату</div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
       <input type="date" id="mmShiftDate" style="border:1px solid #ccc;border-radius:6px;padding:3px 8px;font-size:13px">
-      <button class="btn btn-blue btn-sm" onclick="doMMPinStage()">Зафиксировать</button>
-      <button class="btn btn-gray btn-sm" id="mmUnpinBtn" onclick="doMMUnpinStage()" style="display:none">✕ Снять перенос</button>
+      <button class="btn btn-blue btn-sm" onclick="doMMMoveStage()">Переставить</button>
     </div>
-    <input type="text" id="mmShiftReason" placeholder="Причина переноса..." style="width:100%;border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:12px;box-sizing:border-box">
-    <div id="mmPinnedNote" style="display:none;font-size:11px;color:#2471a3;margin-top:4px"></div>
+    <input type="text" id="mmShiftReason" placeholder="Причина (необязательно)..." style="width:100%;border:1px solid #ccc;border-radius:6px;padding:5px 8px;font-size:12px;box-sizing:border-box">
   </div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mMMMarkDay')">Закрыть</button></div>
 </div></div>
