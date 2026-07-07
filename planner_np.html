@@ -8040,6 +8040,9 @@ function openAddMMStage(templateId){
   document.getElementById('mmStagePhase').value='1';
   document.querySelectorAll('input[name=mmStageMode]').forEach((r,i)=>r.checked=i===0);
   document.querySelectorAll('input[name=mmStageSpec]').forEach((r,i)=>r.checked=i===0);
+  document.getElementById('mmStageEW').checked=false;
+  document.getElementById('mmStageEWSlots').value='1';
+  document.getElementById('mmStageEWRow').style.display='none';
   openModal('mMMStage');
 }
 function openEditMMStage(templateId,stageId){
@@ -8052,12 +8055,13 @@ function openEditMMStage(templateId,stageId){
   document.getElementById('mmStageAbbr').value=st.abbr;
   document.getElementById('mmStageDays').value=st.days;
   document.getElementById('mmStagePhase').value=st.phase||'1';
-  // map old modes: seq/combined/par → exec
   const modeVal=st.mode==='ctrl'?'ctrl':'exec';
   document.querySelectorAll('input[name=mmStageMode]').forEach(r=>r.checked=r.value===modeVal);
-  // map old specs: merge → both
   const specVal=st.spec==='merge'?'both':(st.spec||'frame');
   document.querySelectorAll('input[name=mmStageSpec]').forEach(r=>r.checked=r.value===specVal);
+  document.getElementById('mmStageEW').checked=!!st.expWorkshop;
+  document.getElementById('mmStageEWSlots').value=st.expWorkshopSlots||1;
+  document.getElementById('mmStageEWRow').style.display=st.expWorkshop?'':'none';
   openModal('mMMStage');
 }
 function saveMMStage(){
@@ -8067,13 +8071,15 @@ function saveMMStage(){
   const phase=document.getElementById('mmStagePhase').value||'1';
   const mode=document.querySelector('input[name=mmStageMode]:checked')?.value||'ctrl';
   const spec=document.querySelector('input[name=mmStageSpec]:checked')?.value||'frame';
+  const expWorkshop=document.getElementById('mmStageEW').checked;
+  const expWorkshopSlots=parseInt(document.getElementById('mmStageEWSlots').value)||1;
   if(!name)return alert('Введите название');if(!abbr)return alert('Введите аббревиатуру');
   const t=S.mm.templates.find(x=>x.id===_mmStageEditTemplateId);if(!t)return;
   if(_mmStageEditId){
     const st=t.stages.find(x=>x.id===_mmStageEditId);
-    if(st)Object.assign(st,{name,abbr,days,mode,spec,phase});
+    if(st)Object.assign(st,{name,abbr,days,mode,spec,phase,expWorkshop,expWorkshopSlots});
   }else{
-    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,spec,phase});
+    t.stages.push({id:'mms'+Date.now(),name,abbr,days,mode,spec,phase,expWorkshop,expWorkshopSlots});
   }
   save();closeModal('mMMStage');renderMMTemplates();
 }
@@ -8391,6 +8397,32 @@ function rebuildAllMM(force=false){
   if(force)S.mm.schedule={};
   const prods=[...S.mm.products].sort((a,b)=>a.priority-b.priority);
   const mmDoingBusy={},expBusy={};
+  // Pre-populate busy days from already-scheduled products so new products don't overlap
+  if(!force){
+    for(const pid in S.mm.schedule){
+      const p=S.mm.products.find(x=>x.id===pid);
+      if(!p||p.status==='closed')continue;
+      const tmpl=S.mm.templates.find(t=>t.id===p.templateId);if(!tmpl)continue;
+      const pA=p.cidA||'',pB=p.cidB||pA;
+      if(pA&&!mmDoingBusy[pA])mmDoingBusy[pA]=new Set();
+      if(pB&&pB!==pA&&!mmDoingBusy[pB])mmDoingBusy[pB]=new Set();
+      for(const sid in S.mm.schedule[pid]){
+        const stage=tmpl.stages.find(s=>s.id===sid);if(!stage)continue;
+        const isCtrlSt=stage.mode==='ctrl';if(isCtrlSt)continue;
+        const spec=stage.spec==='merge'?'both':stage.spec||'both';
+        const ew=stage.expWorkshop,ewSlots=stage.expWorkshopSlots||1;
+        const entry=S.mm.schedule[pid][sid];
+        for(const[d,v]of Object.entries(entry.days||{})){
+          if(v.status==='planned'||v.status==='done'){
+            if(!ew){
+              if(spec==='frame'||spec==='both'){if(pA)mmDoingBusy[pA].add(d);}
+              if(spec==='sewing'||spec==='both'){if(pB)mmDoingBusy[pB].add(d);}
+            }else{expBusy[d]=(expBusy[d]||0)+1;}
+          }
+        }
+      }
+    }
+  }
   for(const prod of prods){
     if(prod.status==='closed')continue;
     if(!force&&S.mm.schedule[prod.id]&&Object.keys(S.mm.schedule[prod.id]).length>0)continue;
@@ -9118,6 +9150,16 @@ function tryAutoLogin(){
     </div>
   </div>
   <div class="fg"><label>Рабочих дней</label><input type="number" id="mmStageDays" min="1" max="90" value="1"></div>
+  <div class="fg">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="mmStageEW" onchange="document.getElementById('mmStageEWRow').style.display=this.checked?'':'none'">
+      🏭 Выполняется в Экспериментальном участке (ЭУ)
+    </label>
+  </div>
+  <div class="fg" id="mmStageEWRow" style="display:none">
+    <label>Слотов ЭУ (одновременно занятых мест)</label>
+    <input type="number" id="mmStageEWSlots" min="1" max="10" value="1">
+  </div>
   <div class="mfooter"><button class="btn btn-gray" onclick="closeModal('mMMStage')">Отмена</button><button class="btn btn-green" onclick="saveMMStage()">Сохранить</button></div>
 </div></div>
 
