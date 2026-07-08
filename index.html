@@ -3224,7 +3224,7 @@ function metallRender(rows, label){
     <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Отчёт ${dateStr} · для мессенджера</div>
     <div id="met-msg-card" style="background:#fefce8;border:2px solid #fde047;border-radius:12px;padding:14px 18px;display:inline-block;min-width:300px;cursor:pointer" title="Нажмите чтобы скопировать текст" onclick="metCopyReport()">
       <div style="font-size:15px;font-weight:700;color:#0f172a;line-height:2;font-family:monospace">
-        <div>П/Ф День: ${metFmtR(planD)} / ${metFmtR(factD)} / ${metFmtPct(pctDay)}</div>
+        <div>П/Ф День: ${metFmtR(planD)} / ${metFmtR(factD)} / ${metFmtPct(pctDay-1)}</div>
         <div>П/Ф Месяц: ${metFmtR(planToDate)} / ${metFmtR(factCur)} / ${metFmtPct(pctDate-1)}</div>
       </div>
       <div style="font-size:9px;color:#92400e;margin-top:4px">📋 нажмите чтобы скопировать</div>
