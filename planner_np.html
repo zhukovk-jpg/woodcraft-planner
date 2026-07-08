@@ -1934,8 +1934,9 @@ function rebuildForConstructor(cid){
       saved[prod.id][sid]={marks,failReason:e.failReason};
     }
   }
-  for(const prod of prods)S.schedule[prod.id]={};
+  for(const prod of prods) if(!prod.manualSchedule) S.schedule[prod.id]={};
   for(const prod of prods){
+    if(prod.manualSchedule) continue;
     const sched=S.schedule[prod.id];
     let cursor=ensureWork(prod.startDate,cid);
     // naiveCursor: vacation-naive cursor for ctrl stages.
@@ -2131,6 +2132,31 @@ function rebuildAllScheme(){
 function rebuildAll(){
   [...new Set(S.products.map(p=>p.constructorId).filter(Boolean))].forEach(cid=>rebuildForConstructor(cid));
   rebuildAllScheme();
+}
+function removeStageFromProduct(pid,sid){
+  const sched=S.schedule[pid];if(!sched)return;
+  if(!sched[sid])sched[sid]={};
+  const marks={};
+  for(const[d,v]of Object.entries(sched[sid].days||{}))if(v.status==='done'||v.status==='fail')marks[d]={...v};
+  sched[sid]={startDate:null,endDate:null,days:marks,skipped:true,manualSkip:true,failReason:null};
+  const prod=S.products.find(p=>p.id===pid);
+  if(prod)prod.manualSchedule=true;
+  save();renderCalendar();
+}
+function restoreStageInProduct(pid,sid){
+  const sched=S.schedule[pid];
+  if(sched&&sched[sid]){delete sched[sid].skipped;delete sched[sid].manualSkip;}
+  const prod=S.products.find(p=>p.id===pid);
+  if(prod)prod.manualSchedule=true;
+  save();renderCalendar();
+}
+function resetProductManualSchedule(pid){
+  const prod=S.products.find(p=>p.id===pid);if(!prod)return;
+  const sched=S.schedule[pid]||{};
+  for(const sid in sched){delete sched[sid].manualSkip;if(sched[sid].skipped&&!Object.values(sched[sid].days||{}).some(v=>v.status==='done'||v.status==='fail'))delete S.schedule[pid][sid];}
+  delete prod.manualSchedule;
+  if(prod.constructorId)rebuildForConstructor(prod.constructorId);
+  save();renderCalendar();
 }
 
 function shiftFromDate(cid,fromDate,logEntry){
@@ -6067,15 +6093,20 @@ function renderCalendar(){
       const accStatus=getAcceptanceStatus(prod.id);
       const accMark=accStatus==='assigned'?'<span class="prod-acc-yes" title="Включено в приёмку">✅</span>':accStatus==='warning'?'<span class="prod-acc-warn" title="ПРМ этого месяца, но не назначена приёмка">⚠️</span>':'';
       const closedBadge=prod.status==='closed'?'<span class="closed-badge">ЗАКРЫТО</span> ':'';
+      const canEditProd=session.role==='admin'||prod.constructorId===session.cid;
+      const immuneBadge=prod.manualSchedule
+        ?`<span title="Иммунитет к Пересчитать" style="font-size:10px;color:#e67e22;margin-left:4px;flex-shrink:0">🔒</span>${canEditProd?`<span onclick="event.stopPropagation();resetProductManualSchedule('${prod.id}')" title="Разрешить пересчёт и пересчитать" style="cursor:pointer;font-size:10px;color:#888;margin-left:3px;text-decoration:underline;flex-shrink:0">сбросить</span>`:''}`:'' ;
       const pr=document.createElement('tr');
       const pt=document.createElement('td');pt.className='gc-prod';
-      pt.innerHTML=`<div style="display:flex;align-items:baseline;gap:4px;white-space:nowrap">${closedBadge}<span class="pri">${prod.priority}</span><span style="overflow:hidden;text-overflow:ellipsis">${prod.name}</span><span class="type-badge ${TYPE_CSS[prod.type]}">${TYPE_LABEL[prod.type]}</span>${accMark}${prod.bitrixUrl?`<a href="${prod.bitrixUrl}" target="_blank" style="color:#e67e22;font-size:11px;margin-left:4px;text-decoration:none" title="Открыть в Битрикс">🔗</a>`:''}</div><div style="font-size:10px;color:#2471a3;margin-top:2px">📅 до ${fmtFull(prodEnd)}</div>`;
+      pt.innerHTML=`<div style="display:flex;align-items:baseline;gap:4px;white-space:nowrap">${closedBadge}<span class="pri">${prod.priority}</span><span style="overflow:hidden;text-overflow:ellipsis">${prod.name}</span><span class="type-badge ${TYPE_CSS[prod.type]}">${TYPE_LABEL[prod.type]}</span>${accMark}${prod.bitrixUrl?`<a href="${prod.bitrixUrl}" target="_blank" style="color:#e67e22;font-size:11px;margin-left:4px;text-decoration:none" title="Открыть в Битрикс">🔗</a>`:''}${immuneBadge}</div><div style="font-size:10px;color:#2471a3;margin-top:2px">📅 до ${fmtFull(prodEnd)}</div>`;
       pr.appendChild(pt);
       for(const d of days){const td2=document.createElement('td');td2.style.cssText='background:#dce5f0;border:1px solid #d8dce2';pr.appendChild(td2);}
       tbl.appendChild(pr);
 
       const expanded=_calExpanded.has(prod.id);
-      const stageList=getStageList(prod.type).filter(s=>!(sched[s.id]?.skipped));
+      const allStagesFull=getStageList(prod.type);
+      const stageList=allStagesFull.filter(s=>!(sched[s.id]?.skipped));
+      const skippedStages=allStagesFull.filter(s=>sched[s.id]?.skipped);
       const isStageActive=s=>{const e=sched[s.id];if(!e||!e.startDate||!e.endDate)return false;
         if(e.startDate<=td&&e.endDate>=td)return true;
         return days.some(d=>e.days?.[d]);};
@@ -6087,7 +6118,8 @@ function renderCalendar(){
         const entry=sched[stage.id];
         const sr=document.createElement('tr');
         const st=document.createElement('td');st.className='gc-stage';
-        st.innerHTML=`<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stage.type==='doing'?'🔵':'🟠'} <b>${stage.abbr}</b> ${stage.name}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
+        const rmBtn=canEditProd?`<span onclick="event.stopPropagation();removeStageFromProduct('${prod.id}','${stage.id}')" title="Убрать этап" style="cursor:pointer;color:#e74c3c;font-size:10px;margin-left:4px;font-weight:700;flex-shrink:0;opacity:.6">✕</span>`:'';
+        st.innerHTML=`<div style="display:flex;align-items:center;overflow:hidden">${stage.type==='doing'?'🔵':'🟠'}&nbsp;<b>${stage.abbr}</b>&nbsp;<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${stage.name}</span>${rmBtn}</div><div style="font-size:10px;color:#aaa">до ${fmtShort(entry?.endDate)}</div>`;
         sr.appendChild(st);
 
         for(const d of days){
@@ -6139,15 +6171,29 @@ function renderCalendar(){
         tbl.appendChild(sr);
       }
 
+      // Skipped (removed) stages — shown when expanded
+      if(expanded&&skippedStages.length>0){
+        for(const s of skippedStages){
+          const sr2=document.createElement('tr');
+          const st2=document.createElement('td');
+          st2.colSpan=days.length+1;
+          st2.style.cssText='padding:2px 10px 2px 24px;font-size:11px;background:#fff8f8;border-bottom:1px solid #fee;color:#bbb';
+          const restoreHtml=canEditProd?`<span onclick="restoreStageInProduct('${prod.id}','${s.id}')" style="cursor:pointer;color:#27ae60;margin-left:8px;font-size:11px;font-weight:600">+ добавить</span>`:'';
+          const lbl=sched[s.id]?.manualSkip?'<span style="color:#e74c3c;margin-right:3px">✕</span>':'<span style="margin-right:3px">⊘</span>';
+          st2.innerHTML=`${lbl}<b>${s.abbr}</b> ${s.name} — <i>убран</i>${restoreHtml}`;
+          sr2.appendChild(st2);tbl.appendChild(sr2);
+        }
+      }
       // Collapse toggle row
-      if(hiddenStages.length>0||expanded){
+      const totalHidden=hiddenStages.length+skippedStages.length;
+      if(totalHidden>0||expanded){
         const tr=document.createElement('tr');
         const tc=document.createElement('td');
         tc.colSpan=days.length+1;
         tc.style.cssText='padding:2px 10px 4px 24px;font-size:11px;color:#2471a3;cursor:pointer;background:#f5f8fc;border-bottom:1px solid #e0e8f0';
         tc.innerHTML=expanded
-          ?`<span>▲ Свернуть неактивные этапы</span>`
-          :`<span>▼ Скрыто этапов: ${hiddenStages.length} — показать все</span>`;
+          ?`<span>▲ Свернуть</span>`
+          :`<span>▼ Скрыто: ${hiddenStages.length}${skippedStages.length?` · убрано: ${skippedStages.length}`:''} — показать все</span>`;
         tc.onclick=()=>{if(_calExpanded.has(prod.id))_calExpanded.delete(prod.id);else _calExpanded.add(prod.id);renderCalendar();};
         tr.appendChild(tc);tbl.appendChild(tr);
       }
