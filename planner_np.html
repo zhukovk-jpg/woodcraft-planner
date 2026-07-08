@@ -2448,6 +2448,8 @@ function startApp(){
     document.getElementById('mtMm').style.display='none';
     document.getElementById('mtMetal').style.display='none';
     document.getElementById('mtMassiv').style.display='none';
+    const dbTab=document.getElementById('mtDashboard');
+    if(dbTab)dbTab.style.display='';
   } else if(session.role==='manager'){
     document.getElementById('mtKm').style.display='';
     document.getElementById('mtMm').style.display='none';
@@ -2459,9 +2461,7 @@ function startApp(){
   if(session.role==='constructor'){
     switchSection('dashboard');
   } else if(session.role==='scheme'){
-    switchSection('km');
-    const calTabEl=document.querySelector('#subNavKm .sub-tab');
-    if(calTabEl)calTabEl.click();
+    switchSection('dashboard');
   } else if(session.role==='manager'){
     switchSection('km');
     document.getElementById('stPlanFact').click();
@@ -2657,6 +2657,19 @@ function _dbCollectTasks(cid){
       else if(e.startDate<=today){active.push(task);(isCtrl?today_ctrl:today_doing).push(task);}
     }
   }
+  // Scheme designer tasks
+  if(session.role==='scheme'){
+    for(const prod of (S.products||[]).filter(p=>p.schemeDiagCid===cid&&p.status!=='closed')){
+      const e=S.schemeSchedule?.[prod.id];if(!e||!e.startDate||!e.endDate)continue;
+      const isDone=Object.values(e.days||{}).some(v=>v.status==='done');
+      if(isDone)continue;
+      const task={prodName:prod.name,prodId:prod.id,stageAbbr:'СХМ',stageName:'Схема сборки',
+        startDate:e.startDate,endDate:e.endDate,isCtrl:false,
+        mod:'СХМ',modClr:'#4a235a',modBg:'#f5eef8',bitrixUrl:prod.bitrixUrl||''};
+      if(e.endDate<today)overdue.push(task);
+      else if(e.startDate<=today){active.push(task);today_doing.push(task);}
+    }
+  }
   const sortByEnd=(a,b)=>a.endDate<b.endDate?-1:a.endDate>b.endDate?1:0;
   [active,today_doing,today_ctrl,overdue].forEach(a=>a.sort(sortByEnd));
   return{active,today_doing,today_ctrl,overdue};
@@ -2682,23 +2695,25 @@ function _dbTaskRow(task){
   </div>`;
 }
 function renderDashboard(){
-  if(session.role!=='constructor')return;
+  if(session.role!=='constructor'&&session.role!=='scheme')return;
   const el=document.getElementById('tab-dashboard');if(!el)return;
   const cid=session.cid;
-  const c=profileGetCon(cid);if(!c)return;
+  const isScheme=session.role==='scheme';
+  const c=isScheme?(S.schemeDesigners||[]).find(x=>x.id===cid):profileGetCon(cid);
+  if(!c)return;
   const now=new Date();const yr=now.getFullYear();const mo=now.getMonth();
   const {active,today_doing,today_ctrl,overdue}=_dbCollectTasks(cid);
   const {data:wlData,allDays:wlDays}=_wlCompute(yr,mo+1);
   const myWl=wlData[cid];
   const wlPct=wlDays.length>0&&myWl?Math.round(Object.values(myWl.days).reduce((s,x)=>s+x.doing.length,0)/wlDays.length*100):0;
   const wlColors=_wlPctBg(wlPct);
-  const moPts=session.module==='mm'?calcMMPointsMonth(cid,yr,mo):calcPoints(cid,yr,mo);
-  const allPts=calcAllTimePoints(cid);
+  const moPts=isScheme?0:session.module==='mm'?calcMMPointsMonth(cid,yr,mo):calcPoints(cid,yr,mo);
+  const allPts=isScheme?0:calcAllTimePoints(cid);
   const avatarHtml=c.avatar
     ?`<img src="${c.avatar}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.25)">`
     :`<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.25)">${drawChar(c.gender||'male',48)}</div>`;
-  const modLabel=session.module==='mm'?'🛋 Мягкая мебель':'🗄 Корпусная мебель';
-  const modClr=session.module==='mm'?'#ce93d8':'#90caf9';
+  const modLabel=isScheme?'📐 Схемы сборки':session.module==='mm'?'🛋 Мягкая мебель':'🗄 Корпусная мебель';
+  const modClr=isScheme?'#a8d5b5':session.module==='mm'?'#ce93d8':'#90caf9';
   const today=now.toISOString().slice(0,10);
   const dayNames=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
   const todayLabel=`${dayNames[now.getDay()]}, ${today.slice(8)}.${today.slice(5,7)}.${today.slice(0,4)}`;
@@ -2715,16 +2730,21 @@ function renderDashboard(){
         <div style="font-size:24px;font-weight:900;color:${wlPct>100?'#ff8a65':wlPct>70?'#ffd54f':'#a5d6a7'}">${wlPct}%</div>
         <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Загрузка</div>
       </div>`:''}
-      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
-        <div style="font-size:24px;font-weight:900;color:#ffd700">⭐${moPts}</div>
-        <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">За месяц</div>
-      </div>
-      <div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+      ${isScheme
+        ?`<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+          <div style="font-size:24px;font-weight:900;color:#a8d5b5">${active.length}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">В работе</div>
+        </div>`
+        :`<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
+          <div style="font-size:24px;font-weight:900;color:#ffd700">⭐${moPts}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">За месяц</div>
+        </div>`}
+      ${!isScheme?`<div style="background:rgba(255,255,255,.08);border-radius:10px;padding:10px 18px;text-align:center">
         <div style="font-size:24px;font-weight:900;color:#fff">${allPts}</div>
         <div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px">Всего очков</div>
-      </div>
+      </div>`:''}
     </div>
-    <button onclick="openProfile()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:12px;align-self:flex-start">⚙ Настройки</button>
+    ${!isScheme?`<button onclick="openProfile()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:7px 16px;cursor:pointer;font-size:12px;align-self:flex-start">⚙ Настройки</button>`:''}
   </div>`;
 
   const tips=_dbGetTips({active,today_doing,today_ctrl,overdue},wlPct,c.name);
@@ -2784,7 +2804,7 @@ function renderDashboard(){
     </div>`:'<div style="color:#aaa;font-size:12px">Нет доступных доп. задач</div>'}
   </div>`;
 
-  el.innerHTML=`<div class="panel" style="max-width:900px;margin:0 auto">${profileHtml}${tipsHtml}${overdueHtml}${todayHtml}${activeHtml}${extraHtml}</div>`;
+  el.innerHTML=`<div class="panel" style="max-width:900px;margin:0 auto">${profileHtml}${tipsHtml}${overdueHtml}${todayHtml}${activeHtml}${isScheme?'':extraHtml}</div>`;
 }
 
 // ── Workload ──────────────────────────────────────────────────
