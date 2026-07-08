@@ -1057,7 +1057,7 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
 const ADMIN_PW='admin2024';
 const CON_PW='0000';
 const STAGES=[
-  {id:'tz',   abbr:'ТЗ',  name:'Анализ ТЗ',                  type:'doing',days:{simple:1,medium:1,complex:1,series:2}},
+  {id:'tz',   abbr:'ТЗ',  name:'Анализ ТЗ',                  type:'ctrl', days:{simple:1,medium:1,complex:1,series:2}},
   {id:'model',abbr:'МОД', name:'Создание модели',             type:'doing',days:{simple:1,medium:2,complex:3,series:5}},
   {id:'mat',  abbr:'МАТ', name:'Запрос стоим. материалов',   type:'ctrl', days:{simple:1,medium:2,complex:3,series:3}},
   {id:'clar', abbr:'УТЧ', name:'Уточнения по модели',        type:'doing',days:{simple:1,medium:2,complex:2,series:3}},
@@ -2197,6 +2197,8 @@ function getActiveStageId(pid){
 }
 // Returns true if all stages before stageId are done (no remaining planned days)
 function isPrevStageDone(pid,stageId){
+  const prod=S.products.find(p=>p.id===pid);
+  if(prod?.brokenDeps?.includes(stageId))return true; // зависимость разорвана
   // ВБСП требует завершения схемы сборки (планируется для всех изделий после ПРМ)
   if(stageId==='vbsp'){
     const se=S.schemeSchedule[pid];
@@ -7603,17 +7605,48 @@ function adjustDur(pid,sid,delta){
 function doPostponeStage(){
   const{pid,sid,prodCid}=markCtx;
   const prod=S.products.find(p=>p.id===pid);
-  const stage=STAGES.find(s=>s.id===sid);
+  const stageList=getStageList(prod?.type||'simple');
+  const stage=stageList.find(s=>s.id===sid)||STAGES.find(s=>s.id===sid);
   const dateInput=document.getElementById('postponeDate');
-  const minStart=dateInput&&dateInput.value?dateInput.value:(()=>{const n=new Date();const nm=new Date(n.getFullYear(),n.getMonth()+1,1);return toStr(nm);})();
+  const newDate=dateInput&&dateInput.value?dateInput.value:(()=>{const n=new Date();const nm=new Date(n.getFullYear(),n.getMonth()+1,1);return toStr(nm);})();
   if(!S.stageConstraints[pid])S.stageConstraints[pid]={};
-  S.stageConstraints[pid][sid]=minStart;
-  // Clear any planned days for this stage
+  S.stageConstraints[pid][sid]=newDate;
+
   const entry=S.schedule[pid]?.[sid];
-  if(entry){for(const d in entry.days){if(entry.days[d].status==='planned')delete entry.days[d];}}
+  const oldStart=entry?.startDate;
+  const deltaDays=oldStart?Math.round((parseDate(newDate)-parseDate(oldStart))/864e5):0;
+  const idx=stageList.findIndex(s=>s.id===sid);
+
+  // Разрываем зависимость если новая дата перекрывается с предыдущим этапом
+  if(idx>0){
+    const prevEntry=S.schedule[pid]?.[stageList[idx-1].id];
+    if(prevEntry?.endDate&&newDate<=prevEntry.endDate){
+      if(!prod.brokenDeps)prod.brokenDeps=[];
+      if(!prod.brokenDeps.includes(sid))prod.brokenDeps.push(sid);
+    }
+  }
+
+  if(prod?.manualSchedule&&deltaDays!==0&&oldStart){
+    // Паровозик для иммунных изделий: двигаем текущий и все последующие этапы
+    const sched=S.schedule[pid]||{};
+    for(let i=idx;i<stageList.length;i++){
+      const s=stageList[i];const e=sched[s.id];if(!e||e.skipped)continue;
+      const nd={};
+      for(const[d,v]of Object.entries(e.days||{}))nd[addDay(d,deltaDays)]={...v};
+      e.days=nd;
+      if(e.startDate)e.startDate=addDay(e.startDate,deltaDays);
+      if(e.endDate)e.endDate=addDay(e.endDate,deltaDays);
+      if(i!==idx&&S.stageConstraints[pid]?.[s.id])
+        S.stageConstraints[pid][s.id]=addDay(S.stageConstraints[pid][s.id],deltaDays);
+    }
+  } else {
+    // Для неиммунных: очищаем плановые дни, rebuild перестроит
+    if(entry){for(const d in entry.days){if(entry.days[d].status==='planned')delete entry.days[d];}}
+  }
+
   S.shiftsLog.push({id:'sl'+Date.now(),timestamp:new Date().toISOString(),
-    constructorId:prodCid,fromDate:minStart,type:'postpone',
-    reason:`Этап зафиксирован на дату ${fmtShort(minStart)}`,
+    constructorId:prodCid,fromDate:newDate,type:'postpone',
+    reason:`Этап зафиксирован на дату ${fmtShort(newDate)}`,
     productId:pid,stageId:sid,productName:prod.name,stageName:stage.name,shiftedCount:0});
   rebuildForConstructor(prodCid);save();closeModal('mMark');renderCalendar();
 }
