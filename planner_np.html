@@ -2634,7 +2634,7 @@ function _dbCollectTasks(cid){
       if(_dbStageDone(e))continue;
       const task={prodName:prod.name,prodId:prod.id,stageAbbr:stage.abbr,stageName:stage.name,
         startDate:e.startDate,endDate:e.endDate,isCtrl:stage.type==='ctrl',
-        mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd'};
+        mod:'КМ',modClr:'#1565c0',modBg:'#e3f2fd',bitrixUrl:prod.bitrixUrl||''};
       if(e.endDate<today)overdue.push(task);
       else if(e.startDate<=today){active.push(task);(task.isCtrl?today_ctrl:today_doing).push(task);}
     }
@@ -2651,7 +2651,7 @@ function _dbCollectTasks(cid){
       const isCtrl=stage.mode==='ctrl'||!!stage.expWorkshop;
       const task={prodName:prod.name,prodId:prod.id,stageAbbr:stage.abbr,stageName:stage.name,
         startDate:e.startDate,endDate:e.endDate,isCtrl,
-        mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5'};
+        mod:'ММ',modClr:'#6a1b9a',modBg:'#f3e5f5',bitrixUrl:prod.bitrixUrl||''};
       if(e.endDate<today)overdue.push(task);
       else if(e.startDate<=today){active.push(task);(isCtrl?today_ctrl:today_doing).push(task);}
     }
@@ -2671,10 +2671,11 @@ function _dbTaskRow(task){
   const ctrlBadge=task.isCtrl?'<span style="background:#f3e5f5;color:#7b1fa2;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:600;margin-left:3px">контроль</span>':'';
   const endLabel=isOv?`<span style="color:#c62828;font-weight:700">просрочено ${task.endDate}</span>`:`до ${task.endDate}`;
   const dLabel=isOv?'⚠ '+Math.abs(daysLeft)+'д':daysLeft===0?'сегодня':'+'+daysLeft+'д';
+  const bitrixLink=task.bitrixUrl?`<a href="${task.bitrixUrl}" target="_blank" style="color:#2471a3;font-size:11px;text-decoration:none;white-space:nowrap" title="Открыть в Битрикс">🔗 Битрикс</a>`:'';
   return`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;margin-bottom:5px;background:${urgBg};border-left:3px solid ${urgClr}">
     <div style="flex:1;min-width:0">
       <div style="font-size:12px;font-weight:700;color:#1a2030">${badge}<b>${task.stageAbbr}</b>${ctrlBadge} — ${task.prodName}</div>
-      <div style="font-size:11px;color:#666;margin-top:1px">${task.stageName} · ${endLabel}</div>
+      <div style="font-size:11px;color:#666;margin-top:1px;display:flex;align-items:center;gap:8px">${task.stageName} · ${endLabel}${bitrixLink?'&nbsp;·&nbsp;'+bitrixLink:''}</div>
     </div>
     <div style="font-size:11px;font-weight:700;color:${urgClr};white-space:nowrap">${dLabel}</div>
   </div>`;
