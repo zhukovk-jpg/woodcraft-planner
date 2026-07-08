@@ -3160,8 +3160,16 @@ function metPill(pct){
   return `<span class="pill bad">✗ ${(pct*100).toFixed(1)}%</span>`;
 }
 
+function metFmtR(rub){
+  if(rub==null||isNaN(rub)) return '—';
+  return Math.round(rub).toLocaleString('ru-RU');
+}
+function metFmtPct(pct){
+  const v=Math.round(pct*100);
+  return (v>=0?'+':'')+v+'%';
+}
+
 function metallRender(rows, label){
-  // rows[0] = header, rows[1..] = data
   const daily=[];
   for(let i=1;i<rows.length;i++){
     const r=rows[i];
@@ -3178,53 +3186,95 @@ function metallRender(rows, label){
     return;
   }
 
-  const lastFact=daily.filter(d=>d.factM!=null).pop();
+  // Последний день с фактом
+  const factDays=daily.filter(d=>d.factD!=null&&d.factD!==-1&&d.factD>0);
+  const lastFactDay=factDays[factDays.length-1];
   const planTotal=daily[daily.length-1].planM;
-  const factCur=lastFact?lastFact.factM:0;
-  const planToDate=lastFact?lastFact.planM:0;
+  const factCur=lastFactDay?lastFactDay.factM:0;
+  const planToDate=lastFactDay?lastFactDay.planM:0;
+  const planD=lastFactDay?lastFactDay.planD:0;
+  const factD=lastFactDay?lastFactDay.factD:0;
+  const pctDay=planD?factD/planD:0;
   const pctDate=planToDate?factCur/planToDate:0;
-  const pctMonth=planTotal?factCur/planTotal:0;
-  const delta=factCur-planToDate;
-  const deltaSign=delta>=0?'+':'';
-  const deltaColor=delta>=0?'#15803d':'#dc2626';
+
+  // Прогноз: средний дневной факт × всего рабочих дней
+  const totalWorkDays=planD?Math.round(planTotal/planD):daily.length;
+  const avgDaily=factDays.length?factCur/factDays.length:0;
+  const forecast=avgDaily*totalWorkDays;
+  const pctForecast=planTotal?forecast/planTotal:0;
+  const forecastColor=pctForecast>=0.98?'#15803d':pctForecast>=0.90?'#92400e':'#991b1b';
+
+  const dateStr=lastFactDay?metFmtDate(lastFactDay.date)+'.'+String(lastFactDay.date.getUTCFullYear()).slice(2):'';
 
   const labels=daily.map(d=>metFmtDate(d.date));
   const planDVals=daily.map(d=>d.planD);
-  const factDVals=daily.map(d=>d.factD);
+  const factDVals=daily.map(d=>(d.factD!=null&&d.factD>0)?d.factD:null);
   const planMVals=daily.map(d=>d.planM);
   const factMVals=daily.map(d=>d.factM);
 
+  // Линия прогноза: от первого дня со средним шагом
+  const forecastLine=daily.map((_,i)=>{
+    if(i<factDays.length) return null;
+    return factCur + avgDaily*(i-factDays.length+1);
+  });
+
   document.getElementById('met-content').innerHTML=`
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px">
+  <!-- ── Отчёт для мессенджера ── -->
+  <div style="margin-bottom:16px">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Отчёт ${dateStr} · для мессенджера</div>
+    <div id="met-msg-card" style="background:#fefce8;border:2px solid #fde047;border-radius:12px;padding:14px 18px;display:inline-block;min-width:300px;cursor:pointer" title="Нажмите чтобы скопировать текст" onclick="metCopyReport()">
+      <div style="font-size:15px;font-weight:700;color:#0f172a;line-height:2;font-family:monospace">
+        <div>П/Ф День: ${metFmtR(planD)} / ${metFmtR(factD)} / ${metFmtPct(pctDay)}</div>
+        <div>П/Ф Месяц: ${metFmtR(planToDate)} / ${metFmtR(factCur)} / ${metFmtPct(pctDate-1)}</div>
+      </div>
+      <div style="font-size:9px;color:#92400e;margin-top:4px">📋 нажмите чтобы скопировать</div>
+    </div>
+    <div id="met-copy-ok" style="display:none;margin-top:6px;font-size:11px;color:#15803d;font-weight:700">✓ Скопировано!</div>
+  </div>
+
+  <!-- ── Прогноз + карточки ── -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
     <div class="card" style="border-top-color:#3b82f6;padding:12px 14px">
       <div class="clbl">Факт накопленный</div>
-      <div style="font-size:22px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(factCur)}</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(factCur)}</div>
       <div style="font-size:10px;color:#64748b">план на дату: ${metFmtM(planToDate)}</div>
       ${metPill(pctDate)}
     </div>
-    <div class="card" style="border-top-color:#8b5cf6;padding:12px 14px">
-      <div class="clbl">Выполнение плана месяца</div>
-      <div style="font-size:22px;font-weight:800;color:#0f172a;margin:4px 0">${(pctMonth*100).toFixed(1)}%</div>
+    <div class="card" style="border-top-color:${forecastColor};padding:12px 14px">
+      <div class="clbl">Прогноз на конец месяца</div>
+      <div style="font-size:20px;font-weight:800;color:${forecastColor};margin:4px 0">${metFmtM(forecast)}</div>
       <div style="font-size:10px;color:#64748b">план месяц: ${metFmtM(planTotal)}</div>
-      ${metPill(pctMonth)}
+      ${metPill(pctForecast)}
     </div>
-    <div class="card" style="border-top-color:${delta>=0?'#22c55e':'#ef4444'};padding:12px 14px">
-      <div class="clbl">Отклонение от плана на дату</div>
-      <div style="font-size:22px;font-weight:800;color:${deltaColor};margin:4px 0">${deltaSign}${metFmtM(delta)}</div>
-      <div style="font-size:10px;color:#64748b">${(pctDate*100).toFixed(1)}% от плана на дату</div>
+    <div class="card" style="border-top-color:#8b5cf6;padding:12px 14px">
+      <div class="clbl">Ср. день / рабочих дней</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(avgDaily)}</div>
+      <div style="font-size:10px;color:#64748b">факт ${factDays.length} из ${totalWorkDays} дней</div>
     </div>
   </div>
+
+  <!-- ── Графики ── -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
     <div class="card" style="padding:12px 14px">
-      <div class="clbl" style="margin-bottom:8px">Ежедневно: план vs факт (руб.)</div>
+      <div class="clbl" style="margin-bottom:8px">Ежедневно: план vs факт</div>
       <canvas id="met-chart-daily" height="180"></canvas>
     </div>
     <div class="card" style="padding:12px 14px">
-      <div class="clbl" style="margin-bottom:8px">Накопленный итог: план vs факт (руб.)</div>
+      <div class="clbl" style="margin-bottom:8px">Накопленный итог + прогноз</div>
       <canvas id="met-chart-cumul" height="180"></canvas>
     </div>
   </div>
-  <div style="margin-top:8px;font-size:10px;color:#94a3b8">Источник: таблица «${label}» (план/факт реализации металлопроизводства)</div>`;
+  <div style="margin-top:8px;font-size:10px;color:#94a3b8">Источник: «${label}» · прогноз = средний дневной факт × всего рабочих дней (${totalWorkDays})</div>`;
+
+  // Функция копирования
+  window.metCopyReport=function(){
+    const txt=`П/Ф День: ${metFmtR(planD)}/${metFmtR(factD)}/${metFmtPct(pctDay)}\nП/Ф Месяц: ${metFmtR(planToDate)}/${metFmtR(factCur)}/${metFmtPct(pctDate-1)}`;
+    navigator.clipboard.writeText(txt).then(()=>{
+      const ok=document.getElementById('met-copy-ok');
+      ok.style.display='block';
+      setTimeout(()=>ok.style.display='none',2000);
+    });
+  };
 
   metKillChart('daily'); metKillChart('cumul');
 
@@ -3233,11 +3283,11 @@ function metallRender(rows, label){
     data:{
       labels,
       datasets:[
-        {label:'План день',data:planDVals,backgroundColor:'rgba(59,130,246,0.25)',borderColor:'#3b82f6',borderWidth:1},
-        {label:'Факт день',data:factDVals,backgroundColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)'),borderColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'#16a34a':'#dc2626'),borderWidth:1},
+        {label:'План день',data:planDVals,backgroundColor:'rgba(59,130,246,0.2)',borderColor:'#3b82f6',borderWidth:1},
+        {label:'Факт день',data:factDVals,backgroundColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'rgba(34,197,94,0.75)':'rgba(239,68,68,0.75)'),borderColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'#16a34a':'#dc2626'),borderWidth:1},
       ]
     },
-    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{ticks:{callback:v=>(v/1000000).toFixed(1)+'M',font:{size:9}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:8},maxRotation:45}}}}
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{ticks:{callback:v=>(v/1000).toFixed(0)+'k',font:{size:9}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:8},maxRotation:45}}}}
   });
 
   metChartInst['cumul']=new Chart(document.getElementById('met-chart-cumul'),{
@@ -3247,6 +3297,7 @@ function metallRender(rows, label){
       datasets:[
         {label:'План месяц',data:planMVals,borderColor:'#3b82f6',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0},
         {label:'Факт месяц',data:factMVals,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.08)',borderWidth:2,pointRadius:2,tension:0,spanGaps:false},
+        {label:'Прогноз',data:forecastLine,borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,4],pointRadius:0,tension:0,spanGaps:false},
       ]
     },
     options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{ticks:{callback:v=>(v/1000000).toFixed(1)+'M',font:{size:9}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:8},maxRotation:45}}}}
