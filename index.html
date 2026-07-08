@@ -3268,7 +3268,7 @@ function metallRender(rows, label){
 
   // Функция копирования
   window.metCopyReport=function(){
-    const txt=`П/Ф День: ${metFmtR(planD)}/${metFmtR(factD)}/${metFmtPct(pctDay)}\nП/Ф Месяц: ${metFmtR(planToDate)}/${metFmtR(factCur)}/${metFmtPct(pctDate-1)}`;
+    const txt=`П/Ф День: ${metFmtR(planD)}/${metFmtR(factD)}/${metFmtPct(pctDay-1)}\nП/Ф Месяц: ${metFmtR(planToDate)}/${metFmtR(factCur)}/${metFmtPct(pctDate-1)}`;
     navigator.clipboard.writeText(txt).then(()=>{
       const ok=document.getElementById('met-copy-ok');
       ok.style.display='block';
