@@ -217,6 +217,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
       <span id="met-badge" class="fbadge" style="display:none"></span>
     </div>
     <div id="met-content"></div>
+    <div id="met-year-content" style="margin-top:20px"></div>
   </div>
 
   <div id="mmprod" class="pane">
@@ -3091,6 +3092,106 @@ function authInit(){
   document.getElementById('auth-pwd').addEventListener('keydown',e=>{if(e.key==='Enter')authSubmit();});
   document.getElementById('auth-pwd').focus();
 }
+function metallRenderYear(){
+  const el=document.getElementById('met-year-content');
+  if(!el||!metYearData) return;
+  metKillChart('year');
+
+  const labels=[], planVals=[], factVals=[], dailyAll=[], planAllD=[], factAllD=[];
+
+  metYearData.forEach(res=>{
+    if(!res) return;
+    const {m,rows}=res;
+    // Итог месяца: последняя строка с числовым serial
+    const dataRows=rows.slice(1).filter(r=>r[0]&&typeof r[0]==='number');
+    if(!dataRows.length) return;
+    const planTotal=Number(dataRows[dataRows.length-1][4])||0;
+    const factRows=dataRows.filter(r=>r[5]!=null&&r[5]!==''&&Number(r[5])>0);
+    const factTotal=factRows.length?Number(factRows[factRows.length-1][5]):null;
+    labels.push(m.label.replace(' 2026',''));
+    planVals.push(planTotal);
+    factVals.push(factTotal);
+
+    // Ежедневные точки для нижнего графика
+    dataRows.forEach(r=>{
+      const serial=r[0];
+      const d=metExcelDate(serial);
+      const pd=Number(r[1])||0;
+      const fd=r[2]!=null&&r[2]!==''&&Number(r[2])>0?Number(r[2]):null;
+      dailyAll.push(metFmtDate(d)+' '+m.label.replace(' 2026',''));
+      planAllD.push(pd);
+      factAllD.push(fd);
+    });
+  });
+
+  // Прогресс-бары и итоговые цифры
+  const totalPlan=planVals.reduce((a,b)=>a+b,0);
+  const totalFact=factVals.reduce((a,b)=>a+(b||0),0);
+  const barsHtml=labels.map((lbl,i)=>{
+    const p=planVals[i], f=factVals[i];
+    const pct=p?((f||0)/p):0;
+    const color=f==null?'#94a3b8':pct>=0.98?'#22c55e':pct>=0.90?'#f59e0b':'#ef4444';
+    const w=Math.min((pct||0)*100,100).toFixed(1);
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#475569;margin-bottom:2px">
+        <b>${lbl}</b>
+        <span>${f!=null?metFmtM(f):'в процессе'} / ${metFmtM(p)} ${f!=null?'('+Math.round(pct*100)+'%)':''}</span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:4px;height:10px">
+        <div style="background:${color};width:${w}%;height:100%;border-radius:4px"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML=`
+  <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Годовой итог · все месяцы</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+    <div class="card" style="padding:14px 16px;border-top-color:#3b82f6">
+      <div class="clbl">Итого план (все месяцы)</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(totalPlan)}</div>
+    </div>
+    <div class="card" style="padding:14px 16px;border-top-color:#22c55e">
+      <div class="clbl">Итого факт (все месяцы)</div>
+      <div style="font-size:20px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(totalFact)}</div>
+      ${metPill(totalPlan?totalFact/totalPlan:0)}
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card" style="padding:14px 16px">
+      <div class="clbl" style="margin-bottom:10px">Выполнение по месяцам</div>
+      ${barsHtml}
+    </div>
+    <div class="card" style="padding:14px 16px">
+      <div class="clbl" style="margin-bottom:8px">План vs Факт по месяцам</div>
+      <canvas id="met-chart-year" height="220"></canvas>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:10px;color:#94a3b8">Серые столбцы = план, цветные = факт (зел. ≥98%, жёлт. ≥90%, красн. &lt;90%)</div>`;
+
+  metChartInst['year']=new Chart(document.getElementById('met-chart-year'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'План',data:planVals,backgroundColor:'rgba(59,130,246,0.2)',borderColor:'#3b82f6',borderWidth:1.5},
+        {label:'Факт',data:factVals,backgroundColor:factVals.map((f,i)=>{
+          if(f==null) return 'rgba(148,163,184,0.3)';
+          const p=planVals[i];
+          const r=p?f/p:0;
+          return r>=0.98?'rgba(34,197,94,0.75)':r>=0.90?'rgba(245,158,11,0.75)':'rgba(239,68,68,0.75)';
+        }),borderColor:factVals.map((f,i)=>{
+          if(f==null) return '#94a3b8';
+          const r=planVals[i]?f/planVals[i]:0;
+          return r>=0.98?'#16a34a':r>=0.90?'#d97706':'#dc2626';
+        }),borderWidth:1.5},
+      ]
+    },
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},
+      scales:{y:{ticks:{callback:v=>(v/1000000).toFixed(1)+'M',font:{size:9}},grid:{color:'#f1f5f9'}},
+              x:{ticks:{font:{size:10}}}}}
+  });
+}
+
 authInit();
 
 // ── Металл: план/факт реализации по дням ─────────────────────────────
@@ -3107,6 +3208,8 @@ let metLoaded=false;
 let metChartInst={};
 function metKillChart(id){if(metChartInst[id]){metChartInst[id].destroy();delete metChartInst[id];}}
 
+let metYearData=null;
+
 function metallEnsureLoaded(){
   if(metLoaded) return;
   metLoaded=true;
@@ -3118,6 +3221,23 @@ function metallEnsureLoaded(){
   });
   sel.value='iul26';
   metallLoadMonth();
+  metallLoadYear();
+}
+
+async function metallLoadYear(){
+  try{
+    const results=await Promise.all(MET_MONTHS.map(async m=>{
+      const range=encodeURIComponent(m.sheet)+'!A1:G35';
+      const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_METALL}/values/${range}?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+      const resp=await fetch(url);
+      if(!resp.ok) return null;
+      return {m, rows:(await resp.json()).values||[]};
+    }));
+    metYearData=results;
+    metallRenderYear();
+  }catch(e){
+    console.warn('year fetch failed:',e);
+  }
 }
 
 async function metallLoadMonth(){
