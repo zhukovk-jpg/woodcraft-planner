@@ -1066,6 +1066,7 @@ const STAGES=[
   {id:'vbsp',  abbr:'ВБСП',name:'Выдача без старта продаж',  type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'pp',    abbr:'ПП',  name:'Поступление потребности',   type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'zero',  abbr:'НС',  name:'Произв. нулевой серии',      type:'ctrl', days:{simple:7,medium:7,complex:7,series:7}},
+  {id:'zero_acc',abbr:'ПРМН',name:'Приёмка нулевой партии', type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'vsp',   abbr:'ВСП', name:'Выдача со стартом продаж',  type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
 ];
 // Points: doing = 2,4,6,8; ctrl = 1,2,3,4 (by type simple/medium/complex/series)
@@ -1077,7 +1078,7 @@ const STAGE_GROUPS=[
   {ids:['tz','model','mat','clar','price'], n:1, label:'Стадия 1 — Разработка', bg:'#e3f2fd', border:'#90caf9', badge:'#1565c0', badgeBg:'#bbdefb'},
   {ids:['sample','insp'],                  n:2, label:'Стадия 2 — Образец',    bg:'#e8f5e9', border:'#a5d6a7', badge:'#1b5e20', badgeBg:'#c8e6c9'},
   {ids:['accept','fix','docs','vbsp'],      n:3, label:'Стадия 3 — Согласование', bg:'#fffde7', border:'#fff176', badge:'#e65100', badgeBg:'#fff9c4'},
-  {ids:['pp','zero','vsp'],                n:4, label:'Стадия 4 — Серия',      bg:'#fce4ec', border:'#f48fb1', badge:'#880e4f', badgeBg:'#f8bbd0'},
+  {ids:['pp','zero','zero_acc','vsp'],      n:4, label:'Стадия 4 — Серия',      bg:'#fce4ec', border:'#f48fb1', badge:'#880e4f', badgeBg:'#f8bbd0'},
 ];
 function getStageGroup(pid){
   const sid=getActiveStageId(pid);
@@ -1098,6 +1099,7 @@ const STAGES_MT=[
   {id:'docs',  abbr:'ДОК', name:'Подготовка документации',       type:'doing',days:{simple:3,medium:4,complex:5,series:6}},
   {id:'presale',abbr:'РЛЗ',name:'Предпродажный релиз',          type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'zero',  abbr:'НС',  name:'Нулевая серия',                 type:'ctrl', days:{simple:10,medium:14,complex:21,series:21}},
+  {id:'zero_acc',abbr:'ПРМН',name:'Приёмка нулевой партии',     type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'launch',abbr:'ЗПС', name:'Запуск продаж',                 type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
 ];
 // ── Массив stages ──────────────────────────────────────────────
@@ -1114,6 +1116,7 @@ const STAGES_MS=[
   {id:'docs',  abbr:'ДОК', name:'Подготовка документации',       type:'doing',days:{simple:3,medium:4,complex:6,series:7}},
   {id:'presale',abbr:'РЛЗ',name:'Предпродажный релиз',          type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'zero',  abbr:'НС',  name:'Нулевая серия',                 type:'ctrl', days:{simple:14,medium:21,complex:30,series:30}},
+  {id:'zero_acc',abbr:'ПРМН',name:'Приёмка нулевой партии',     type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
   {id:'launch',abbr:'ЗПС', name:'Запуск продаж',                 type:'ctrl', days:{simple:1,medium:1,complex:1,series:1}},
 ];
 const MOD_CFG={
@@ -1952,6 +1955,11 @@ function rebuildForConstructor(cid){
         const nmStr=nm.toISOString().slice(0,10);
         cursor=ensureWork(nmStr,cid);
         naiveCursor=ensureCtrlWork(nmStr,cid);
+      }
+      // zero_acc (Приёмка нулевой партии) happens on the last day of zero
+      if(stage.id==='zero_acc'){
+        const zeroE=sched['zero'];
+        if(zeroE&&zeroE.endDate&&!zeroE.skipped){cursor=zeroE.endDate;naiveCursor=zeroE.endDate;}
       }
       const minStart=(S.stageConstraints[prod.id]||{})[stage.id];
       if(minStart){cursor=ensureWork(minStart,cid);naiveCursor=ensureCtrlWork(minStart,cid);}
