@@ -557,6 +557,10 @@ table.gantt th,table.gantt td{border:1px solid #d8dce2}
   <div class="fg"><label>Дата начала</label><input type="date" id="pStart"></div>
   <div class="fg"><label>Приоритет (1=высший) <span style="font-weight:400;color:#999;font-size:11px">— для очереди в работе или пула</span></label><input type="number" id="pPri" min="1" max="99" value="1"></div>
   <div class="fg"><label>Начать с этапа</label><select id="pStartStage"></select></div>
+  <div class="fg">
+    <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0"><span>Состав этапов</span><button type="button" id="pStageSelectorToggle" onclick="toggleStageSelector()" style="font-size:11px;background:none;border:1px solid #ccc;border-radius:4px;padding:2px 10px;cursor:pointer;color:#2471a3">▼ Настроить</button></label>
+    <div id="pStageSelectorBox" style="display:none;margin-top:8px;border:1px solid #e0e8f0;border-radius:6px;padding:8px;background:#f8fbfe"></div>
+  </div>
   <div class="fg"><label>Количество моделей в задаче</label><input type="number" id="pQty" min="1" max="9999" value="1" style="width:100px"></div>
   <div class="fg"><label>Конструктор схем сборки <span style="font-weight:400;color:#999">(необязательно)</span></label><select id="pSchemeDes"></select></div>
   <div class="fg"><label>Ссылка в Битрикс</label><input type="url" id="pBitrix" placeholder="https://..."></div>
@@ -4113,6 +4117,29 @@ function fillStartStageSelect(val){
   const phaseStarts=KEY_STAGES.map(id=>STAGES.find(s=>s.id===id));
   sel.innerHTML=phaseStarts.map(s=>`<option value="${s.id}"${s.id===val?' selected':''}>${s.abbr} — ${s.name}</option>`).join('');
 }
+function fillStageSelector(prodId){
+  const sched=prodId?(S.schedule[prodId]||{}):null;
+  const box=document.getElementById('pStageSelectorBox');if(!box)return;
+  const phaseLabels=['Стадия 1 — Разработка','Стадия 2 — Образец','Стадия 3 — Согласование','Стадия 4 — Серия'];
+  let html='';
+  STAGE_GROUPS.forEach((grp,gi)=>{
+    html+=`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#1a3a5c;margin-bottom:3px;padding:2px 6px;background:#e8f4fd;border-radius:4px">${phaseLabels[gi]}</div>`;
+    for(const sid of grp.ids){
+      const st=STAGES.find(s=>s.id===sid);if(!st)continue;
+      const checked=sched?(!sched[sid]?.skipped?'checked':''):'checked';
+      html+=`<label style="display:flex;align-items:center;gap:6px;padding:2px 6px;font-size:12px;cursor:pointer"><input type="checkbox" name="pStageInclude" value="${sid}" ${checked}>${st.type==='doing'?'🔵':'🟠'} <b>${st.abbr}</b> — ${st.name}</label>`;
+    }
+    html+=`</div>`;
+  });
+  box.innerHTML=html;
+}
+function toggleStageSelector(){
+  const box=document.getElementById('pStageSelectorBox');
+  const btn=document.getElementById('pStageSelectorToggle');
+  const show=box.style.display==='none';
+  box.style.display=show?'':'none';
+  btn.textContent=show?'▲ Скрыть':'▼ Настроить';
+}
 
 // ── EXTRA TASKS ───────────────────────────────────────────────
 function buildExtraAssignmentSchedule(ea){
@@ -6773,6 +6800,9 @@ function openAddProd(){
   document.getElementById('pBitrix').value='';
   document.getElementById('pQty').value=1;
   fillSchemeDesSelect();document.getElementById('pSchemeDes').value='';
+  fillStageSelector(null);
+  document.getElementById('pStageSelectorBox').style.display='none';
+  document.getElementById('pStageSelectorToggle').textContent='▼ Настроить';
   fillConSelect2(null);openModal('mProd');
 }
 function openEditProd(id){
@@ -6785,6 +6815,10 @@ function openEditProd(id){
   document.getElementById('pBitrix').value=p.bitrixUrl||'';
   document.getElementById('pQty').value=p.qty||1;
   fillSchemeDesSelect();document.getElementById('pSchemeDes').value=p.schemeDiagCid||'';
+  fillStageSelector(id);
+  const hasManual=p.manualSchedule||false;
+  document.getElementById('pStageSelectorBox').style.display=hasManual?'':'none';
+  document.getElementById('pStageSelectorToggle').textContent=hasManual?'▲ Скрыть':'▼ Настроить';
   fillConSelect2(p.constructorId||null);openModal('mProd');
 }
 function fillConSelect2(sel){
@@ -6802,9 +6836,14 @@ function saveProd(){
   const qty=Math.max(1,parseInt(document.getElementById('pQty').value)||1);
   const schemeDiagCid=document.getElementById('pSchemeDes').value||null;
   if(!name)return alert('Введите название');if(!startDate)return alert('Укажите дату');
+  // Collect excluded stages from selector
+  const excluded=new Set([...document.querySelectorAll('#pStageSelectorBox input[name="pStageInclude"]')]
+    .filter(cb=>!cb.checked).map(cb=>cb.value));
   const eid=document.getElementById('mProdId').value;
+  let targetId=eid;
   if(eid){
     const p=S.products.find(x=>x.id===eid);const oc=p.constructorId;const osd=p.schemeDiagCid;
+    delete p.manualSchedule;
     Object.assign(p,{name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
     delete S.schedule[eid];delete S.schemeSchedule[eid];
     if(cid)rebuildForConstructor(cid);
@@ -6813,12 +6852,23 @@ function saveProd(){
     else rebuildSchemeForProd(p);
     if(osd&&osd!==schemeDiagCid)rebuildForSchemeDesigner(osd);
   }else{
-    const id='p'+Date.now();
-    S.products.push({id,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
+    targetId='p'+Date.now();
+    S.products.push({id:targetId,name,type,constructorId:cid,startDate,priority,startStageId,splitByMonths,bitrixUrl,qty,schemeDiagCid});
     if(cid)rebuildForConstructor(cid);
-    const newP=S.products.find(x=>x.id===id);
+    const newP=S.products.find(x=>x.id===targetId);
     if(schemeDiagCid)rebuildForSchemeDesigner(schemeDiagCid);
     else if(newP)rebuildSchemeForProd(newP);
+  }
+  // Apply manual stage exclusions
+  if(excluded.size>0&&targetId){
+    const sched=S.schedule[targetId]=S.schedule[targetId]||{};
+    for(const sid of excluded){
+      const marks={};
+      for(const[d,v]of Object.entries(sched[sid]?.days||{}))if(v.status==='done'||v.status==='fail')marks[d]={...v};
+      sched[sid]={startDate:null,endDate:null,days:marks,skipped:true,manualSkip:true,failReason:null};
+    }
+    const prod=S.products.find(p=>p.id===targetId);
+    if(prod)prod.manualSchedule=true;
   }
   save();closeModal('mProd');renderProducts();
 }
