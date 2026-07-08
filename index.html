@@ -170,6 +170,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
       <button class="tab active" onclick="go('loadv2',this)">Загрузка производства</button>
       <button class="tab" onclick="go('quality',this)">КАЧЕСТВО</button>
       <button class="tab" onclick="go('korpusm',this);kmEnsureLoaded();">Корпус</button>
+      <button class="tab" onclick="go('metall',this);metallEnsureLoaded();">Металл</button>
       <button class="tab" onclick="go('mmprod',this);mmpEnsureLoaded();">Выполнение ММ</button>
     </div>
     <div class="st"><span class="dot" id="dot"></span><span id="stxt">Загрузка…</span></div>
@@ -207,6 +208,15 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
     <div class="note" style="margin-bottom:10px">Источник: таблица «Корпус» — помесячные листы, блок «ФИО мастера» (план/факт/% выполнения по сменам).</div>
     <div id="km-panes"></div>
     <div id="km-allmetrics"></div>
+  </div>
+
+  <div id="metall" class="pane">
+    <div class="filter-bar">
+      <span class="filter-label">Месяц:</span>
+      <select class="fsel" id="met-month-sel" onchange="metallLoadMonth()"></select>
+      <span id="met-badge" class="fbadge" style="display:none"></span>
+    </div>
+    <div id="met-content"></div>
   </div>
 
   <div id="mmprod" class="pane">
@@ -3082,6 +3092,166 @@ function authInit(){
   document.getElementById('auth-pwd').focus();
 }
 authInit();
+
+// ── Металл: план/факт реализации по дням ─────────────────────────────
+const SHEET_ID_METALL='1lAwzN1iFH-KAZaVrlSWHHyt5MldvH2D6MjSxdLjHB2A';
+const MET_MONTHS=[
+  {key:'fev26',label:'Февраль 2026',sheet:'Февраль'},
+  {key:'mar26',label:'Март 2026',sheet:'Март'},
+  {key:'apr26',label:'Апрель 2026',sheet:'Апрель'},
+  {key:'may26',label:'Май 2026',sheet:'Май'},
+  {key:'iun26',label:'Июнь 2026',sheet:'Июнь'},
+  {key:'iul26',label:'Июль 2026',sheet:'Июль'},
+];
+let metLoaded=false;
+let metChartInst={};
+function metKillChart(id){if(metChartInst[id]){metChartInst[id].destroy();delete metChartInst[id];}}
+
+function metallEnsureLoaded(){
+  if(metLoaded) return;
+  metLoaded=true;
+  const sel=document.getElementById('met-month-sel');
+  MET_MONTHS.forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m.key; o.textContent=m.label;
+    sel.appendChild(o);
+  });
+  sel.value='iul26';
+  metallLoadMonth();
+}
+
+async function metallLoadMonth(){
+  const key=document.getElementById('met-month-sel').value;
+  const m=MET_MONTHS.find(x=>x.key===key);
+  if(!m) return;
+  const badge=document.getElementById('met-badge');
+  badge.style.display='inline'; badge.textContent='Загрузка…';
+  badge.style.background='#f1f5f9'; badge.style.color='#475569'; badge.style.borderColor='#cbd5e1';
+  document.getElementById('met-content').innerHTML='<div style="padding:20px;color:#94a3b8;font-size:12px">Загрузка данных…</div>';
+  try{
+    const range=encodeURIComponent(m.sheet)+'!A1:G35';
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_METALL}/values/${range}?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const rows=(await resp.json()).values||[];
+    metallRender(rows, m.label);
+    badge.textContent='OK ✓';
+    badge.style.background='#dcfce7'; badge.style.color='#15803d'; badge.style.borderColor='#86efac';
+  }catch(e){
+    badge.textContent='Ошибка';
+    badge.style.background='#fee2e2'; badge.style.color='#991b1b'; badge.style.borderColor='#fca5a5';
+    document.getElementById('met-content').innerHTML=`<div style="padding:20px;color:#ef4444;font-size:12px">Ошибка загрузки: ${e.message}</div>`;
+  }
+}
+
+function metExcelDate(serial){
+  return new Date(Date.UTC(1899,11,30)+serial*86400000);
+}
+function metFmtDate(d){
+  return d.getUTCDate()+'.'+(d.getUTCMonth()+1).toString().padStart(2,'0');
+}
+function metFmtM(rub){
+  if(rub==null||isNaN(rub)) return '—';
+  return (rub/1000000).toFixed(2)+' млн';
+}
+function metPill(pct){
+  if(pct>=0.98) return `<span class="pill ok">✓ ${(pct*100).toFixed(1)}%</span>`;
+  if(pct>=0.90) return `<span class="pill warn">⚠ ${(pct*100).toFixed(1)}%</span>`;
+  return `<span class="pill bad">✗ ${(pct*100).toFixed(1)}%</span>`;
+}
+
+function metallRender(rows, label){
+  // rows[0] = header, rows[1..] = data
+  const daily=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    const serial=r[0];
+    if(!serial||typeof serial!=='number') continue;
+    const planD=Number(r[1])||0;
+    const factD=r[2]!==''&&r[2]!=null?Number(r[2]):null;
+    const planM=Number(r[4])||0;
+    const factM=r[5]!==''&&r[5]!=null?Number(r[5]):null;
+    daily.push({date:metExcelDate(serial),planD,factD,planM,factM});
+  }
+  if(!daily.length){
+    document.getElementById('met-content').innerHTML='<div style="padding:20px;color:#94a3b8">Нет данных</div>';
+    return;
+  }
+
+  const lastFact=daily.filter(d=>d.factM!=null).pop();
+  const planTotal=daily[daily.length-1].planM;
+  const factCur=lastFact?lastFact.factM:0;
+  const planToDate=lastFact?lastFact.planM:0;
+  const pctDate=planToDate?factCur/planToDate:0;
+  const pctMonth=planTotal?factCur/planTotal:0;
+  const delta=factCur-planToDate;
+  const deltaSign=delta>=0?'+':'';
+  const deltaColor=delta>=0?'#15803d':'#dc2626';
+
+  const labels=daily.map(d=>metFmtDate(d.date));
+  const planDVals=daily.map(d=>d.planD);
+  const factDVals=daily.map(d=>d.factD);
+  const planMVals=daily.map(d=>d.planM);
+  const factMVals=daily.map(d=>d.factM);
+
+  document.getElementById('met-content').innerHTML=`
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px">
+    <div class="card" style="border-top-color:#3b82f6;padding:12px 14px">
+      <div class="clbl">Факт накопленный</div>
+      <div style="font-size:22px;font-weight:800;color:#0f172a;margin:4px 0">${metFmtM(factCur)}</div>
+      <div style="font-size:10px;color:#64748b">план на дату: ${metFmtM(planToDate)}</div>
+      ${metPill(pctDate)}
+    </div>
+    <div class="card" style="border-top-color:#8b5cf6;padding:12px 14px">
+      <div class="clbl">Выполнение плана месяца</div>
+      <div style="font-size:22px;font-weight:800;color:#0f172a;margin:4px 0">${(pctMonth*100).toFixed(1)}%</div>
+      <div style="font-size:10px;color:#64748b">план месяц: ${metFmtM(planTotal)}</div>
+      ${metPill(pctMonth)}
+    </div>
+    <div class="card" style="border-top-color:${delta>=0?'#22c55e':'#ef4444'};padding:12px 14px">
+      <div class="clbl">Отклонение от плана на дату</div>
+      <div style="font-size:22px;font-weight:800;color:${deltaColor};margin:4px 0">${deltaSign}${metFmtM(delta)}</div>
+      <div style="font-size:10px;color:#64748b">${(pctDate*100).toFixed(1)}% от плана на дату</div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card" style="padding:12px 14px">
+      <div class="clbl" style="margin-bottom:8px">Ежедневно: план vs факт (руб.)</div>
+      <canvas id="met-chart-daily" height="180"></canvas>
+    </div>
+    <div class="card" style="padding:12px 14px">
+      <div class="clbl" style="margin-bottom:8px">Накопленный итог: план vs факт (руб.)</div>
+      <canvas id="met-chart-cumul" height="180"></canvas>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:10px;color:#94a3b8">Источник: таблица «${label}» (план/факт реализации металлопроизводства)</div>`;
+
+  metKillChart('daily'); metKillChart('cumul');
+
+  metChartInst['daily']=new Chart(document.getElementById('met-chart-daily'),{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'План день',data:planDVals,backgroundColor:'rgba(59,130,246,0.25)',borderColor:'#3b82f6',borderWidth:1},
+        {label:'Факт день',data:factDVals,backgroundColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'rgba(34,197,94,0.7)':'rgba(239,68,68,0.7)'),borderColor:factDVals.map((v,i)=>v==null?'transparent':v>=planDVals[i]?'#16a34a':'#dc2626'),borderWidth:1},
+      ]
+    },
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{ticks:{callback:v=>(v/1000000).toFixed(1)+'M',font:{size:9}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:8},maxRotation:45}}}}
+  });
+
+  metChartInst['cumul']=new Chart(document.getElementById('met-chart-cumul'),{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'План месяц',data:planMVals,borderColor:'#3b82f6',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:0},
+        {label:'Факт месяц',data:factMVals,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.08)',borderWidth:2,pointRadius:2,tension:0,spanGaps:false},
+      ]
+    },
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{y:{ticks:{callback:v=>(v/1000000).toFixed(1)+'M',font:{size:9}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:8},maxRotation:45}}}}
+  });
+}
 </script>
 </div><!-- /app -->
 </body>
