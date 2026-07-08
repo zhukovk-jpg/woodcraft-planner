@@ -5949,21 +5949,17 @@ function renderCalendar(){
   const filterBar=document.getElementById('calFilterBar');
   const filterWrap=document.getElementById('calFilterWrap');
   if(filterBar&&filterWrap){
-    if(session.role==='admin'){
-      filterBar.style.display='flex';
-      const opts=['<option value="">Все конструкторы</option>',
-        ...S.constructors.map(c=>`<option value="${c.id}"${_calFilter===c.id?' selected':''}>${c.name}</option>`)
-      ].join('');
-      filterWrap.innerHTML=`<select style="border-radius:8px;border:1px solid #4a5568;background:#2d3748;color:#fff;padding:5px 12px;font-size:13px;cursor:pointer;min-width:180px"
-          onchange="_calFilter=this.value||null;renderCalendar()">${opts}</select>
-        ${_calFilter
-          ?`<button onclick="_calFilter=null;renderCalendar()" style="background:rgba(255,80,80,.25);border:1px solid rgba(255,80,80,.4);color:#ff9999;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600">✕ Показать всех</button>
-            <span style="font-size:12px;color:#90caf9;font-style:italic">Показан: ${S.constructors.find(c=>c.id===_calFilter)?.name||''}</span>`
-          :'<span style="font-size:12px;color:rgba(255,255,255,.35)">Выберите конструктора для быстрого просмотра (только у вас)</span>'}`;
-    } else {
-      filterBar.style.display='none';
-      filterWrap.innerHTML='';
-    }
+    filterBar.style.display='flex';
+    const opts=['<option value="">Все конструкторы</option>',
+      ...S.constructors.map(c=>`<option value="${c.id}"${_calFilter===c.id?' selected':''}>${c.name}</option>`)
+    ].join('');
+    filterWrap.innerHTML=`<select style="border-radius:8px;border:1px solid #4a5568;background:#2d3748;color:#fff;padding:5px 12px;font-size:13px;cursor:pointer;min-width:180px"
+        onchange="_calFilter=this.value||null;renderCalendar()">${opts}</select>
+      ${_calFilter
+        ?`<button onclick="_calFilter=null;renderCalendar()" style="background:rgba(255,80,80,.25);border:1px solid rgba(255,80,80,.4);color:#ff9999;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600">✕ Показать всех</button>
+          <span style="font-size:12px;color:#90caf9;font-style:italic">Показан: ${S.constructors.find(c=>c.id===_calFilter)?.name||''}</span>`
+        :'<span style="font-size:12px;color:rgba(255,255,255,.35)">Фильтр виден только вам</span>'}`;
+
   }
 
   const cons=_calFilter ? S.constructors.filter(c=>c.id===_calFilter) : S.constructors;
