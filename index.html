@@ -2593,7 +2593,7 @@ async function init(){
   let qData, qDefects;
   try{
     if(!GOOGLE_API_KEY) throw new Error('no key');
-    const resp=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:V120?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
+    const resp=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID2}/values/${encodeURIComponent("Сводная ММ+Корпус")}!A1:V125?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`);
     if(!resp.ok) throw new Error(`Сводная ${resp.status}`);
     const svdRows=(await resp.json()).values||[];
     qData=parseSvodnayaData(svdRows);
