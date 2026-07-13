@@ -260,7 +260,7 @@ const MONTHS2 = [
   {n:'Июль',    wi:[25,26,27,28,29],  mi:6},
 ];
 // Мягкая мебель (своя таблица) — другая раскладка недель по месяцам: 5/4/4/5/4/5 = 27 недель.
-const WL_MYAG = ['Н1','Н2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27'];
+const WL_MYAG = ['Н1','Н2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28'];
 const MONTHS_MYAG = [
   {n:'Январь',  wi:[0,1,2,3,4],          mi:0},
   {n:'Февраль', wi:[5,6,7,8],            mi:1},
@@ -268,6 +268,7 @@ const MONTHS_MYAG = [
   {n:'Апрель',  wi:[13,14,15,16,17],     mi:3},
   {n:'Май',     wi:[18,19,20,21],        mi:4},
   {n:'Июнь',    wi:[22,23,24,25,26],     mi:5},
+  {n:'Июль',    wi:[27],                 mi:6},
 ];
 
 // ── Deployment config ─────────────────────────────────────────────────
@@ -315,8 +316,8 @@ const V2_PL_METALL_JUN_WC=[11,12,13,14], V2_PL_METALL_JUN_IC=10;
 
 // Мягкая мебель: всё из её собственного листа RUN (другая таблица, SHEET_ID4).
 // 27 недель Янв-Июнь 2026; «Итого»-столбец есть только у января (остальное — сумма недель).
-const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218];
-const V2_IC_MYAG=[192,null,null,null,null,null];
+const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218, 220];
+const V2_IC_MYAG=[192,null,null,null,null,null,null];
 
 function v2Get(row,idx){
   if(idx==null)return null;
@@ -2576,7 +2577,7 @@ async function init(){
   let v2Myag;
   try{
     if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
-    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A40:HZ41"];
+    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A41:HZ42"];
     const qsMyag=rangesMyag.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
     const url5=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID4}/values:batchGet?${qsMyag}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
     const resp5=await fetch(url5);
