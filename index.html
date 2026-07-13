@@ -302,7 +302,7 @@ function build(s,wl,months){
 const V2_WC_RUN    = [155,156,157,158, 160,161,162,163, 165,166,167,168, 170,171,172,173,174, 176,177,178,179, 181,182,183,184, 186,187,188,189,190];
 const V2_IC_RUN     = [159,164,169,175,180,185,191];
 const V2_WC_METALL  = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132, 134,135,136,137, 139,140,141,142, 145,146,147,148,149];
-const V2_IC_METALL  = [117,122,127,133,138,null,150]; // июнь — итог пока не подведён в таблице
+const V2_IC_METALL  = [117,122,127,133,138,144,150];
 // «PL 2026» (Реализации) пока без июльских столбцов в источнике — добавляем null-плейсхолдеры,
 // чтобы длина массива осталась согласована с WL2/V2_WC_RUN (иначе сдвинутся недели на графике).
 const V2_WC_PL_KORPUS = [3,4,5,6, 13,14,15,16, 24,25,26,27, 32,33,34,35,36, 41,42,43,44, 49,50,51,52, 57,null,null,null,null];
@@ -313,6 +313,7 @@ const V2_METALL_RW_JANAPR_WC = [113,114,115,116, 118,119,120,121, 123,124,125,12
 const V2_METALL_RW_JANAPR_IC = [117,122,127,133];
 const V2_PL_METALL_MAY_WC=[3,4,5,6], V2_PL_METALL_MAY_IC=2;
 const V2_PL_METALL_JUN_WC=[11,12,13,14], V2_PL_METALL_JUN_IC=10;
+const V2_PL_METALL_JUL_WC=[19,null,null,null,null], V2_PL_METALL_JUL_IC=18;
 
 // Мягкая мебель: всё из её собственного листа RUN (другая таблица, SHEET_ID4).
 // 27 недель Янв-Июнь 2026; «Итого»-столбец есть только у января (остальное — сумма недель).
@@ -385,17 +386,18 @@ function buildV2(batches){
   const metallRmJanApr = V2_METALL_RW_JANAPR_IC.map(c=>v2Get(metReal,c));
   const plMetalMayW = V2_PL_METALL_MAY_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
   const plMetalJunW = V2_PL_METALL_JUN_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
+  const plMetalJulW = V2_PL_METALL_JUL_WC.map(c=>{const v=c==null?null:v2Get(plMetal,c);return v==null?null:v/1000;});
   const plMetalMayM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_MAY_IC);return v==null?null:v/1000;})();
   const plMetalJunM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUN_IC);return v==null?null:v/1000;})();
+  const plMetalJulM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUL_IC);return v==null?null:v/1000;})();
 
   const metall = {
     tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
     cw: V2_WC_METALL.map(c=>v2Get(metMoshch,c)), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
     fw: V2_WC_METALL.map(c=>v2Get(metProgn,c)),  fm: V2_IC_METALL.map(c=>v2Get(metProgn,c)),
     aw: V2_WC_METALL.map(c=>v2Get(metPrin,c)),   am: V2_IC_METALL.map(c=>v2Get(metPrin,c)),
-    // «PL металл» пока без июльских столбцов — 5 null-плейсхолдеров (выровнено с V2_WC_METALL).
-    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, null,null,null,null,null],
-    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, null],
+    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, ...plMetalJulW],
+    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, plMetalJulM],
   };
 
   return {korpus2:build(korpus,WL2,MONTHS2), metall2:build(metall,WL2,MONTHS2)};
