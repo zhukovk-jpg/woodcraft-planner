@@ -2362,7 +2362,7 @@ async function kmLoadDayReport(key, sheet){
   const serial=Math.round((Date.UTC(yr,mo-1,dy)-Date.UTC(1899,11,30))/86400000);
   out.innerHTML='<div style="font-size:11px;color:#94a3b8">Загрузка…</div>';
   try{
-    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_KORPUS}/values/${encodeURIComponent("'"+sheet+"'!A1:F70")}?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_KORPUS}/values/${encodeURIComponent("'"+sheet+"'!A1:F200")}?key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
     const resp=await fetch(url);
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const json=await resp.json();
@@ -2371,11 +2371,15 @@ async function kmLoadDayReport(key, sheet){
     const mObj=window._kmData.find(x=>x.key===key);
     const shiftMap={};
     (mObj&&mObj.rows||[]).forEach(r=>{shiftMap[r.shift.toLowerCase().replace(/\s+/g,'')]=r.fio;});
-    // Parse daily rows
+    // Parse daily rows, track available date range
     let curDate=null;
-    const dayRows=[];
+    const dayRows=[], availDates=[];
+    const excelToDate=s=>{const d=new Date(Date.UTC(1899,11,30)+s*86400000);return`${String(d.getUTCDate()).padStart(2,'0')}.${String(d.getUTCMonth()+1).padStart(2,'0')}.${d.getUTCFullYear()}`;};
     vals.forEach(row=>{
-      if(row[0]&&typeof row[0]==='number') curDate=row[0];
+      if(row[0]&&typeof row[0]==='number'&&row[0]>40000){
+        curDate=Math.round(row[0]);
+        if(!availDates.includes(curDate)) availDates.push(curDate);
+      }
       if(curDate===serial && row[1]){
         const shiftKey=(row[2]||'').toLowerCase().replace(/\s+/g,'');
         dayRows.push({
@@ -2386,7 +2390,10 @@ async function kmLoadDayReport(key, sheet){
       }
     });
     if(!dayRows.length){
-      out.innerHTML='<div style="font-size:11px;color:#94a3b8">Нет данных за выбранную дату.</div>';
+      const rangeMsg=availDates.length
+        ?`Доступные даты: ${excelToDate(Math.min(...availDates))} — ${excelToDate(Math.max(...availDates))}`
+        :'В листе нет дневных данных';
+      out.innerHTML=`<div style="font-size:11px;color:#94a3b8">Нет данных за выбранную дату.<br>${rangeMsg}</div>`;
       return;
     }
     const dateLabel=`${dy.toString().padStart(2,'0')}.${mo.toString().padStart(2,'0')}.${yr}`;
