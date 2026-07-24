@@ -393,7 +393,7 @@ function buildV2(batches){
 
   const metall = {
     tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
-    cw: V2_WC_METALL.map(c=>v2Get(metMoshch,c)), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
+    cw: V2_WC_METALL.map(c=>{const v=v2Get(metMoshch,c);return v!=null?v:v2Get(metProgn,c);}), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
     fw: V2_WC_METALL.map(c=>v2Get(metProgn,c)),  fm: V2_IC_METALL.map(c=>v2Get(metProgn,c)),
     aw: V2_WC_METALL.map(c=>v2Get(metPrin,c)),   am: V2_IC_METALL.map(c=>v2Get(metPrin,c)),
     rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, ...plMetalJulW],
