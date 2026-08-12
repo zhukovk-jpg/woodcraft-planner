@@ -112,6 +112,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
 .qheat .qheat-label{text-align:left;white-space:normal;max-width:220px;font-weight:600;background:#fff;position:sticky;left:0}
 .qheat th:first-child{text-align:left;position:sticky;left:0;background:#f1f5f9}
 .qheat .qheat-median{font-weight:700;background:#f8fafc}
+.qheat .qheat-dead{background:#f8fafc;color:#cbd5e1}
+.qheat tr.qd-derived .qheat-label{border-left:3px solid #6366f1;font-style:italic;color:#4338ca}
+.qheat tr.qd-derived td{font-style:italic}
 .qheat tr:hover .qheat-label{text-decoration:underline}
 .qheat tr.qd-selected .qheat-label{background:#dbeafe!important;border-left:3px solid #3b82f6;font-weight:700}
 .qheat tr.qd-selected td{outline:1px solid #93c5fd;outline-offset:-1px}
@@ -1280,10 +1283,41 @@ function parseDefectRows(rows,months){
   }
   return out;
 }
+// «Живое» окно строки — от первого до последнего ненулевого месяца. Ведущие нули
+// (категории ещё не было в справочнике) и хвостовые (категорию закрыли) — не данные,
+// а отсутствие категории. null, если строка пустая целиком.
+function qActiveRange(arr){
+  const a=arr.findIndex(v=>v>0);
+  if(a<0) return null;
+  let b=arr.length-1;
+  while(b>a && !(arr[b]>0)) b--;
+  return [a,b];
+}
+// Медиана — только по живому окну. Иначе у новой категории (нули с Янв'25 по Апр'26)
+// медиана уезжает в 0 и все реальные значения красятся в красный «рост дефекта»,
+// хотя рост тут мнимый — просто категории раньше не существовало.
 function qMedian(arr){
-  const s=[...arr].sort((a,b)=>a-b);
+  const rng=qActiveRange(arr);
+  const s=(rng?arr.slice(rng[0],rng[1]+1):arr).slice().sort((a,b)=>a-b);
+  if(!s.length) return 0;
   const mid=Math.floor(s.length/2);
   return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+// С мая 2026 «Несоответствие ожиданиям клиента» разбили на 4 детальные причины:
+// старая строка обнулена, новые начаты с нуля. Тренд рвётся, поэтому даём сводную
+// строку старая+новые — она одна непрерывна на всём горизонте.
+const QD_EXPECT_OLD='Несоответствие ожиданиям клиента';
+const QD_EXPECT_NEW=['Не подошел размер','Не подходит по жесткости/мягкости/удобству','Не подходит под интерьер/дизайн/стиль','Не соответствует цвет/оттенок'];
+const QD_EXPECT_SUM='Несоответствие ожиданиям клиента (сводно)';
+function qdAddExpectSum(rows){
+  const iOld=rows.findIndex(r=>r.label===QD_EXPECT_OLD);
+  if(iOld<0) return rows;
+  const parts=QD_EXPECT_NEW.map(l=>rows.find(r=>r.label===l)).filter(Boolean);
+  if(!parts.length) return rows;
+  const vals=rows[iOld].vals.map((v,i)=>parts.reduce((s,p)=>s+(p.vals[i]||0),v));
+  const out=rows.slice();
+  out.splice(iOld+1,0,{label:QD_EXPECT_SUM,vals,derived:true});
+  return out;
 }
 // Цвет ячейки тепловой карты: медиана = нейтральный белый, выше медианы — краснее, ниже — зеленее.
 // Отклонение капается на ±100% от медианы, чтобы выбросы не «забивали» всю шкалу.
@@ -1869,7 +1903,7 @@ function renderDefects(elId,res){
     <span class="qpatlink" id="qd-clear-sel" style="margin:0;align-self:center" onclick="qdClearSelection()">Очистить выделение (<span id="qd-sel-count">0</span>)</span>
   </div>
   <div class="qheatwrap"><div id="qd-table"></div></div>
-  <div class="note">Цвет ячейки — относительно медианы своей строки (вид дефекта) за весь период: белый = медиана, краснее — выше медианы (рост дефекта), зеленее — ниже медианы (улучшение). Дефекты приведены как есть из таблицы. Клик по заголовку столбца — сортировка; клик по строке — выделить.</div>`;
+  <div class="note">Цвет ячейки — относительно медианы своей строки (вид дефекта): белый = медиана, краснее — выше медианы (рост дефекта), зеленее — ниже медианы (улучшение). Медиана считается только по «живому» окну строки — от первого до последнего месяца с данными; месяцы, когда категории ещё (или уже) не было в справочнике, показаны <span style="color:#cbd5e1;font-weight:700">серым</span> и в медиану не входят. С мая 2026 «Несоответствие ожиданиям клиента» разбито на 4 детальные причины (размер / жёсткость / интерьер / цвет) — строка <span style="color:#4338ca;font-style:italic;font-weight:700">«… (сводно)»</span> суммирует старую и новые, чтобы тренд не рвался на стыке. Клик по заголовку столбца — сортировка; клик по строке — выделить.</div>`;
   window._qdRes=res;
   qdRefresh();
 }
@@ -1895,7 +1929,8 @@ function qdRefresh(){
   const selCountEl=document.getElementById('qd-sel-count');
   if(selCountEl) selCountEl.textContent=_qdState.selected.size;
   const res=window._qdRes;
-  const rows=((res.data[_qdState.dept]&&res.data[_qdState.dept][_qdState.view])||[]).map(r=>({...r,median:qMedian(r.vals)}));
+  const src=(res.data[_qdState.dept]&&res.data[_qdState.dept][_qdState.view])||[];
+  const rows=qdAddExpectSum(src).map(r=>({...r,median:qMedian(r.vals),range:qActiveRange(r.vals)}));
   const months=res.months;
   const {sortCol,sortDir}=_qdState;
   if(sortCol!=null){
@@ -1915,8 +1950,12 @@ function qdRefresh(){
   html+=`<th style="cursor:pointer" onclick="qdSort('median')">Медиана${arrow('median')}</th></tr></thead><tbody>`;
   rows.forEach((r,idx)=>{
     const sel=_qdState.selected.has(r.label);
-    html+=`<tr class="${sel?'qd-selected':''}" style="cursor:pointer" onclick="qdToggleRowIdx(${idx})"><td class="qheat-label">${r.label}</td>`;
-    r.vals.forEach(v=>{ html+=`<td style="background:${qHeatColor(v,r.median)}">${v}</td>`; });
+    html+=`<tr class="${sel?'qd-selected':''}${r.derived?' qd-derived':''}" style="cursor:pointer" onclick="qdToggleRowIdx(${idx})"><td class="qheat-label">${r.label}</td>`;
+    r.vals.forEach((v,i)=>{
+      const dead=r.range&&(i<r.range[0]||i>r.range[1]);
+      html+= dead ? `<td class="qheat-dead" title="Категории не было в справочнике">${v}</td>`
+                  : `<td style="background:${qHeatColor(v,r.median)}">${v}</td>`;
+    });
     html+=`<td class="qheat-median">${r.median.toFixed(1)}</td></tr>`;
   });
   html+='</tbody></table>';
