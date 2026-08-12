@@ -261,7 +261,7 @@ const MONTHS = [
 ];
 
 // ── «Загрузка v2»: тот же недельный шаблон + Январь (4 недели) впереди ───
-const WL2 = ['Н1-2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28','Н29','Н30','Н31'];
+const WL2 = ['Н1-2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28','Н29','Н30','Н31','Н32','Н33','Н34','Н35'];
 const MONTHS2 = [
   {n:'Январь',  wi:[0,1,2,3],         mi:0},
   {n:'Февраль', wi:[4,5,6,7],         mi:1},
@@ -270,9 +270,10 @@ const MONTHS2 = [
   {n:'Май',     wi:[17,18,19,20],     mi:4},
   {n:'Июнь',    wi:[21,22,23,24],     mi:5},
   {n:'Июль',    wi:[25,26,27,28,29],  mi:6},
+  {n:'Август',  wi:[30,31,32,33],     mi:7},
 ];
 // Мягкая мебель (своя таблица) — другая раскладка недель по месяцам: 5/4/4/5/4/5 = 27 недель.
-const WL_MYAG = ['Н1','Н2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28','Н29','Н30','Н31','Н32'];
+const WL_MYAG = ['Н1','Н2','Н3','Н4','Н5','Н6','Н7','Н8','Н9','Н10','Н11','Н12','Н13','Н14','Н15','Н16','Н17','Н18','Н19','Н20','Н21','Н22','Н23','Н24','Н25','Н26','Н27','Н28','Н29','Н30','Н31','Н32','Н33','Н34','Н35','Н36'];
 const MONTHS_MYAG = [
   {n:'Январь',  wi:[0,1,2,3,4],          mi:0},
   {n:'Февраль', wi:[5,6,7,8],            mi:1},
@@ -281,6 +282,7 @@ const MONTHS_MYAG = [
   {n:'Май',     wi:[18,19,20,21],        mi:4},
   {n:'Июнь',    wi:[22,23,24,25,26],     mi:5},
   {n:'Июль',    wi:[27,28,29,30,31],     mi:6},
+  {n:'Август',  wi:[32,33,34,35],        mi:7},
 ];
 
 // ── Deployment config ─────────────────────────────────────────────────
@@ -311,26 +313,33 @@ function build(s,wl,months){
 
 // ── Загрузка производства: набор метрик из таблицы WOODCRAFT (RUN/Металл/PL) ──
 // Колонки 0-based в соответствующих листах.
-const V2_WC_RUN    = [155,156,157,158, 160,161,162,163, 165,166,167,168, 170,171,172,173,174, 176,177,178,179, 181,182,183,184, 186,187,188,189,190];
-const V2_IC_RUN     = [159,164,169,175,180,185,191];
-const V2_WC_METALL  = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132, 134,135,136,137, 139,140,141,142, 145,146,147,148,149];
-const V2_IC_METALL  = [117,122,127,133,138,144,150];
-// «PL 2026» (Реализации) пока без июльских столбцов в источнике — добавляем null-плейсхолдеры,
-// чтобы длина массива осталась согласована с WL2/V2_WC_RUN (иначе сдвинутся недели на графике).
-const V2_WC_PL_KORPUS = [3,4,5,6, 13,14,15,16, 24,25,26,27, 32,33,34,35,36, 41,42,43,44, 49,50,51,52, 57,58,59,60,null];
-const V2_IC_PL_KORPUS = [2,12,23,31,40,48,56];
+// Август 2026: RUN — недели 32-35 в колонках 192-195, итого 196.
+const V2_WC_RUN    = [155,156,157,158, 160,161,162,163, 165,166,167,168, 170,171,172,173,174, 176,177,178,179, 181,182,183,184, 186,187,188,189,190, 192,193,194,195];
+const V2_IC_RUN     = [159,164,169,175,180,185,191,196];
+// Металл — недели 32-35 в колонках 151-154, итого 155.
+const V2_WC_METALL  = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132, 134,135,136,137, 139,140,141,142, 145,146,147,148,149, 151,152,153,154];
+const V2_IC_METALL  = [117,122,127,133,138,144,150,155];
+// «PL 2026» (Реализации Корпуса): июль заполнен целиком (5-я неделя — колонка 61),
+// августа в этом листе ещё НЕТ — держим null-плейсхолдеры, чтобы длина совпадала с
+// WL2/V2_WC_RUN (иначе недели на графике съедут). Появятся столбцы — проставить номера.
+const V2_WC_PL_KORPUS = [3,4,5,6, 13,14,15,16, 24,25,26,27, 32,33,34,35,36, 41,42,43,44, 49,50,51,52, 57,58,59,60,61, null,null,null,null];
+const V2_IC_PL_KORPUS = [2,12,23,31,40,48,56,null];
 // Металл: Реализации — Фев-Апр из листа «Металл» (row 40, тыс.₽ как есть),
 // Май-Июнь из «PL металл» (свежее, в руб. → /1000), как указал заказчик.
 const V2_METALL_RW_JANAPR_WC = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132];
 const V2_METALL_RW_JANAPR_IC = [117,122,127,133];
 const V2_PL_METALL_MAY_WC=[3,4,5,6], V2_PL_METALL_MAY_IC=2;
 const V2_PL_METALL_JUN_WC=[11,12,13,14], V2_PL_METALL_JUN_IC=10;
-const V2_PL_METALL_JUL_WC=[19,20,21,22,null], V2_PL_METALL_JUL_IC=18;
+const V2_PL_METALL_JUL_WC=[19,20,21,22,23], V2_PL_METALL_JUL_IC=18;
+// Августа в «PL металл» ещё нет, зато он есть в листе «Металл» (row 40, тыс.₽ как есть,
+// колонки 151-154, итого 155) — берём оттуда. Сверено: июльские итоги двух листов
+// совпадают (8415.4 тыс. ₽ против 8 415 679 ₽), масштаб один и тот же.
+const V2_METALL_RW_AUG_WC=[151,152,153,154], V2_METALL_RW_AUG_IC=155;
 
 // Мягкая мебель: всё из её собственного листа RUN (другая таблица, SHEET_ID4).
 // 27 недель Янв-Июнь 2026; «Итого»-столбец есть только у января (остальное — сумма недель).
-const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218, 220,221,222,223,224];
-const V2_IC_MYAG=[192,null,null,null,null,null,null];
+const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218, 220,221,222,223,224, 226,227,228,229];
+const V2_IC_MYAG=[192,null,null,null,null,null,null,null];
 
 function v2Get(row,idx){
   if(idx==null)return null;
@@ -402,14 +411,17 @@ function buildV2(batches){
   const plMetalMayM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_MAY_IC);return v==null?null:v/1000;})();
   const plMetalJunM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUN_IC);return v==null?null:v/1000;})();
   const plMetalJulM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUL_IC);return v==null?null:v/1000;})();
+  // Август: в «PL металл» его пока нет, берём из листа «Металл» (уже в тыс.₽, без деления).
+  const metalAugW = V2_METALL_RW_AUG_WC.map(c=>v2Get(metReal,c));
+  const metalAugM = v2Get(metReal,V2_METALL_RW_AUG_IC);
 
   const metall = {
     tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
     cw: V2_WC_METALL.map(c=>{const v=v2Get(metMoshch,c);return v!=null?v:v2Get(metProgn,c);}), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
     fw: V2_WC_METALL.map(c=>v2Get(metProgn,c)),  fm: V2_IC_METALL.map(c=>v2Get(metProgn,c)),
     aw: V2_WC_METALL.map(c=>v2Get(metPrin,c)),   am: V2_IC_METALL.map(c=>v2Get(metPrin,c)),
-    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, ...plMetalJulW],
-    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, plMetalJulM],
+    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, ...plMetalJulW, ...metalAugW],
+    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, plMetalJulM, metalAugM],
   };
 
   return {korpus2:build(korpus,WL2,MONTHS2), metall2:build(metall,WL2,MONTHS2)};
@@ -419,7 +431,15 @@ function buildV2Myag(batches){
   const vr=batches.valueRanges;
   const tbuMoshch = (vr[0].values)||[];   // 'RUN '!A20:HZ21 — idx0=ТБУ(20), idx1=Мощность(21)
   const prinBd    = (vr[1].values)||[];   // 'RUN '!A28:HZ33 — idx0..5 (28..33)
-  const planFact = (vr[2].values)||[]; // 'RUN '!A40:HZ41 — idx0=Реализации план(40), idx1=Реализации факт(41)
+  // 'RUN '!A38:HZ50 — ищем строки по названию в колонке A, а не по номеру:
+  // в этом листе вставляют строки, и фиксированные индексы уезжают на соседние
+  // показатели («Средний чек», «Доля продаж новинок») без единого признака ошибки.
+  const rowsRealiz = (vr[2].values)||[];
+  const findRow=(re)=>rowsRealiz.find(r=>re.test(String((r&&r[0])||'')))||null;
+  const planRow = findRow(/^Реализации\s+план/i);
+  const factRow = findRow(/^Реализации\s+факт/i);
+  if(!planRow||!factRow) console.warn('Мягкая: не найдены строки «Реализации план/факт» — проверьте лист RUN');
+  const planFact = [planRow, factRow];
 
   // «Принятые заказы всего с НДС» — а Прогноз/Реализации здесь без НДС, поэтому для
   // сопоставимости снимаем НДС с Принятых (÷1.22). Это особенность только этой таблицы.
@@ -427,7 +447,7 @@ function buildV2Myag(batches){
   const myagkaya = {
     tw: V2_WC_MYAG.map(c=>v2Get(tbuMoshch[0],c)), tm: V2_IC_MYAG.map(c=>v2Get(tbuMoshch[0],c)),
     cw: V2_WC_MYAG.map(c=>v2Get(tbuMoshch[1],c)), cm: V2_IC_MYAG.map(c=>v2Get(tbuMoshch[1],c)),
-    // «Прогноз продаж» в этой таблице называется «Реализации план, без НДС» (строка 40).
+    // «Прогноз продаж» в этой таблице называется «Реализации план, без НДС».
     fw: V2_WC_MYAG.map(c=>v2Get(planFact[0],c)), fm: V2_IC_MYAG.map(c=>v2Get(planFact[0],c)),
     aw: V2_WC_MYAG.map(c=>noVat(v2Get(prinBd[0],c))), am: V2_IC_MYAG.map(c=>noVat(v2Get(prinBd[0],c))),
     rw: V2_WC_MYAG.map(c=>v2Get(planFact[1],c)),  rm: V2_IC_MYAG.map(c=>v2Get(planFact[1],c)),
@@ -769,10 +789,13 @@ function forecastMonth(wArr, mo, isCurrent){
 // ── Monthly value: prefer sum of weekly data; fall back to итого column only if no weekly data.
 // This avoids using cumulative/running-total итого formulas that exist in the spreadsheet.
 function mFall(marr, warr, months=MONTHS){
+  // Отсутствующий ряд трактуем как пустой: раньше undefined здесь ронял исключение
+  // и обрывал отрисовку ВСЕХ остальных графиков направления, а не только своего.
+  const w=Array.isArray(warr)?warr:[], m=Array.isArray(marr)?marr:[];
   return months.map(mo=>{
-    const s=mo.wi.reduce((a,wi)=>a+(warr[wi]||0),0);
+    const s=mo.wi.reduce((a,wi)=>a+(w[wi]||0),0);
     if(s>0) return s;          // weekly sum available → always use it
-    const v=marr[mo.mi];
+    const v=m[mo.mi];
     return v!=null?v:null;     // no weekly data → fall back to итого column
   });
 }
@@ -800,6 +823,29 @@ function elapsedSums(rwArr,cwArr,months=MONTHS){
 }
 
 // ── Chart render by period ────────────────────────────────────────────
+// Блок разбивки по контрагентам: рисуем, только если разбивка есть. Если её нет
+// (Металл), прячем всю карточку и пишем причину — пустая рамка выглядит как поломка.
+function qBreakdownChart(elId,slot,breakdown,MO,lb){
+  const canvas=document.getElementById(`${elId}-${slot}`);
+  const box=canvas?canvas.closest('.cbox'):null;
+  const has=Array.isArray(breakdown)&&breakdown.length>0;
+  if(box) box.style.display=has?'':'none';
+  if(!has){ killChart(`${elId}-${slot}`); return; }
+  groupedBarChart(`${elId}-${slot}`,
+    breakdown.map((it,i)=>({l:it.label,d:mFall(it.m,it.w,MO),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br})),
+    lb,false);
+}
+// То же для недельного вида: там значения берутся срезом sl(), а не mFall().
+function qBreakdownChartW(elId,slot,breakdown,sl,lb){
+  const canvas=document.getElementById(`${elId}-${slot}`);
+  const box=canvas?canvas.closest('.cbox'):null;
+  const has=Array.isArray(breakdown)&&breakdown.length>0;
+  if(box) box.style.display=has?'':'none';
+  if(!has){ killChart(`${elId}-${slot}`); return; }
+  groupedBarChart(`${elId}-${slot}`,
+    breakdown.map((it,i)=>({l:it.label,d:sl(it.w),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br})),
+    lb,false);
+}
 function renderCharts(elId, d, mi, wi){
   const MO=d.MONTHS||MONTHS, WLd=d.WL||WL;
   if(wi===-1){
@@ -824,22 +870,11 @@ function renderCharts(elId, d, mi, wi){
       {l:'Реализации',d:fRM,bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
     ],lb,false);
     lineChart(elId+'-l3',[{l:'Реализации / '+tLabel,d:mRatio(d.rm,d.rw,tBase_m,tBase_w,MO),c:'#f59e0b'}],true,lb,false);
-    // Разрез по контрагентам — новая структура (d.awBreakdown/d.rwBreakdown), если задана,
-    // иначе старые 3 категории ДТ/МН/Прочие (v1, не трогаем).
-    groupedBarChart(elId+'-b4', d.awBreakdown
-      ? d.awBreakdown.map((it,i)=>({l:it.label,d:mFall(it.m,it.w,MO),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
-      : [
-        {l:'ДТ',    d:mFall(d.am_dt,d.aw_dt,MO),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
-        {l:'МН/МП', d:mFall(d.am_mn,d.aw_mn,MO),bg:'rgba(16,185,129,.75)',br:'#10b981'},
-        {l:'Прочие',d:mFall(d.am_pr,d.aw_pr,MO),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
-      ], lb,false);
-    groupedBarChart(elId+'-b5', d.rwBreakdown
-      ? d.rwBreakdown.map((it,i)=>({l:it.label,d:mFall(it.m,it.w,MO),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
-      : [
-        {l:'ДТ',    d:mFall(d.rm_dt,d.rw_dt,MO),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
-        {l:'МН/МП', d:mFall(d.rm_mn,d.rw_mn,MO),bg:'rgba(16,185,129,.75)',br:'#10b981'},
-        {l:'Прочие',d:mFall(d.rm_pr,d.rw_pr,MO),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
-      ], lb,false);
+    // Разрез по контрагентам. У Металла его нет вообще — тогда блок прячем, а не рисуем
+    // пустую рамку. Раньше здесь был запасной вариант на поля v1 (am_dt/aw_dt/...), которых
+    // в данных давно нет: на Металле он ронял mFall и обрывал отрисовку остальных графиков.
+    qBreakdownChart(elId,'b4',d.awBreakdown,MO,lb);
+    qBreakdownChart(elId,'b5',d.rwBreakdown,MO,lb);
   } else {
     // Weekly view — weeks of selected month only
     const mo=MO[mi];
@@ -862,21 +897,9 @@ function renderCharts(elId, d, mi, wi){
       {l:'Реализации',d:sl(d.rw),bg:'rgba(139,92,246,.35)',br:'#8b5cf6'},
     ],lb,false);
     lineChart(elId+'-l3',[{l:'Реализации / '+tLabel,d:sl(pRT_w_src),c:'#f59e0b'}],true,lb,false);
-    // Разрез по контрагентам (weekly)
-    groupedBarChart(elId+'-b4', d.awBreakdown
-      ? d.awBreakdown.map((it,i)=>({l:it.label,d:sl(it.w),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
-      : [
-        {l:'ДТ',    d:sl(d.aw_dt),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
-        {l:'МН/МП', d:sl(d.aw_mn),bg:'rgba(16,185,129,.75)',br:'#10b981'},
-        {l:'Прочие',d:sl(d.aw_pr),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
-      ], lb,false);
-    groupedBarChart(elId+'-b5', d.rwBreakdown
-      ? d.rwBreakdown.map((it,i)=>({l:it.label,d:sl(it.w),bg:QPAL[i%QPAL.length].bg,br:QPAL[i%QPAL.length].br}))
-      : [
-        {l:'ДТ',    d:sl(d.rw_dt),bg:'rgba(59,130,246,.75)',br:'#3b82f6'},
-        {l:'МН/МП', d:sl(d.rw_mn),bg:'rgba(16,185,129,.75)',br:'#10b981'},
-        {l:'Прочие',d:sl(d.rw_pr),bg:'rgba(245,158,11,.75)', br:'#f59e0b'},
-      ], lb,false);
+    // Разрез по контрагентам (weekly) — как и в месячном виде, без разбивки блок прячем.
+    qBreakdownChartW(elId,'b4',d.awBreakdown,sl,lb);
+    qBreakdownChartW(elId,'b5',d.rwBreakdown,sl,lb);
   }
 }
 
@@ -2835,7 +2858,11 @@ async function init(){
   let v2Myag;
   try{
     if(!GOOGLE_API_KEY) throw new Error('Cowork-режим не поддерживает batchGet нескольких листов');
-    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A41:HZ42"];
+    // Реализации берём широким диапазоном и ищем строки ПО НАЗВАНИЮ: в этом листе
+    // периодически вставляют строки, и жёсткие номера уезжают. 12.08.2026 так и
+    // случилось — реализации переехали с 41/42 на 43/44, а дашборд молча читал
+    // «Средний чек стульев» и «Долю продаж новинок» вместо объёмов.
+    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A38:HZ50"];
     const qsMyag=rangesMyag.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
     const url5=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID4}/values:batchGet?${qsMyag}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
     const resp5=await fetch(url5);
