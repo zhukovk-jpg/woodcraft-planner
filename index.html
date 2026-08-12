@@ -1164,28 +1164,52 @@ const Q_d2_TABLE={
   10:3.078,11:3.173,12:3.258,13:3.336,14:3.407,15:3.472,16:3.532,
   17:3.588,18:3.640,19:3.689,20:3.735,21:3.778,22:3.819,23:3.858,24:3.895,25:3.931
 };
-function qD2For(n){
-  if(Q_D2_TABLE[n]!=null) return Q_D2_TABLE[n];
-  if(n<2) return Q_D2_TABLE[2];
-  if(n>25) return Q_D2_TABLE[25];
-  return Q_D2_TABLE[2];
+// ── Статистики контрольной карты ────────────────────────────────────────
+// Базовый период (Фаза I по SPC): среднее и σ считаются ОДИН раз по нему, границы
+// замораживаются, последующие месяцы наносятся на готовые границы (Фаза II).
+// Кумулятивный пересчёт, который был здесь раньше, приводил к тому, что границы
+// «плыли» каждый месяц и точка могла выйти из-под контроля без единого изменения
+// в самих данных.
+const Q_BASELINE_SUFFIX="'25";
+function qBaselineLen(months){
+  let k=0;
+  while(k<months.length && String(months[k]).endsWith(Q_BASELINE_SUFFIX)) k++;
+  return k>=2 ? k : months.length;   // год не размечен — берём весь ряд
 }
-function qD2Sigma(knownVals){
-  const range=Math.max(...knownVals)-Math.min(...knownVals);
-  return range/qD2For(knownVals.length);
+// Скользящие размахи, выровненные по месяцам (в позиции 0 всегда null).
+function qMRSeries(vals){
+  return vals.map((v,i)=>(i>0&&v!=null&&vals[i-1]!=null)?Math.abs(v-vals[i-1]):null);
 }
-// Сигма «на конец периода»: пересчёт по тому же методу (размах/D2), но на данных,
-// известных на момент N, N-1, ... N-4 месяцев назад (5 точек, как в листе «Диаграммы») —
-// так в исходной таблице отслеживают стабильность системы (рост сигмы = менее стабильна).
-function qHistSigmas(vals,months){
-  const res=[];
-  for(let k=0;k<5;k++){
-    const slice=vals.slice(0,vals.length-k);
-    const known=slice.filter(v=>v!=null);
-    if(known.length<2){res.push(null);continue;}
-    res.push({sigma:qD2Sigma(known),label:months[months.length-1-k],n:known.length,d2:qD2For(known.length)});
-  }
-  return res; // [текущая, пред.месяц, позапред.месяц]
+function qMRBar(vals){
+  const mr=qMRSeries(vals).filter(v=>v!=null);
+  return mr.length ? mr.reduce((a,b)=>a+b,0)/mr.length : 0;
+}
+// σ = средний скользящий размах / d2(2), d2(2)=1.128 — стандартная оценка для карт
+// индивидуальных значений. Устойчива к сдвигам уровня, в отличие от общего размаха:
+// тот раздувается любым трендом и одним старым выбросом навсегда.
+// ВАЖНО: раньше здесь было размах/D2, но D2=d2+3·d3 — это множитель ВЕРХНЕЙ ГРАНИЦЫ
+// карты размахов (UCL_R = D2·σ), а не оценка σ. Это занижало σ в ~1.6 раза.
+const Q_D2_FOR_PAIR=1.128;
+function qChartStats(vals,months,unit){
+  const bl=qBaselineLen(months);
+  const baseVals=vals.slice(0,bl);
+  const base=baseVals.filter(v=>v!=null);
+  const mrBase=qMRBar(baseVals);
+  const sigma=mrBase/Q_D2_FOR_PAIR;
+  const mean=base.length?base.reduce((a,b)=>a+b,0)/base.length:0;
+  const ucl=mean+3*sigma, lcl=Math.max(0,mean-3*sigma);
+  // Разброс «сейчас» против базы — окно той же длины с конца ряда.
+  const mrRecent=qMRBar(vals.slice(Math.max(0,vals.length-bl)));
+  // Проверка Фазы I: сама база обязана укладываться в свои же границы. Если нет —
+  // базовый период выбран неудачно, и все дальнейшие сигналы читать с оговоркой.
+  const baselineOutliers=baseVals
+    .map((v,i)=>({v,m:months[i]}))
+    .filter(o=>o.v!=null&&(o.v>ucl||o.v<lcl));
+  return {
+    vals,months,unit,mean,sigma,ucl,lcl,
+    baselineLen:bl, baselineLabel:months.length?months[Math.max(0,bl-1)]:'',
+    mrBase,mrRecent,mrSeries:qMRSeries(vals),baselineOutliers,
+  };
 }
 
 // Единственный источник данных — «Сводная ММ+Корпус».
@@ -1232,32 +1256,37 @@ function parseSvodnayaData(rows){
     const d=out[dept]&&out[dept][view];
     if(!d||!d.vals){
       out[dept]=out[dept]||{};
-      out[dept][view]={vals:[],months,mean:0,sigma:0,sigmaHist:[],pct:[]};
+      const empty=[];
+      out[dept][view]={vals:empty,months,pct:empty,
+        count:qChartStats(empty,months,'шт.'), rate:qChartStats(empty,months,'%')};
       continue;
     }
-    const known=d.vals.filter(v=>v!=null);
-    const mean=known.length?known.reduce((a,b)=>a+b,0)/known.length:0;
-    const sigma=known.length>=2?qD2Sigma(known):0;
-    const sigmaHist=qHistSigmas(d.vals,months);
     // % считаем от «Реализации диван.ру» для ОБОИХ срезов — только тогда «вина фабрики»
     // читается как подмножество «всех виновников» на одном графике. Разные знаменатели
     // сравнивать нельзя. У ММ строка «Реализация фабрики» в источнике пустая вообще,
     // поэтому запасной вариант — на случай, если пуста как раз диван.ру.
     const hasVals=a=>Array.isArray(a)&&a.some(v=>v!=null);
     const denom=hasVals(d.realizDivan)?d.realizDivan:d.realizFab;
-    const pct=denom?d.vals.map((v,i)=>(v!=null&&denom[i])?+(v/denom[i]*100).toFixed(4):null):null;
-    out[dept][view]={vals:d.vals,months,mean,sigma,sigmaHist,pct,realizFab:d.realizFab,realizDivan:d.realizDivan};
+    const pct=denom?d.vals.map((v,i)=>(v!=null&&denom[i])?+(v/denom[i]*100).toFixed(4):null):d.vals.map(()=>null);
+    // Два набора статистик: карта по штукам и карта по доле от реализации.
+    // Объём отгрузки гуляет на 34–51%, поэтому карта по штукам смешивает качество
+    // с продажами — карта по доле нужна как отдельный взгляд.
+    out[dept][view]={vals:d.vals,months,pct,realizFab:d.realizFab,realizDivan:d.realizDivan,
+      count:qChartStats(d.vals,months,'шт.'), rate:qChartStats(pct,months,'%')};
   }
   return out;
 }
 
 function qualityFallback(){
   const months=['Янв\'25','Фев\'25','Мар\'25','Апр\'25','Май\'25','Июн\'25','Июл\'25','Авг\'25','Сен\'25','Окт\'25','Ноя\'25','Дек\'25','Янв\'26','Фев\'26','Мар\'26','Апр\'26','Май\'26','Июн\'26'];
-  const mk=(vals,pct)=>{
-    const known=vals.filter(v=>v!=null);
-    const mean=known.reduce((a,b)=>a+b,0)/known.length;
-    const sigma=qD2Sigma(known);
-    return {vals,mean,sigma,sigmaHist:qHistSigmas(vals,months),months,pct:pct.map(p=>p!=null?p*100:null)};
+  // ВНИМАНИЕ: набор заморожен на Июн'26 и отстаёт от источника (напр. Май'26 КМ здесь
+  // 630 против 684 в «Сводной»). Используется ТОЛЬКО когда Google Sheets недоступен —
+  // цифры показательные, не отчётные. Статистики считаются теми же функциями, что и
+  // на живых данных, чтобы фоллбэк не расходился с боевой методикой.
+  const mk=(vals,pctRaw)=>{
+    const pct=pctRaw.map(p=>p!=null?p*100:null);
+    return {vals,months,pct,
+      count:qChartStats(vals,months,'шт.'), rate:qChartStats(pct,months,'%')};
   };
   return {
     korpus:{
@@ -1400,9 +1429,27 @@ function zoneColor(v,mean,sigma){
 
 function controlChart(id,d){
   killChart(id);
-  const {vals,mean,sigma,months}=d;
-  const flat=v=>months.map(()=>v);
+  const {vals,mean,sigma,months,unit,baselineLen}=d;
+  // Ни количество рекламаций, ни доля не бывают отрицательными — нижние линии
+  // обрезаем нулём, иначе карта рисует бессмысленную границу ниже нуля.
+  const flat=v=>months.map(()=>Math.max(0,v));
   const ctx=document.getElementById(id).getContext('2d');
+  // Граница базового периода: слева границы построены (Фаза I), справа — проверяются (Фаза II).
+  const phaseLine={
+    id:'qPhaseLine'+id,
+    afterDatasetsDraw(c){
+      const xs=c.scales.x; if(!xs||!baselineLen||baselineLen>=months.length) return;
+      const x=xs.getPixelForValue(baselineLen-0.5);
+      const {top,bottom}=c.chartArea;
+      const g=c.ctx; g.save();
+      g.strokeStyle='#6366f1'; g.lineWidth=1.5; g.setLineDash([4,3]);
+      g.beginPath(); g.moveTo(x,top); g.lineTo(x,bottom); g.stroke();
+      g.setLineDash([]); g.fillStyle='#6366f1'; g.font='9px Segoe UI,Arial';
+      g.textAlign='right'; g.fillText('база',x-3,top+9);
+      g.textAlign='left';  g.fillText('контроль',x+3,top+9);
+      g.restore();
+    }
+  };
   CI[id]=new Chart(ctx,{
     type:'line',
     data:{labels:months,datasets:[
@@ -1424,19 +1471,21 @@ function controlChart(id,d){
         legend:{display:false},
         tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
           filter:item=>item.dataset.label==='Рекламации',
-          callbacks:{title:([c])=>c.label,label:c=>' Рекламаций: '+fmtN(c.parsed.y)},
+          callbacks:{title:([c])=>c.label,
+            label:c=>(unit==='%'?' Доля: ':' Рекламаций: ')+qFmtVal(c.parsed.y,unit)},
         },
       },
       scales:{
         x:{grid:{display:false},ticks:{font:{size:9},color:'#64748b',maxRotation:0}},
-        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b'},
-           title:{display:true,text:'шт.',font:{size:8},color:'#94a3b8'}}
+        y:{grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>unit==='%'?v+'%':v},
+           title:{display:true,text:unit,font:{size:8},color:'#94a3b8'}}
       }
-    }
+    },
+    plugins:[phaseLine]
   });
 }
 
-const _qState={dept:'korpus'};
+const _qState={dept:'korpus',metric:'count'};
 const Q_VIEW_LABEL={all:'Все виновники',factory:'Вина фабрики'};
 function qBlockHTML(view){
   return `
@@ -1449,7 +1498,7 @@ function qBlockHTML(view){
     </div>
     <div class="card c2"><div class="clbl">Среднее (ср.знач)</div><div class="cval" id="q-${view}-mean">—</div></div>
     <div class="card c3 qsigcard" onclick="qToggleSigmaDrill('${view}')">
-      <div class="clbl">Сигма (σ)<span class="qcaret" id="q-${view}-sigma-caret">▾ динамика</span></div>
+      <div class="clbl">Сигма (σ)<span class="qcaret" id="q-${view}-sigma-caret">▾ размахи</span></div>
       <div class="cval" id="q-${view}-sigma">—</div>
       <div class="qdelta" id="q-${view}-sigma-delta"></div>
     </div>
@@ -1485,7 +1534,7 @@ function qBlockHTML(view){
   <span class="qpatlink" id="q-${view}-ai-link" style="color:#7c3aed" onclick="qToggleHelp('${view}','ai')">✨ ИИ-анализ карты</span>
   <div class="qhelpbox" id="q-${view}-ai-help"></div>
   <div class="qbig">
-    <div class="ctitle">Карта Шухарта — количество рекламаций, шт.</div>
+    <div class="ctitle" id="q-${view}-chart-title">Карта Шухарта</div>
     <div class="leg">
       <div class="li"><div class="ll" style="background:#1e3a5f"></div>Факт</div>
       <div class="li"><div class="ll" style="background:#64748b"></div>ср.знач</div>
@@ -1497,72 +1546,100 @@ function qBlockHTML(view){
     <div class="qwrap"><canvas id="q-${view}-chart"></canvas></div>
   </div>`;
 }
+// Форматирование зависит от того, что на карте: штуки или доля от реализации.
+function qFmtVal(v,unit){
+  if(v==null) return '—';
+  return unit==='%' ? v.toFixed(2)+'%' : fmtN(v);
+}
+function qFmtDelta(v,unit){
+  if(v==null) return '—';
+  const s=v>0?'+':'';
+  return unit==='%' ? s+v.toFixed(2)+' пп' : s+fmtN(v);
+}
 function renderQuality(elId,data){
   document.getElementById(elId).innerHTML=`
   <div class="qtoggle">
     <button class="qbtn" id="q-dept-korpus" onclick="qSetDept('korpus')">Корпусная мебель</button>
     <button class="qbtn" id="q-dept-myagkaya" onclick="qSetDept('myagkaya')">Мягкая мебель</button>
   </div>
+  <div class="qtoggle">
+    <button class="qbtn" id="q-metric-count" onclick="qSetMetric('count')">Количество, шт.</button>
+    <button class="qbtn" id="q-metric-rate" onclick="qSetMetric('rate')">Доля, % от реализации</button>
+  </div>
   ${qBlockHTML('all')}
   ${qBlockHTML('factory')}
-  <div class="note">В пределах ±2σ (синий) — обычный разброс, независимо от стороны. Ниже -2σ (зелёный) — значимое улучшение. Выше +2σ (оранжевый) — сигнал ухудшения; выше +3σ (красный) — процесс вне контроля.</div>`;
+  <div class="note">В пределах ±2σ (синий) — обычный разброс, независимо от стороны. Ниже -2σ (зелёный) — значимое улучшение. Выше +2σ (оранжевый) — сигнал ухудшения; выше +3σ (красный) — процесс вне контроля. Границы рассчитаны один раз по базовому периоду (2025) и заморожены — новые месяцы наносятся на них, а не сдвигают их. σ считается по среднему скользящему размаху (σ = MR̄ / 1.128) — стандарт для карт индивидуальных значений. Карта по штукам смешивает качество с объёмом отгрузки (он гуляет на 34–51%), карта по доле — нет.</div>`;
   window._qData=data;
   qRefresh();
 }
 function qSetDept(dept){_qState.dept=dept;qRefresh();}
+function qSetMetric(metric){_qState.metric=metric;qRefresh();}
 function qRefresh(){
   document.getElementById('q-dept-korpus').classList.toggle('on',_qState.dept==='korpus');
   document.getElementById('q-dept-myagkaya').classList.toggle('on',_qState.dept==='myagkaya');
+  document.getElementById('q-metric-count').classList.toggle('on',_qState.metric==='count');
+  document.getElementById('q-metric-rate').classList.toggle('on',_qState.metric==='rate');
   ['all','factory'].forEach(view=>{
-    const d=window._qData[_qState.dept][view];
-    const last=d.vals[d.vals.length-1];
-    const lastLabel=d.months[d.months.length-1];
-    document.getElementById(`q-${view}-last`).innerHTML=`${fmtN(last)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> рекламаций</span>`;
+    // m — набор статистик выбранной метрики: {vals,unit,mean,sigma,ucl,lcl,mrBase,mrRecent,...}
+    const m=window._qData[_qState.dept][view][_qState.metric];
+    const u=m.unit;
+    const last=m.vals[m.vals.length-1];
+    const lastLabel=m.months[m.months.length-1];
+    document.getElementById(`q-${view}-last`).innerHTML=`${qFmtVal(last,u)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> ${u==='%'?'от реализации':'рекламаций'}</span>`;
     const labelEl=document.getElementById(`q-${view}-last-label`);
     if(labelEl) labelEl.firstChild.textContent=lastLabel;
-    // Дельта рекламаций: текущий месяц vs предыдущий. Меньше — лучше (зелёная стрелка вниз),
-    // больше — хуже (красная стрелка вверх) — оформление как у карточки сигмы.
-    const prevMonthVal=d.vals[d.vals.length-2];
+    // Дельта: текущий месяц vs предыдущий. Меньше — лучше (зелёная стрелка вниз),
+    // больше — хуже (красная стрелка вверх).
+    const prevMonthVal=m.vals[m.vals.length-2];
     const lastDeltaEl=document.getElementById(`q-${view}-last-delta`);
-    if(lastDeltaEl && last!=null && prevMonthVal!=null){
-      const mdelta=last-prevMonthVal;
-      if(Math.abs(mdelta)<1){
-        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">0 без изменений</span>`;
-      } else if(mdelta>0){
-        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#ef4444">↑</span><span class="qnum" style="color:#ef4444">+${fmtN(mdelta)}</span>`;
-      } else {
-        lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#10b981">↓</span><span class="qnum" style="color:#10b981">${fmtN(mdelta)}</span>`;
+    if(lastDeltaEl){
+      if(last==null||prevMonthVal==null){ lastDeltaEl.innerHTML=''; }
+      else {
+        const mdelta=last-prevMonthVal;
+        const eps=u==='%'?0.01:1;
+        if(Math.abs(mdelta)<eps){
+          lastDeltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">без изменений</span>`;
+        } else {
+          const c=mdelta>0?'#ef4444':'#10b981', a=mdelta>0?'↑':'↓';
+          lastDeltaEl.innerHTML=`<span class="qarrow" style="color:${c}">${a}</span><span class="qnum" style="color:${c}">${qFmtDelta(mdelta,u)}</span>`;
+        }
       }
     }
-    qRenderMonthDrill(view,d);
-    document.getElementById(`q-${view}-mean`).innerHTML=`${fmtN(d.mean)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> рекламаций</span>`;
-    document.getElementById(`q-${view}-sigma`).textContent=d.sigma.toFixed(1);
-    // Дельта: текущая сигма vs предыдущий период. Рост сигмы (хуже, менее стабильно) — крупная
-    // красная стрелка вверх; снижение (лучше, стабильнее) — крупная зелёная стрелка вниз.
-    const hist=d.sigmaHist||[];
+    qRenderMonthDrill(view,m);
+    document.getElementById(`q-${view}-mean`).innerHTML=`${qFmtVal(m.mean,u)}<span style="font-size:11px;font-weight:600;color:#94a3b8"> база ${Q_BASELINE_SUFFIX.replace("'","20")}</span>`;
+    document.getElementById(`q-${view}-sigma`).textContent=u==='%'?m.sigma.toFixed(2):m.sigma.toFixed(1);
+    // Границы заморожены, поэтому σ постоянна и «динамика сигмы» смысла не имеет.
+    // Вместо неё — честное сравнение разброса: средний скользящий размах за последнее
+    // окно той же длины против базового. Рост разброса — красным, снижение — зелёным.
     const deltaEl=document.getElementById(`q-${view}-sigma-delta`);
-    if(deltaEl && hist[0] && hist[1]){
-      const delta=hist[0].sigma-hist[1].sigma;
-      if(Math.abs(delta)<0.05){
-        deltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">0.0 без изменений</span>`;
-      } else if(delta>0){
-        deltaEl.innerHTML=`<span class="qarrow" style="color:#ef4444">↑</span><span class="qnum" style="color:#ef4444">+${delta.toFixed(1)}</span>`;
-      } else {
-        deltaEl.innerHTML=`<span class="qarrow" style="color:#10b981">↓</span><span class="qnum" style="color:#10b981">${delta.toFixed(1)}</span>`;
+    if(deltaEl){
+      if(!m.mrBase){ deltaEl.innerHTML=''; }
+      else {
+        const rel=m.mrRecent/m.mrBase-1;
+        if(Math.abs(rel)<0.05){
+          deltaEl.innerHTML=`<span class="qarrow" style="color:#94a3b8">→</span><span class="qnum" style="color:#94a3b8">разброс как в базе</span>`;
+        } else {
+          const c=rel>0?'#ef4444':'#10b981', a=rel>0?'↑':'↓';
+          deltaEl.innerHTML=`<span class="qarrow" style="color:${c}">${a}</span><span class="qnum" style="color:${c}">разброс ${rel>0?'+':''}${(rel*100).toFixed(0)}% к базе</span>`;
+        }
       }
     }
-    qRenderSigmaDrill(view,hist);
+    qRenderSigmaDrill(view,m);
     // В пределах ±2σ — обычный разброс («В норме»), независимо от стороны.
     // Существенное отклонение вверх (>2σ/>3σ) — плохо; существенное отклонение вниз (<-2σ) — хорошо.
-    const z=(last-d.mean)/d.sigma;
+    const z=m.sigma?(last-m.mean)/m.sigma:0;
     const statusEl=document.getElementById(`q-${view}-status`);
     if(z>3){statusEl.innerHTML='Вне контроля <span class="qstat bad">&gt;3σ</span>';}
     else if(z>2){statusEl.innerHTML='Отклонение <span class="qstat warn">&gt;2σ</span>';}
     else if(z<-2){statusEl.innerHTML='Хорошо <span class="qstat ok">&lt;-2σ</span>';}
     else {statusEl.innerHTML='В норме <span class="qstat ok">±2σ</span>';}
-    qRenderPatterns(view,d);
-    qRenderAIAnalysis(view,d,z);
-    controlChart(`q-${view}-chart`,d);
+    const titleEl=document.getElementById(`q-${view}-chart-title`);
+    if(titleEl) titleEl.textContent=u==='%'
+      ? 'Карта Шухарта — доля рекламаций, % от реализации'
+      : 'Карта Шухарта — количество рекламаций, шт.';
+    qRenderPatterns(view,m);
+    qRenderAIAnalysis(view,m,z);
+    controlChart(`q-${view}-chart`,m);
   });
 }
 
@@ -1571,19 +1648,21 @@ function qRenderMonthDrill(view,d){
   const el=document.getElementById(`q-${view}-last-drill`);
   if(!el)return;
   const rows=[];
+  const u=d.unit, eps=u==='%'?0.01:1;
   for(let i=d.vals.length-1;i>=0;i--){
     const v=d.vals[i];
     const prev=i>0?d.vals[i-1]:null;
     let arrowHtml='<span class="qd-arrow" style="color:#94a3b8">—</span>';
     if(v!=null&&prev!=null){
       const delta=v-prev;
-      if(Math.abs(delta)>=1){
-        arrowHtml=delta>0
-          ? `<span class="qd-arrow" style="color:#ef4444">↑ +${fmtN(delta)}</span>`
-          : `<span class="qd-arrow" style="color:#10b981">↓ ${fmtN(delta)}</span>`;
+      if(Math.abs(delta)>=eps){
+        const c=delta>0?'#ef4444':'#10b981', a=delta>0?'↑':'↓';
+        arrowHtml=`<span class="qd-arrow" style="color:${c}">${a} ${qFmtDelta(delta,u)}</span>`;
       }
     }
-    rows.push(`<tr><td>${d.months[i]}</td><td>${fmtN(v)}</td><td>${arrowHtml}</td></tr>`);
+    // Месяцы базового периода помечаем — по ним посчитаны границы.
+    const isBase=i<d.baselineLen;
+    rows.push(`<tr><td>${d.months[i]}${isBase?' <span style="color:#94a3b8;font-size:9px">база</span>':''}</td><td>${qFmtVal(v,u)}</td><td>${arrowHtml}</td></tr>`);
   }
   el.innerHTML=`<table><tbody>${rows.join('')}</tbody></table>`;
 }
@@ -1612,10 +1691,24 @@ const Q_PATTERNS=[
   {id:'r5',label:'2 из 3 за 2σ',    desc:'2 из последних 3 точек выходят за ±2σ с одной стороны — приближение к границе контроля.'},
   {id:'r6',label:'4 из 5 за 1σ',    desc:'4 из последних 5 точек выходят за ±1σ с одной стороны — небольшой, но устойчивый сдвиг.'},
 ];
-function qDetectPatterns(vals,mean,sigma){
+function qDetectPatterns(m){
+  const {vals,mean,sigma,months}=m;
   const n=vals.length, res={};
   const last=vals[n-1];
-  res.r1={triggered:last!=null&&Math.abs(last-mean)>3*sigma, side: last>mean?'above':'below'};
+  // Правило 1 проверяем по ВСЕМУ ряду, а не только по последней точке: график красит
+  // все точки, и раньше плитка писала «норма», когда красная точка была в истории.
+  const beyond3=vals.map((v,i)=>({v,i})).filter(o=>o.v!=null&&sigma>0&&Math.abs(o.v-mean)>3*sigma);
+  const mn=i=>months?months[i]:i;
+  const above=beyond3.filter(o=>o.v>mean).map(o=>mn(o.i));
+  const below=beyond3.filter(o=>o.v<mean).map(o=>mn(o.i));
+  // Выбросы могут быть по обе стороны сразу (вверх — ухудшение, вниз — улучшение).
+  // Тогда одной «стороны» у правила нет, и сваливать их в один знак нельзя.
+  res.r1={
+    triggered:beyond3.length>0,
+    side: above.length&&below.length ? null : (above.length?'above':below.length?'below':null),
+    above, below,
+    months: beyond3.map(o=>mn(o.i)),
+  };
   const sameSideRun=(k)=>{
     if(n<k)return{triggered:false};
     const s=vals.slice(n-k);
@@ -1661,7 +1754,7 @@ function qDetectPatterns(vals,mean,sigma){
 function qRenderPatterns(view,d){
   const el=document.getElementById(`q-${view}-patterns`);
   if(!el)return;
-  const det=qDetectPatterns(d.vals,d.mean,d.sigma);
+  const det=qDetectPatterns(d);
   el.innerHTML=Q_PATTERNS.map(p=>{
     const r=det[p.id]||{triggered:false};
     let cls='qp-ok', mark='○', note='норма';
@@ -1669,6 +1762,16 @@ function qRenderPatterns(view,d){
       if(r.side==='below'){cls='qp-good';mark='✓';note='хорошо (ниже среднего)';}
       else if(r.side==='above'){cls='qp-bad';mark='⚠';note='сигнал ухудшения';}
       else {cls='qp-warn';mark='⚠';note='нетипичный паттерн';}
+      // r1 проверяется по всему ряду — показываем, какие именно месяцы, чтобы плитка
+      // сходилась с точками на графике. Выбросы вверх и вниз перечисляем раздельно:
+      // вверх — ухудшение, вниз — улучшение, смешивать их в один знак нельзя.
+      if(p.id==='r1'){
+        const up=(r.above||[]), dn=(r.below||[]);
+        if(up.length&&dn.length){
+          note=`выше границы: ${up.join(', ')} · ниже границы: ${dn.join(', ')}`;
+        } else if(up.length){ note=`сигнал ухудшения: ${up.join(', ')}`; }
+        else if(dn.length){ note=`хорошо (ниже границы): ${dn.join(', ')}`; }
+      }
     }
     return `<div class="qpat ${cls}" onclick="qToggleHelp('${view}','patterns')"><span class="qp-mark">${mark}</span>${p.label}<div style="font-weight:400;margin-top:2px">${note}</div></div>`;
   }).join('');
@@ -1679,18 +1782,19 @@ function qRenderPatterns(view,d){
 // что уже считаются на странице (сигма, её история, статус точки, 6 паттернов).
 // Отвечает на: устойчива ли система, улучшается/ухудшается, ухудшается ли контроль
 // (растёт ли сигма), какие конкретно закономерности обнаружены.
-function qSigmaTrendInfo(sigmaHist){
-  const chron=(sigmaHist||[]).filter(Boolean).slice().reverse(); // от старого к новому
-  if(chron.length<2) return {dir:'na',text:'недостаточно истории, чтобы оценить тренд сигмы'};
-  const first=chron[0].sigma, last=chron[chron.length-1].sigma;
-  const delta=last-first, pct=first?(delta/first*100):0;
-  if(Math.abs(delta)<0.05*first || Math.abs(delta)<0.5){
-    return {dir:'flat',text:`сигма держится стабильно (${first.toFixed(1)} → ${last.toFixed(1)}) за последние ${chron.length} периодов`};
-  }
-  if(delta>0){
-    return {dir:'up',text:`сигма выросла с ${first.toFixed(1)} до ${last.toFixed(1)} (${pct>=0?'+':''}${pct.toFixed(0)}%) за последние ${chron.length} периодов — разброс увеличивается, контроль слабеет`};
-  }
-  return {dir:'down',text:`сигма снизилась с ${first.toFixed(1)} до ${last.toFixed(1)} (${pct.toFixed(0)}%) за последние ${chron.length} периодов — разброс уменьшается, контроль усиливается`};
+// Сравнение разброса «сейчас» с базовым периодом. Раньше здесь сравнивались сигмы,
+// пересчитанные на окнах разной длины, — это давало ложный тренд: сигма механически
+// падала на ~0.6% в месяц от роста n, а рекордно хороший месяц расширял размах и
+// подавался как «контроль слабеет». Теперь сравниваются средние скользящие размахи
+// на окнах ОДИНАКОВОЙ длины, что и есть честная мера изменения вариабельности.
+function qSpreadInfo(m){
+  const u=m.unit;
+  if(!m.mrBase) return {dir:'na',text:'недостаточно данных, чтобы оценить разброс'};
+  const rel=m.mrRecent/m.mrBase-1;
+  const base=`средний скользящий размах: база ${qFmtVal(m.mrBase,u)} → последние ${m.baselineLen} мес ${qFmtVal(m.mrRecent,u)}`;
+  if(Math.abs(rel)<0.05) return {dir:'flat',text:`разброс не изменился относительно базы (${base})`};
+  if(rel>0) return {dir:'up',text:`разброс вырос на ${(rel*100).toFixed(0)}% относительно базы (${base}) — процесс стал менее предсказуемым`};
+  return {dir:'down',text:`разброс снизился на ${Math.abs(rel*100).toFixed(0)}% относительно базы (${base}) — процесс стал стабильнее`};
 }
 // Практическая интерпретация каждого из 6 критериев (не статистика, а производственный смысл):
 // что значит, насколько серьёзно, и что обычно является причиной.
@@ -1717,19 +1821,20 @@ const Q_PATTERN_INTERP={
 function qRenderAIAnalysis(view,d,z){
   const el=document.getElementById(`q-${view}-ai-help`);
   if(!el)return;
-  const det=qDetectPatterns(d.vals,d.mean,d.sigma);
+  const det=qDetectPatterns(d);
   const active=Q_PATTERNS.map(p=>({...p,r:det[p.id]})).filter(p=>p.r&&p.r.triggered);
   const badActive=active.filter(p=>p.r.side==='above'||p.r.side==null);
-  const sigmaInfo=qSigmaTrendInfo(d.sigmaHist);
+  const sigmaInfo=qSpreadInfo(d);
+  const u=d.unit;
   const last=d.vals[d.vals.length-1];
   const lastLabel=d.months[d.months.length-1];
-  const ucl=d.mean+3*d.sigma, lcl=Math.max(0,d.mean-3*d.sigma);
+  const ucl=d.ucl, lcl=d.lcl;
   const critical=badActive.some(p=>p.id==='r1'||p.id==='r5')||z>3; // основания для немедленных действий
   const warning=badActive.some(p=>p.id==='r2'||p.id==='r3'||p.id==='r4'||p.id==='r6');
 
   // 1. Вердикт устойчивости
   let verdictCls,verdictTxt;
-  if(critical){verdictCls='bad';verdictTxt=`✗ Процесс статистически неустойчив. Точка ${fmtN(last)} шт. (${lastLabel}) либо выходит за ±3σ, либо подтверждена сработавшим критическим правилом (${badActive.map(p=>p.label).join(', ')}) — это не случайный разброс, а сигнал особой причины.`;}
+  if(critical){verdictCls='bad';verdictTxt=`✗ Процесс статистически неустойчив. Точка ${qFmtVal(last,u)} (${lastLabel}) либо выходит за ±3σ, либо подтверждена сработавшим критическим правилом (${badActive.map(p=>p.label).join(', ')}) — это не случайный разброс, а сигнал особой причины.`;}
   else if(warning){verdictCls='warn';verdictTxt=`⚠ Процесс пограничный. Резкого выброса за ±3σ нет, но сработали правила (${badActive.map(p=>p.label).join(', ')}), указывающие на неслучайный сдвиг — формально процесс уже не «чисто случайный».`;}
   else {verdictCls='ok';verdictTxt='✓ Процесс статистически устойчив — все точки укладываются в случайный разброс относительно контрольных границ, неслучайных закономерностей не обнаружено.';}
 
@@ -1745,13 +1850,23 @@ function qRenderAIAnalysis(view,d,z){
       }).join('')
     : '<div>Ни один из 6 критериев не сработал — поведение точек статистически случайно, отдельных причин искать не требуется.</div>';
 
-  // 3. Тренд сигмы
-  const sigmaDirTxt=sigmaInfo.dir==='up'?'растёт':sigmaInfo.dir==='down'?'снижается':'почти не меняется';
+  // 3. Разброс относительно базы
+  const sigmaDirTxt=sigmaInfo.dir==='up'?'вырос':sigmaInfo.dir==='down'?'снизился':'не изменился';
   const sigmaMeaning=sigmaInfo.dir==='up'
-    ? 'Это значит, что контроль над вариабельностью слабеет: процесс становится менее предсказуемым, разброс значений вокруг среднего увеличивается.'
+    ? 'Колебания месяц к месяцу стали крупнее, чем в базовом периоде: процесс менее предсказуем, хотя сам уровень мог и не сдвинуться.'
     : sigmaInfo.dir==='down'
-    ? 'Это значит, что контроль над вариабельностью усиливается: процесс становится более предсказуемым, разброс значений сужается.'
-    : 'Вариабельность процесса не меняется — уровень контроля стабилен.';
+    ? 'Колебания месяц к месяцу стали мельче, чем в базовом периоде: процесс стал ровнее.'
+    : 'Колебания месяц к месяцу такие же, как в базовом периоде.';
+  // Проверка Фазы I: если сама база вылезает за свои же границы, она не была
+  // статистически управляемой, и все сигналы ниже надо читать с этой оговоркой.
+  const blOut=d.baselineOutliers||[];
+  // Склонение: 1 точка выходит / 2–4 точки выходят / 5+ точек выходят (11–14 — исключение).
+  const nOut=blOut.length, n10=nOut%10, n100=nOut%100;
+  const wordPt=(n10===1&&n100!==11)?'точка':((n10>=2&&n10<=4&&(n100<12||n100>14))?'точки':'точек');
+  const wordVb=(n10===1&&n100!==11)?'выходит':'выходят';
+  const baselineWarn=nOut
+    ? `<div class="cinsight warn" style="display:block;margin-top:6px">⚠ Базовый период сам по себе нестабилен: ${nOut} ${wordPt} базы ${wordVb} за собственные границы (${blOut.map(o=>o.m).join(', ')}). Значит база выбрана неудачно — внутри неё уже был сдвиг или тренд. Сигналы ниже корректны формально, но прежде чем действовать по ним, стоит пересмотреть базовый период.</div>`
+    : '';
 
   // 4. Последняя точка
   const distToEdge = z>=0 ? ucl-last : last-lcl;
@@ -1785,31 +1900,33 @@ function qRenderAIAnalysis(view,d,z){
   el.innerHTML=`
     <div style="margin-bottom:10px"><b>1. Вердикт устойчивости</b><br><span class="cinsight ${verdictCls}" style="display:block;margin-top:3px">${verdictTxt}</span></div>
     <div style="margin-bottom:10px"><b>2. Интерпретация паттернов</b><div style="margin-top:4px">${patternsHtml}</div></div>
-    <div style="margin-bottom:10px"><b>3. Тренд сигмы</b><br>σ ${sigmaDirTxt}: ${sigmaInfo.text}. ${sigmaMeaning}</div>
-    <div style="margin-bottom:10px"><b>4. Последняя точка</b><br>${lastLabel}: ${fmtN(last)} шт. — ${z>=0?'выше':'ниже'} среднего (${fmtN(d.mean)}) на ${Math.abs(z).toFixed(1)}σ, до ${z>=0?'верхней':'нижней'} границы (${fmtN(z>=0?ucl:lcl)}) ещё ${fmtN(Math.abs(distToEdge))} шт. Это ${pointKind}.</div>
+    <div style="margin-bottom:10px"><b>3. Разброс относительно базы</b><br>Разброс ${sigmaDirTxt}: ${sigmaInfo.text}. ${sigmaMeaning}<br>
+      <span style="color:#94a3b8">Границы построены по базовому периоду (${d.months[0]}–${d.baselineLabel}, ${d.baselineLen} мес) и заморожены: ср. ${qFmtVal(d.mean,u)}, σ ${u==='%'?d.sigma.toFixed(2):d.sigma.toFixed(1)}, границы ${qFmtVal(lcl,u)}…${qFmtVal(ucl,u)}. Новые месяцы их не сдвигают.</span>${baselineWarn}</div>
+    <div style="margin-bottom:10px"><b>4. Последняя точка</b><br>${lastLabel}: ${qFmtVal(last,u)} — ${z>=0?'выше':'ниже'} среднего (${qFmtVal(d.mean,u)}) на ${Math.abs(z).toFixed(1)}σ, до ${z>=0?'верхней':'нижней'} границы (${qFmtVal(z>=0?ucl:lcl,u)}) ещё ${qFmtVal(Math.abs(distToEdge),u)}. Это ${pointKind}.</div>
     <div style="margin-bottom:10px"><b>5. Производственный диагноз</b><br>${diagnosisTxt}</div>
     <div><b>6. Рекомендации</b><br>${recoHtml}</div>`;
 }
 
 // Раскрывающаяся история сигмы по клику на карточку: все доступные периоды
 // (как в листе «Диаграммы»), новые сверху, с дельтой к предыдущему периоду.
-function qRenderSigmaDrill(view,hist){
+// Раскрытие карточки σ: скользящие размахи по месяцам — это те самые |xᵢ − xᵢ₋₁|,
+// из среднего которых получена σ. Видно, где именно разброс подскочил; месяцы больше
+// среднего размаха базы подсвечены красным (данные MR-карты).
+function qRenderSigmaDrill(view,m){
   const el=document.getElementById(`q-${view}-sigma-drill`);
   if(!el)return;
-  const rows=hist.filter(Boolean).map((h,i)=>{
-    const prev=hist[i+1];
-    let arrowHtml='<span class="qd-arrow" style="color:#94a3b8">—</span>';
-    if(prev){
-      const delta=h.sigma-prev.sigma;
-      if(Math.abs(delta)>=0.05){
-        arrowHtml=delta>0
-          ? `<span class="qd-arrow" style="color:#ef4444">↑ +${delta.toFixed(1)}</span>`
-          : `<span class="qd-arrow" style="color:#10b981">↓ ${delta.toFixed(1)}</span>`;
-      }
-    }
-    return `<tr><td>${h.label}</td><td>${h.sigma.toFixed(1)}</td><td style="color:#94a3b8">D2=${h.d2}</td><td>${arrowHtml}</td></tr>`;
-  }).join('');
-  el.innerHTML=`<table><tbody>${rows}</tbody></table>`;
+  const u=m.unit, mr=m.mrSeries||[];
+  const rows=[];
+  for(let i=mr.length-1;i>=1;i--){
+    const v=mr[i];
+    if(v==null) continue;
+    const hot=m.mrBase&&v>m.mrBase;
+    rows.push(`<tr><td>${m.months[i]}${i<m.baselineLen?' <span style="color:#94a3b8;font-size:9px">база</span>':''}</td>`+
+      `<td style="color:${hot?'#ef4444':'#10b981'}">${qFmtVal(v,u)}</td>`+
+      `<td style="color:#94a3b8">${m.months[i-1]}→${m.months[i]}</td></tr>`);
+  }
+  el.innerHTML=`<div style="font-size:10px;color:#94a3b8;padding:4px 2px">Скользящий размах по месяцам. Средний за базу — ${qFmtVal(m.mrBase,u)}, за последние ${m.baselineLen} мес — ${qFmtVal(m.mrRecent,u)}. σ = MR̄ базы / 1.128 = ${u==='%'?m.sigma.toFixed(2):m.sigma.toFixed(1)}.</div>`+
+    `<table><tbody>${rows.join('')}</tbody></table>`;
 }
 function qToggleSigmaDrill(view){
   const el=document.getElementById(`q-${view}-sigma-drill`);
@@ -1817,7 +1934,7 @@ function qToggleSigmaDrill(view){
   if(!el)return;
   const show=!el.classList.contains('show');
   el.classList.toggle('show',show);
-  if(caret) caret.textContent=show?'▴ скрыть':'▾ динамика';
+  if(caret) caret.textContent=show?'▴ скрыть':'▾ размахи';
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────
@@ -1929,8 +2046,12 @@ function renderD2Table(elId){
   }).join('');
   document.getElementById(elId).innerHTML=`
   <div style="padding:24px;max-width:560px">
-    <h3 style="margin:0 0 6px;font-size:15px;color:#0f172a">Коэффициент D2 по ГОСТ Р 50779.42-99 (ISO 8258)</h3>
-    <p style="margin:0 0 14px;font-size:12px;color:#64748b">Используется для расчёта σ = Размах / D2, где n — количество наблюдений (месяцев). D2 = d2 + 3·d3.</p>
+    <h3 style="margin:0 0 6px;font-size:15px;color:#0f172a">Коэффициенты d2, d3, D2 по ГОСТ Р 50779.42-99 (ISO 8258)</h3>
+    <p style="margin:0 0 8px;font-size:12px;color:#64748b">Справочная таблица. <b>d2</b> — отношение среднего размаха к σ (E[R] = d2·σ), <b>d3</b> — СКО размаха, <b>D2 = d2 + 3·d3</b> — множитель <b>верхней границы карты размахов</b> (UCL<sub>R</sub> = D2·σ).</p>
+    <div style="margin:0 0 14px;padding:10px 12px;background:#eef2ff;border-left:3px solid #6366f1;border-radius:6px;font-size:11px;color:#3730a3;line-height:1.6">
+      <b>Как σ считается на карте Шухарта в этом дашборде:</b> по среднему скользящему размаху — σ = MR̄ / 1.128, где MR̄ = среднее |xᵢ − xᵢ₋₁| за базовый период, а 1.128 = d2 для n=2 (пара соседних месяцев). Это стандартная оценка для карт индивидуальных значений.<br>
+      Коэффициент <b>D2 для оценки σ не применяется</b>: он задаёт границу карты размахов, а не оценивает разброс. Деление размаха на D2 занижало бы σ примерно в 1.6 раза и делало границы вдвое уже положенных.
+    </div>
     <table style="border-collapse:collapse;font-size:12px;width:100%">
       <thead>
         <tr style="background:#0f172a;color:#fff">
