@@ -197,6 +197,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
       <button class="qsubtab" onclick="v2Go('metall2',this)">Металл</button>
     </div>
     <div class="note" style="margin-bottom:10px">Источник: таблица «WOODCRAFT» — листы RUN (ТБУ/Мощность/Прогноз/Принятые) и PL 2026 / PL металл (Реализации). Мягкая мебель — отдельная таблица, тоже лист RUN.</div>
+    <div id="v2-issues"></div>
     <div id="korpus2" class="qsubpane on"></div>
     <div id="myagkaya2" class="qsubpane"></div>
     <div id="metall2" class="qsubpane"></div>
@@ -341,6 +342,99 @@ const V2_METALL_RW_AUG_WC=[151,152,153,154], V2_METALL_RW_AUG_IC=155;
 const V2_WC_MYAG=[187,188,189,190,191, 193,194,195,196, 198,199,200,201, 203,204,205,206,207, 209,210,211,212, 214,215,216,217,218, 220,221,222,223,224, 226,227,228,229];
 const V2_IC_MYAG=[192,null,null,null,null,null,null,null];
 
+// ── Валидатор колонок ───────────────────────────────────────────────────
+// Колонки месяцев заданы явными массивами выше. Это надёжнее, чем угадывать их
+// по шапке: в листах есть объединённые недели («1-2 неделя»), недели, разрезанные
+// границей месяца (у Металла 27-я неделя разложена на 29.06-30.06 и 01.07-05.07),
+// и подписи месяцев то с годом, то без. Но раз массивы заданы руками, их нужно
+// проверять: если в источник вставят колонку, номера molча уедут на соседний месяц.
+// Здесь мы разбираем шапку и убеждаемся, что каждая колонка — та неделя того месяца,
+// за которую её выдаёт конфигурация, и заодно замечаем месяцы, которых ещё нет в дашборде.
+const Q_MON_NOM=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+function qHdrCell(rows,r,c){
+  const row=rows&&rows[r];
+  const v=row&&row[c];
+  return (v===''||v==null)?'':String(v).trim();
+}
+// Разбор шапки: строка 1 — название месяца в начале блока и «Итого <месяц>»,
+// строка 2 — «N неделя» (в т.ч. «1-2 неделя»).
+function qParseMonthHeader(rows){
+  if(!rows||!rows.length) return [];
+  const n=Math.max(...rows.map(r=>r?r.length:0));
+  const out=[]; let cur=null;
+  for(let c=0;c<n;c++){
+    const h1=qHdrCell(rows,0,c), h2=qHdrCell(rows,1,c), low=h1.toLowerCase();
+    const isTotal=low.startsWith('итого');
+    const mon=Q_MON_NOM.find(m=>low.includes(m))||null;
+    if(mon&&!isTotal){ cur={month:mon,weeks:[],total:null,col0:c}; out.push(cur); }
+    if(!cur) continue;
+    if(/^\d+(\s*-\s*\d+)?\s*недел/i.test(h2)) cur.weeks.push(c);
+    else if(isTotal&&cur.total==null) cur.total=c;
+  }
+  const starts=new Set(out.filter(o=>o.weeks.length).map(o=>o.weeks[0]));
+  out.forEach(o=>{ if(o.total==null&&o.weeks.length){ const nx=o.weeks[o.weeks.length-1]+1; if(!starts.has(nx)) o.total=nx; } });
+  return out;
+}
+// Карта «колонка → {месяц, роль}». Роль важна не меньше месяца: при вставке одного
+// столбца недельная колонка съезжает на колонку «Итого» — месяц при этом совпадает,
+// и проверка только по месяцу такой сдвиг пропускает.
+function qColMap(blocks){
+  const map={};
+  for(const b of blocks){
+    b.weeks.forEach(c=>{ map[c]={month:b.month,kind:'week'}; });
+    if(b.total!=null) map[b.total]={month:b.month,kind:'total'};
+  }
+  return map;
+}
+function qValidateColumns(sheetName,hdrRows,monthsCfg,wcArr,icArr){
+  const problems=[];
+  const blocks=qParseMonthHeader(hdrRows);
+  if(!blocks.length){ return [{lvl:'warn',text:`${sheetName}: не удалось разобрать шапку — проверка колонок пропущена`}]; }
+  const map=qColMap(blocks);
+  const RU={week:'неделя',total:'итог'};
+  const check=(c,want,kind,label)=>{
+    if(c==null) return;                       // осознанный пропуск: данных ещё нет
+    const info=map[c];
+    if(!info){ problems.push({lvl:'err',text:`${sheetName}: колонка ${c} (${label}) в шапке ничем не размечена`}); return; }
+    if(info.month!==want) problems.push({lvl:'err',text:`${sheetName}: колонка ${c} отдана под «${label}», но в шапке это ${info.month}`});
+    else if(info.kind!==kind) problems.push({lvl:'err',text:`${sheetName}: колонка ${c} должна быть «${RU[kind]}» для «${label}», а в шапке это «${RU[info.kind]}»`});
+  };
+  monthsCfg.forEach((mo,mi)=>{
+    const want=mo.n.toLowerCase();
+    mo.wi.forEach(wi=>check(wcArr[wi],want,'week',mo.n));
+    if(icArr) check(icArr[mi],want,'total',mo.n+' итого');
+  });
+  // Месяцы, которые уже есть в источнике правее последнего настроенного.
+  const lastCol=Math.max(...wcArr.filter(c=>c!=null));
+  const extra=blocks.filter(b=>b.weeks.length&&b.weeks[0]>lastCol).map(b=>b.month);
+  if(extra.length) problems.push({lvl:'info',text:`${sheetName}: в источнике появились месяцы, которых нет в дашборде — ${[...new Set(extra)].join(', ')}`});
+  return problems;
+}
+const _v2Issues=[];
+function qRunValidation(sheetName,hdrRows,monthsCfg,wcArr,icArr){
+  try{ _v2Issues.push(...qValidateColumns(sheetName,hdrRows,monthsCfg,wcArr,icArr)); }
+  catch(e){ console.warn('Валидатор колонок упал:',sheetName,e); }
+}
+// Выводим замечания прямо на вкладке: молчаливое расхождение колонок опаснее
+// пустого графика — цифры выглядят правдоподобно, но относятся к другому месяцу.
+function renderV2Issues(){
+  const el=document.getElementById('v2-issues');
+  if(!el) return;
+  if(!_v2Issues.length){ el.innerHTML=''; return; }
+  const errs=_v2Issues.filter(i=>i.lvl==='err');
+  const warns=_v2Issues.filter(i=>i.lvl==='warn');
+  const infos=_v2Issues.filter(i=>i.lvl==='info');
+  const block=(items,bg,bd,col,title)=>items.length?
+    `<div style="background:${bg};border-left:3px solid ${bd};border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:${col};line-height:1.6">
+       <b>${title}</b><br>${items.map(i=>i.text).join('<br>')}
+     </div>`:'';
+  el.innerHTML=
+    block(errs,'#fee2e2','#dc2626','#991b1b','⚠ Колонки источника разошлись с настройкой дашборда — цифры могут относиться к другому месяцу')+
+    block(warns,'#fef9c3','#ca8a04','#854d0e','⚠ Данные в источниках расходятся между собой')+
+    block(infos,'#eef2ff','#6366f1','#3730a3','ℹ️ В источнике есть данные, которых пока нет на дашборде');
+  _v2Issues.forEach(i=>console[i.lvl==='err'?'error':'warn']('[источник]',i.text));
+}
+
 function v2Get(row,idx){
   if(idx==null)return null;
   let v=row?row[idx]:null;
@@ -365,6 +459,10 @@ function buildV2(batches){
     vr.slice(0,11).map(r=>(r.values&&r.values[0])||[]);
   const runBd = vr[11].values||[];      // RUN!A34:GZ42 — 9 строк, idx0..8 (см. ниже)
   const plBd  = vr[12].values||[];      // 'PL 2026'!A4:BB9 — 6 строк, idx0..5
+  // Шапки (13,14) — сверяем, что колонки в конфиге всё ещё те самые.
+  _v2Issues.length=0;
+  qRunValidation('RUN',    vr[13]&&vr[13].values, MONTHS2, V2_WC_RUN,    V2_IC_RUN);
+  qRunValidation('Металл', vr[14]&&vr[14].values, MONTHS2, V2_WC_METALL, V2_IC_METALL);
 
   const korpus = {
     tw: V2_WC_RUN.map(c=>v2Get(runTbu,c)),    tm: V2_IC_RUN.map(c=>v2Get(runTbu,c)),
@@ -414,6 +512,17 @@ function buildV2(batches){
   // Август: в «PL металл» его пока нет, берём из листа «Металл» (уже в тыс.₽, без деления).
   const metalAugW = V2_METALL_RW_AUG_WC.map(c=>v2Get(metReal,c));
   const metalAugM = v2Get(metReal,V2_METALL_RW_AUG_IC);
+  // Реализации Металла лежат в двух листах сразу. Май-июль берём из «PL металл»,
+  // август — из «Металл». Раз источники пересекаются, сверяем их: расхождение
+  // означает, что один из листов не долили, и часть месяцев считается по устаревшим цифрам.
+  [['Май',V2_IC_METALL[4],plMetalMayM],['Июнь',V2_IC_METALL[5],plMetalJunM],['Июль',V2_IC_METALL[6],plMetalJulM]]
+    .forEach(([nm,metCol,plVal])=>{
+      const metVal=v2Get(metReal,metCol);
+      if(metVal==null||plVal==null) return;
+      const diff=Math.abs(metVal-plVal)/Math.max(Math.abs(plVal),1);
+      if(diff>0.01) _v2Issues.push({lvl:'warn',
+        text:`Металл, ${nm}: реализации в листах расходятся — «Металл» ${Math.round(metVal)} тыс. ₽ против «PL металл» ${Math.round(plVal)} тыс. ₽ (${(diff*100).toFixed(1)}%). На графике используется «PL металл».`});
+    });
 
   const metall = {
     tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
@@ -438,8 +547,12 @@ function buildV2Myag(batches){
   const findRow=(re)=>rowsRealiz.find(r=>re.test(String((r&&r[0])||'')))||null;
   const planRow = findRow(/^Реализации\s+план/i);
   const factRow = findRow(/^Реализации\s+факт/i);
-  if(!planRow||!factRow) console.warn('Мягкая: не найдены строки «Реализации план/факт» — проверьте лист RUN');
+  if(!planRow||!factRow){
+    console.warn('Мягкая: не найдены строки «Реализации план/факт» — проверьте лист RUN');
+    _v2Issues.push({lvl:'err',text:'Мягкая: в листе не найдены строки «Реализации план/факт» — реализации и прогноз пустые'});
+  }
   const planFact = [planRow, factRow];
+  qRunValidation('Мягкая', vr[3]&&vr[3].values, MONTHS_MYAG, V2_WC_MYAG, V2_IC_MYAG);
 
   // «Принятые заказы всего с НДС» — а Прогноз/Реализации здесь без НДС, поэтому для
   // сопоставимости снимаем НДС с Принятых (÷1.22). Это особенность только этой таблицы.
@@ -930,7 +1043,11 @@ function updateKPI(elId, d, mi, wi){
     // «Реализации/Мощность» — только за отработанные недели (где есть и факт, и план), без прогноза.
     const {sumR,sumC}=elapsedSums(d.rw,d.cw,MO);
     pRC=sumR[mi]!=null&&sumC[mi]?sumR[mi]/sumC[mi]*100:null;
-    badgeText=mo.n+' · итого';
+    // Неполный месяц подписываем явно: 63% плана за 2 недели из 4 и за 4 из 4 —
+    // разные вещи, а по одному проценту это не видно.
+    const doneW=mo.wi.filter(wi2=>(d.aw&&d.aw[wi2]>0)||(d.rw&&d.rw[wi2]>0)).length;
+    const partial=doneW>0&&doneW<mo.wi.length;
+    badgeText=mo.n+' · итого'+(partial?` · ${doneW} из ${mo.wi.length} недель`:'');
     // Forecast: extrapolate from partial weekly data (только для Принятые/Прогноз и Реализации/ТБУ)
     const isCurrent=(mi===MO.length-1);
     const aFC=forecastMonth(d.aw,mo,isCurrent), rFC=forecastMonth(d.rw,mo,isCurrent);
@@ -1162,7 +1279,10 @@ function renderSub(elId,d){
 
   fillBreakdownLegend(elId,'b4',d.awBreakdown);
   fillBreakdownLegend(elId,'b5',d.rwBreakdown);
-  requestAnimationFrame(()=>updateKPI(elId, d, defMi, -1));
+  // rAF в фоновой вкладке не вызывается — если дашборд открыт не на переднем плане,
+  // первичная отрисовка KPI и графиков не происходила вовсе. Таймер срабатывает всегда,
+  // а вёрстка к этому моменту уже готова (innerHTML выставлен выше).
+  setTimeout(()=>updateKPI(elId, d, defMi, -1), 0);
 }
 
 // ── Quality (Shewhart control charts) ───────────────────────────────────
@@ -2836,6 +2956,9 @@ async function init(){
       "'Металл'!A18:GZ18","'Металл'!A20:GZ20","'Металл'!A21:GZ21","'Металл'!A28:GZ28","'Металл'!A40:GZ40",
       "'PL 2026'!A10:BZ10","'PL металл'!A12:AZ12",
       'RUN!A34:GZ42', "'PL 2026'!A4:BZ9",
+      // Шапки — для валидатора колонок (indices 13,14). Добавлены В КОНЕЦ, чтобы не
+      // сдвинуть индексы, по которым разбирается ответ в buildV2().
+      'RUN!A1:IZ3', "'Металл'!A1:IZ3",
     ];
     const qs=ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
     const url4=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID3}/values:batchGet?${qs}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
@@ -2862,7 +2985,7 @@ async function init(){
     // периодически вставляют строки, и жёсткие номера уезжают. 12.08.2026 так и
     // случилось — реализации переехали с 41/42 на 43/44, а дашборд молча читал
     // «Средний чек стульев» и «Долю продаж новинок» вместо объёмов.
-    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A38:HZ50"];
+    const rangesMyag=["'RUN '!A20:HZ21","'RUN '!A28:HZ33","'RUN '!A38:HZ50","'RUN '!A1:HZ3"];
     const qsMyag=rangesMyag.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
     const url5=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID4}/values:batchGet?${qsMyag}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
     const resp5=await fetch(url5);
@@ -2874,6 +2997,7 @@ async function init(){
     v2Myag=v2MyagFallback();
   }
   renderSub('myagkaya2',v2Myag.myagkaya2);
+  renderV2Issues();
 
   // ── Качество: Сводная ММ+Корпус (единственный источник) ─────────────
   let qData, qDefects;
