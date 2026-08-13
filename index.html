@@ -207,12 +207,14 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;mi
       <button class="qsubtab active" onclick="qSubGo('shewhart',this)">Карты Шухарта</button>
       <button class="qsubtab" onclick="qSubGo('percent',this)">% рекламаций</button>
       <button class="qsubtab" onclick="qSubGo('defects',this)">Сводные дефекты</button>
+      <button class="qsubtab" onclick="qSubGo('defanalytics',this)">Аналитика дефектов</button>
       <button class="qsubtab" onclick="qSubGo('complaints',this);qcEnsureLoaded();">Анализ рекламаций</button>
       <button class="qsubtab" onclick="qSubGo('d2table',this)">Коэф. D2</button>
     </div>
     <div id="qsub-shewhart" class="qsubpane on"></div>
     <div id="qsub-percent" class="qsubpane"></div>
     <div id="qsub-defects" class="qsubpane"></div>
+    <div id="qsub-defanalytics" class="qsubpane"></div>
     <div id="qsub-complaints" class="qsubpane"></div>
     <div id="qsub-d2table" class="qsubpane"></div>
   </div>
@@ -2126,11 +2128,34 @@ function qToggleSigmaDrill(view){
 }
 
 // ── Tab switching ─────────────────────────────────────────────────────
+// Chart.js замеряет размер холста при создании. Всё, что строится в скрытой панели
+// (а при загрузке скрыты почти все), получает размер 0×0 и не рисуется вовсе — пока
+// пользователь не тронет любой тумблер, который перестроит график. resize() такой
+// холст не чинит, помогает только полное перестроение. Поэтому после каждого
+// переключения вкладок пересобираем те графики, которые оказались нулевыми.
+function qFixHiddenCharts(){
+  const dead=id=>{
+    const c=document.getElementById(id);
+    if(!c||!c.parentElement) return false;
+    return c.getBoundingClientRect().width===0 && c.parentElement.getBoundingClientRect().width>0;
+  };
+  try{
+    if(dead('q-all-chart')&&window._qData) qRefresh();
+    if(dead('qp-chart')&&window._qpData) qpRefresh();
+    if(dead('qa-matrix')&&window._qaDefects) qaRefresh();
+    Object.keys(_data).forEach(el=>{
+      if(!dead(el+'-b1')) return;
+      const m=document.getElementById(el+'-sel-month'), w=document.getElementById(el+'-sel-week');
+      updateKPI(el,_data[el], m?+m.value:0, w?+w.value:-1);
+    });
+  }catch(e){ console.warn('Перестроение графиков:',e); }
+}
 function go(id,btn){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById(id).classList.add('on');
   btn.classList.add('active');
+  setTimeout(qFixHiddenCharts,0);   // через таймер: вёрстка ещё не пересчитана
 }
 
 // ── Подвкладки внутри «Качество» ────────────────────────────────────────
@@ -2138,14 +2163,17 @@ function qSubGo(id,btn){
   const scope=btn.closest('.pane')||document; // обобщили: работает для любой вкладки с .qsubtabs
   scope.querySelectorAll('.qsubpane').forEach(p=>p.classList.remove('on'));
   scope.querySelectorAll('.qsubtab').forEach(b=>b.classList.remove('active'));
-  document.getElementById('qsub-'+id).classList.add('on');
+  const pane=document.getElementById('qsub-'+id);
+  pane.classList.add('on');
   btn.classList.add('active');
+  setTimeout(qFixHiddenCharts,0);
 }
 function v2Go(id,btn){
   document.querySelectorAll('#loadv2 .qsubpane').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('#loadv2 .qsubtab').forEach(b=>b.classList.remove('active'));
   document.getElementById(id).classList.add('on');
   btn.classList.add('active');
+  setTimeout(qFixHiddenCharts,0);
 }
 
 // ── % рекламаций: все виновники vs вина фабрики, % от реализации ───────
@@ -2363,6 +2391,257 @@ function qdRefresh(){
   html+='</tbody></table>';
   document.getElementById('qd-table').innerHTML=html;
   qdRenderCombo(src,months);
+}
+
+// ── Аналитика дефектов ──────────────────────────────────────────────────
+// Ключевая идея вкладки: обычное Парето по ОБЪЁМУ направляет усилия не туда.
+// У Корпуса «Механическое повреждение» — 47% всех рекламаций, но вина фабрики в нём
+// лишь 8% (это перевозка и сборка у клиента, цехом не лечится). Поэтому основной
+// ранг здесь — по УПРАВЛЯЕМОМУ объёму: сколько рекламаций по этому дефекту пришлось
+// на вину фабрики. Именно на них можно повлиять из производства.
+const _qaState={dept:'korpus',metric:'count',period:'y26'};
+const QA_PERIODS=[
+  {id:'y26', n:'2026 год'},
+  {id:'l12', n:'Последние 12 мес'},
+  {id:'l3',  n:'Последние 3 мес'},
+];
+// Диапазон месяцев [from,to) и сопоставимый предыдущий период той же длины.
+function qaRange(months){
+  const N=months.length;
+  if(_qaState.period==='l3')  { const f=Math.max(0,N-3);  return {from:f,to:N,pf:Math.max(0,f-3),pt:f}; }
+  if(_qaState.period==='l12') { const f=Math.max(0,N-12); return {from:f,to:N,pf:Math.max(0,f-12),pt:f}; }
+  const f=months.findIndex(m=>/'26$/.test(m));           // начало 2026 года
+  const from=f<0?0:f;
+  return {from,to:N,pf:Math.max(0,from-(N-from)),pt:from};
+}
+const qaSum=(arr,f,t)=>{let s=0;for(let i=f;i<t;i++) s+=(arr&&arr[i])||0;return s;};
+// Сводим 4 категории, заменившие «Несоответствие ожиданиям», обратно в одну строку:
+// иначе в разложении изменения они выглядят как взрывной рост, хотя это разбивка.
+function qaMergeExpect(rows){
+  const out=[], parts=[];
+  let base=null;
+  rows.forEach(r=>{
+    if(r.label===QD_EXPECT_OLD){ base={...r,vals:r.vals.slice()}; out.push(base); }
+    else if(QD_EXPECT_NEW.includes(r.label)) parts.push(r);
+    else out.push(r);
+  });
+  if(base&&parts.length){
+    base.label=QD_EXPECT_OLD+' (сводно)';
+    base.merged=true;
+    base.vals=base.vals.map((v,i)=>parts.reduce((s,p)=>s+(p.vals[i]||0),v));
+  }
+  return out;
+}
+// Метрики по каждому дефекту за период: всего, по вине фабрики, доля вины.
+function qaBuild(){
+  const res=window._qaDefects, q=window._qaQuality;
+  const dept=_qaState.dept;
+  const months=res.months||[];
+  const rng=qaRange(months);
+  const all=qaMergeExpect((res.data[dept]&&res.data[dept].all)||[]);
+  const facRaw=(res.data[dept]&&res.data[dept].factory)||[];
+  const fac={}; qaMergeExpect(facRaw).forEach(r=>{fac[r.label]=r.vals;});
+  // Нормировка: дефектов на 1000 отгрузок. Реализация — та же база, что и на «% рекламаций».
+  const realiz=(q&&q[dept]&&q[dept].all&&q[dept].all.realizDivan)||null;
+  const norm=(v,f,t)=>{
+    if(_qaState.metric!=='rate') return v;
+    const base=qaSum(realiz,f,t);
+    return base? v/base*1000 : null;
+  };
+  const rows=all.map(r=>{
+    const cur=qaSum(r.vals,rng.from,rng.to);
+    const curF=qaSum(fac[r.label],rng.from,rng.to);
+    const prev=qaSum(r.vals,rng.pf,rng.pt);
+    const mCur=rng.to-rng.from, mPrev=Math.max(1,rng.pt-rng.pf);
+    return {
+      label:r.label, merged:!!r.merged,
+      total:norm(cur,rng.from,rng.to),
+      fact: norm(curF,rng.from,rng.to),
+      share: cur>0?curF/cur:0,
+      perMonth: norm(cur,rng.from,rng.to)/Math.max(1,mCur),
+      prevPerMonth: rng.pt>rng.pf ? norm(prev,rng.pf,rng.pt)/mPrev : null,
+      rawTotal:cur,
+    };
+  });
+  const catTotal=rows.length;                       // всего категорий в справочнике (после сведения)
+  const used=rows.filter(r=>r.rawTotal>0||r.prevPerMonth);
+  used.forEach(r=>{ r.delta = r.prevPerMonth==null?null:(r.perMonth-r.prevPerMonth); });
+  return {rows:used,rng,months,catTotal};
+}
+const qaFmt=v=>v==null?'—':(_qaState.metric==='rate'?v.toFixed(2):Math.round(v).toLocaleString('ru-RU'));
+const QA_UNIT=()=>_qaState.metric==='rate'?'на 1000 отгрузок':'шт.';
+
+function renderDefectAnalytics(elId,defectsRes,qualityData){
+  window._qaDefects=defectsRes; window._qaQuality=qualityData;
+  const el=document.getElementById(elId);
+  if(!el) return;
+  el.innerHTML=`
+  <div class="qtoggle">
+    <button class="qbtn" id="qa-dept-korpus" onclick="qaSet('dept','korpus')">Корпусная мебель</button>
+    <button class="qbtn" id="qa-dept-myagkaya" onclick="qaSet('dept','myagkaya')">Мягкая мебель</button>
+  </div>
+  <div class="qtoggle">
+    ${QA_PERIODS.map(p=>`<button class="qbtn" id="qa-per-${p.id}" onclick="qaSet('period','${p.id}')">${p.n}</button>`).join('')}
+  </div>
+  <div class="qtoggle">
+    <button class="qbtn" id="qa-metric-count" onclick="qaSet('metric','count')">Количество, шт.</button>
+    <button class="qbtn" id="qa-metric-rate" onclick="qaSet('metric','rate')">На 1000 отгрузок</button>
+  </div>
+  <div id="qa-summary"></div>
+  <div class="qbig"><div class="ctitle">1. Куда бить — Парето по управляемому объёму</div>
+    <div class="note" style="margin:0 0 8px">Ранг по объёму, который приходится на вину фабрики. Столбец «ранг по объёму» показывает, какое место дефект занял бы в обычном Парето — расхождение и есть цена ошибки приоритетов.</div>
+    <div id="qa-pareto"></div></div>
+  <div class="qbig"><div class="ctitle">2. Что изменилось — вклад дефектов</div>
+    <div class="note" style="margin:0 0 8px" id="qa-delta-note"></div>
+    <div id="qa-delta"></div></div>
+  <div class="qbig"><div class="ctitle">3. Матрица: объём × управляемость</div>
+    <div class="note" style="margin:0 0 8px">По горизонтали — какая доля рекламаций по дефекту приходится на вину фабрики, по вертикали — объём. Правый верхний угол: много и наша вина — сюда усилия в первую очередь. Левый верхний: много, но вина не наша — это логистика, упаковка, ожидания клиента.</div>
+    <div class="qwrap"><canvas id="qa-matrix"></canvas></div></div>`;
+  qaRefresh();
+}
+function qaSet(k,v){ _qaState[k]=v; qaRefresh(); }
+function qaRefresh(){
+  ['korpus','myagkaya'].forEach(d=>{const b=document.getElementById('qa-dept-'+d);if(b)b.classList.toggle('on',_qaState.dept===d);});
+  QA_PERIODS.forEach(p=>{const b=document.getElementById('qa-per-'+p.id);if(b)b.classList.toggle('on',_qaState.period===p.id);});
+  ['count','rate'].forEach(m=>{const b=document.getElementById('qa-metric-'+m);if(b)b.classList.toggle('on',_qaState.metric===m);});
+  const {rows,rng,months,catTotal}=qaBuild();
+  qaRenderSummary(rows,rng,months,catTotal);
+  qaRenderPareto(rows);
+  qaRenderDelta(rows,rng,months);
+  qaRenderMatrix(rows);
+}
+function qaRenderSummary(rows,rng,months,catTotal){
+  const el=document.getElementById('qa-summary'); if(!el) return;
+  const tot=rows.reduce((s,r)=>s+(r.total||0),0);
+  const fac=rows.reduce((s,r)=>s+(r.fact||0),0);
+  const per=months[rng.from]+' — '+months[rng.to-1];
+  el.innerHTML=`<div class="cards" style="grid-template-columns:repeat(3,1fr)">
+    <div class="card c1"><div class="clbl">Всего рекламаций</div><div class="cval">${qaFmt(tot)}</div><div class="csub">${per} · ${QA_UNIT()}</div></div>
+    <div class="card c2"><div class="clbl">Из них по вине фабрики</div><div class="cval">${qaFmt(fac)}</div><div class="csub">${tot?Math.round(fac/tot*100):0}% — только на это можно повлиять из цеха</div></div>
+    <div class="card c3"><div class="clbl">Видов дефектов в работе</div><div class="cval">${rows.filter(r=>r.rawTotal>0).length}</div><div class="csub">из ${catTotal} в справочнике</div></div>
+  </div>`;
+}
+function qaRenderPareto(rows){
+  const el=document.getElementById('qa-pareto'); if(!el) return;
+  const byVol=[...rows].sort((a,b)=>b.total-a.total);
+  const rankVol={}; byVol.forEach((r,i)=>{rankVol[r.label]=i+1;});
+  const list=[...rows].filter(r=>r.fact>0).sort((a,b)=>b.fact-a.fact);
+  const sumF=list.reduce((s,r)=>s+r.fact,0);
+  const max=list.length?list[0].fact:1;
+  let acc=0;
+  const body=list.slice(0,12).map((r,i)=>{
+    acc+=r.fact;
+    const accP=sumF?acc/sumF*100:0;
+    const jump=rankVol[r.label]-(i+1);
+    const jumpTxt=jump>=3?`<span style="color:#dc2626;font-weight:700" title="в обычном Парето стоял бы ниже">▲ ${jump}</span>`
+                 :jump<=-3?`<span style="color:#0284c7;font-weight:700" title="по объёму выглядит важнее, чем есть">▼ ${-jump}</span>`:'';
+    return `<tr${accP<=80?' style="background:#f8fafc"':''}>
+      <td style="text-align:right;color:#94a3b8">${i+1}</td>
+      <td>${r.label}${r.merged?' <span style="color:#94a3b8;font-size:9px">сводно</span>':''}</td>
+      <td style="text-align:right;font-weight:700">${qaFmt(r.fact)}</td>
+      <td><div class="qcbar-wrap"><div class="qcbar" style="width:${max?r.fact/max*100:0}%"></div></div></td>
+      <td style="text-align:right;color:#64748b">${accP.toFixed(0)}%</td>
+      <td style="text-align:right">${qaFmt(r.total)}</td>
+      <td style="text-align:right;color:${r.share>=.7?'#dc2626':r.share>=.4?'#ca8a04':'#059669'};font-weight:600">${Math.round(r.share*100)}%</td>
+      <td style="text-align:right;color:#94a3b8">${rankVol[r.label]} ${jumpTxt}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML=`<div style="overflow-x:auto"><table class="qctable">
+    <thead><tr><th>#</th><th>Дефект</th><th style="text-align:right">По вине фабрики</th><th>Вклад</th>
+    <th style="text-align:right">Накопл.</th><th style="text-align:right">Всего</th><th style="text-align:right">Доля вины</th><th style="text-align:right">Ранг по объёму</th></tr></thead>
+    <tbody>${body}</tbody></table></div>
+    <div class="note" style="margin-top:8px">Подсвеченные строки дают 80% всех рекламаций по вине фабрики. Единицы — ${QA_UNIT()}.</div>`;
+}
+function qaRenderDelta(rows,rng,months){
+  const el=document.getElementById('qa-delta'); if(!el) return;
+  const note=document.getElementById('qa-delta-note');
+  const list=rows.filter(r=>r.delta!=null&&Math.abs(r.delta)>0.01).sort((a,b)=>a.delta-b.delta);
+  if(!list.length){ el.innerHTML='<div class="note" style="margin:0">Не с чем сравнивать — нет предыдущего периода той же длины.</div>'; if(note)note.textContent=''; return; }
+  const totalDelta=list.reduce((s,r)=>s+r.delta,0);
+  if(note) note.innerHTML=`Среднемесячно, ${months[rng.from]}—${months[rng.to-1]} против ${months[rng.pf]}—${months[rng.pt-1]}. Итог: <b style="color:${totalDelta>0?'#dc2626':'#059669'}">${totalDelta>0?'+':''}${qaFmt(Math.abs(totalDelta)*(totalDelta<0?-1:1))}</b> ${QA_UNIT()} в месяц. Четыре категории, заменившие «Несоответствие ожиданиям», сведены в одну строку — иначе разбивка выглядела бы как взрывной рост.`;
+  const max=Math.max(...list.map(r=>Math.abs(r.delta)))||1;
+  const row=r=>{
+    const w=Math.abs(r.delta)/max*50;
+    const up=r.delta>0;
+    return `<tr>
+      <td>${r.label}${r.merged?' <span style="color:#94a3b8;font-size:9px">сводно</span>':''}</td>
+      <td style="text-align:right;color:#64748b">${qaFmt(r.prevPerMonth)}</td>
+      <td style="text-align:right;color:#64748b">${qaFmt(r.perMonth)}</td>
+      <td style="width:46%"><div style="position:relative;height:16px">
+        <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:#cbd5e1"></div>
+        <div style="position:absolute;top:2px;height:12px;border-radius:3px;${up?`left:50%;width:${w}%;background:#ef4444`:`right:50%;width:${w}%;background:#10b981`}"></div>
+      </div></td>
+      <td style="text-align:right;font-weight:700;color:${up?'#dc2626':'#059669'}">${up?'+':'−'}${qaFmt(Math.abs(r.delta))}</td>
+    </tr>`;
+  };
+  el.innerHTML=`<div style="overflow-x:auto"><table class="qctable">
+    <thead><tr><th>Дефект</th><th style="text-align:right">Было /мес</th><th style="text-align:right">Стало /мес</th><th>Изменение</th><th style="text-align:right">Δ /мес</th></tr></thead>
+    <tbody>${list.map(row).join('')}</tbody></table></div>`;
+}
+function qaRenderMatrix(rows){
+  killChart('qa-matrix');
+  const cv=document.getElementById('qa-matrix'); if(!cv) return;
+  const pts=rows.filter(r=>r.rawTotal>0);
+  const vols=pts.map(r=>r.total).sort((a,b)=>a-b);
+  const medVol=vols.length?vols[Math.floor(vols.length/2)]:0;
+  const col=r=>(r.share>=.5&&r.total>=medVol)?'rgba(239,68,68,.8)'
+             :(r.share<.5&&r.total>=medVol)?'rgba(59,130,246,.8)'
+             :(r.share>=.5)?'rgba(245,158,11,.75)':'rgba(148,163,184,.6)';
+  // Подписываем самые весомые точки — без имён диаграмма требует наводить мышь на каждую.
+  const named=new Set([...pts].sort((a,b)=>b.fact-a.fact).slice(0,5).map(r=>r.label)
+    .concat([...pts].sort((a,b)=>b.total-a.total).slice(0,2).map(r=>r.label)));
+  const quad={id:'qaQuad',
+    beforeDatasetsDraw(c){
+      const {ctx,chartArea:a,scales}=c; if(!a) return;
+      const x50=scales.x.getPixelForValue(50), yMed=scales.y.getPixelForValue(medVol);
+      ctx.save(); ctx.strokeStyle='#cbd5e1'; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x50,a.top); ctx.lineTo(x50,a.bottom); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(a.left,yMed); ctx.lineTo(a.right,yMed); ctx.stroke();
+      ctx.setLineDash([]); ctx.font='9px Segoe UI,Arial'; ctx.fillStyle='#94a3b8';
+      ctx.textAlign='right'; ctx.fillText('много, но вина не наша',x50-4,a.top+12);
+      ctx.textAlign='left';  ctx.fillStyle='#dc2626'; ctx.fillText('бить сюда',x50+4,a.top+12);
+      ctx.restore();
+    },
+    afterDatasetsDraw(c){
+      const {ctx,chartArea:a}=c; if(!a) return;
+      const meta=c.getDatasetMeta(0);
+      ctx.save(); ctx.font='9px Segoe UI,Arial'; ctx.fillStyle='#475569';
+      meta.data.forEach((pt,i)=>{
+        const r=c.data.datasets[0].data[i];
+        if(!named.has(r.label)) return;
+        let t=r.label.length>26?r.label.slice(0,25)+'…':r.label;
+        const w=ctx.measureText(t).width;
+        let x=pt.x+9, align='left';
+        if(x+w>a.right){ x=pt.x-9; align='right'; }
+        ctx.textAlign=align;
+        ctx.fillText(t,x,pt.y+3);
+      });
+      ctx.restore();
+    }};
+  CI['qa-matrix']=new Chart(cv.getContext('2d'),{
+    type:'scatter',
+    data:{datasets:[{
+      data:pts.map(r=>({x:r.share*100,y:r.total,label:r.label})),
+      backgroundColor:pts.map(col), borderColor:'transparent',
+      pointRadius:6, pointHoverRadius:9,
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'#1e293b',titleColor:'#94a3b8',bodyColor:'#f1f5f9',padding:8,cornerRadius:5,
+          callbacks:{title:it=>it[0].raw.label,
+            label:c=>[` объём: ${qaFmt(c.raw.y)} ${QA_UNIT()}`,` вина фабрики: ${Math.round(c.raw.x)}%`]}}},
+      scales:{
+        x:{min:0,max:100,title:{display:true,text:'Доля вины фабрики, %',font:{size:9},color:'#94a3b8'},
+           grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>v+'%'}},
+        // Логарифм: один дефект (механическое повреждение) на порядок крупнее остальных
+        // и в линейном масштабе сплющивает всё остальное в полоску у нуля.
+        y:{type:'logarithmic',title:{display:true,text:'Объём, '+QA_UNIT()+' (лог. шкала)',font:{size:9},color:'#94a3b8'},
+           grid:{color:'#f1f5f9'},ticks:{font:{size:9},color:'#64748b',callback:v=>{
+             const l=Math.log10(v); return Math.abs(l-Math.round(l))<1e-9||[2,5].includes(v/Math.pow(10,Math.floor(l)))?qaFmt(v):'';
+           }}}}
+    },
+    plugins:[quad]
+  });
 }
 
 // ── Анализ рекламаций: построчная выгрузка (лист на каждый месяц) ───────
@@ -3063,6 +3342,7 @@ async function init(){
   renderQuality('qsub-shewhart',qData);
   renderPercent('qsub-percent',qData);
   renderDefects('qsub-defects',qDefects);
+  renderDefectAnalytics('qsub-defanalytics',qDefects,qData);
   renderD2Table('qsub-d2table');
 }
 
