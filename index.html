@@ -320,22 +320,10 @@ const V2_IC_RUN     = [159,164,169,175,180,185,191,196];
 // Металл — недели 32-35 в колонках 151-154, итого 155.
 const V2_WC_METALL  = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132, 134,135,136,137, 139,140,141,142, 145,146,147,148,149, 151,152,153,154];
 const V2_IC_METALL  = [117,122,127,133,138,144,150,155];
-// «PL 2026» (Реализации Корпуса): июль заполнен целиком (5-я неделя — колонка 61),
-// августа в этом листе ещё НЕТ — держим null-плейсхолдеры, чтобы длина совпадала с
-// WL2/V2_WC_RUN (иначе недели на графике съедут). Появятся столбцы — проставить номера.
-const V2_WC_PL_KORPUS = [3,4,5,6, 13,14,15,16, 24,25,26,27, 32,33,34,35,36, 41,42,43,44, 49,50,51,52, 57,58,59,60,61, null,null,null,null];
-const V2_IC_PL_KORPUS = [2,12,23,31,40,48,56,null];
-// Металл: Реализации — Фев-Апр из листа «Металл» (row 40, тыс.₽ как есть),
-// Май-Июнь из «PL металл» (свежее, в руб. → /1000), как указал заказчик.
-const V2_METALL_RW_JANAPR_WC = [113,114,115,116, 118,119,120,121, 123,124,125,126, 128,129,130,131,132];
-const V2_METALL_RW_JANAPR_IC = [117,122,127,133];
-const V2_PL_METALL_MAY_WC=[3,4,5,6], V2_PL_METALL_MAY_IC=2;
-const V2_PL_METALL_JUN_WC=[11,12,13,14], V2_PL_METALL_JUN_IC=10;
-const V2_PL_METALL_JUL_WC=[19,20,21,22,23], V2_PL_METALL_JUL_IC=18;
-// Августа в «PL металл» ещё нет, зато он есть в листе «Металл» (row 40, тыс.₽ как есть,
-// колонки 151-154, итого 155) — берём оттуда. Сверено: июльские итоги двух листов
-// совпадают (8415.4 тыс. ₽ против 8 415 679 ₽), масштаб один и тот же.
-const V2_METALL_RW_AUG_WC=[151,152,153,154], V2_METALL_RW_AUG_IC=155;
+// Колонки реализаций в «PL 2026» и «PL металл» НЕ задаются вручную: они определяются
+// по шапке листа (см. qParsePLBlocks). Разметка там однозначна — блок [Budget][Actual]
+// [недели с диапазонами дат], — поэтому новый месяц подхватывается сам. Для Металла
+// лист «Металл» служит запасным источником на месяцы, которых в PL ещё нет.
 
 // Мягкая мебель: всё из её собственного листа RUN (другая таблица, SHEET_ID4).
 // 27 недель Янв-Июнь 2026; «Итого»-столбец есть только у января (остальное — сумма недель).
@@ -410,6 +398,54 @@ function qValidateColumns(sheetName,hdrRows,monthsCfg,wcArr,icArr){
   if(extra.length) problems.push({lvl:'info',text:`${sheetName}: в источнике появились месяцы, которых нет в дашборде — ${[...new Set(extra)].join(', ')}`});
   return problems;
 }
+// ── Автоопределение блоков в листах «PL 2026» / «PL металл» ─────────────
+// Разметка здесь однозначна, в отличие от недельных листов: месяц — это блок
+// [Budget][Actual][недели...], а недельные колонки подписаны диапазоном дат
+// («1.07-05.07»), откуда и берётся номер месяца. Поэтому колонки PL определяем
+// автоматически: правило заказчика — если в PL данные есть, верные именно они,
+// и новый месяц должен подхватываться сам, без правки кода.
+function qParsePLBlocks(rows){
+  if(!rows||!rows.length) return {};
+  const n=Math.max(...rows.map(r=>r?r.length:0));
+  const out={};
+  for(let c=0;c<n;c++){
+    if(qHdrCell(rows,0,c).toLowerCase()!=='actual') continue;
+    const wc=[], months=[];
+    for(let k=c+1;k<n;k++){
+      const h=qHdrCell(rows,0,k);
+      if(!/^\d/.test(h)) break;                    // «Diff», «Budget», пусто — конец блока
+      const mm=h.match(/\.(\d{1,2})\b/g);
+      if(!mm) break;
+      wc.push(k);
+      months.push(parseInt(mm[mm.length-1].slice(1),10));
+    }
+    if(!wc.length) continue;
+    const cnt={}; months.forEach(m=>{cnt[m]=(cnt[m]||0)+1;});
+    const mon=+Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
+    if(mon>=1&&mon<=12) out[mon]={ic:c,wc};
+  }
+  return out;
+}
+// Ряд «реализации» по месяцам из PL: тыс.₽ (в листе рубли, поэтому /1000).
+function qPLSeries(row,blocks,monthsCfg){
+  const w=[], m=[];
+  monthsCfg.forEach((mo,mi)=>{
+    const blk=blocks[mi+1];
+    mo.wi.forEach((_,j)=>{
+      const c=blk?blk.wc[j]:null;
+      const v=c==null?null:v2Get(row,c);
+      w.push(v==null?null:v/1000);
+    });
+    const t=blk?v2Get(row,blk.ic):null;
+    m.push(t==null?null:t/1000);
+  });
+  return {w,m};
+}
+function qPLHasData(row,blk){
+  if(!blk) return false;
+  return v2Get(row,blk.ic)!=null || blk.wc.some(c=>v2Get(row,c)!=null);
+}
+
 const _v2Issues=[];
 function qRunValidation(sheetName,hdrRows,monthsCfg,wcArr,icArr){
   try{ _v2Issues.push(...qValidateColumns(sheetName,hdrRows,monthsCfg,wcArr,icArr)); }
@@ -463,14 +499,18 @@ function buildV2(batches){
   _v2Issues.length=0;
   qRunValidation('RUN',    vr[13]&&vr[13].values, MONTHS2, V2_WC_RUN,    V2_IC_RUN);
   qRunValidation('Металл', vr[14]&&vr[14].values, MONTHS2, V2_WC_METALL, V2_IC_METALL);
+  // Блоки PL определяем по шапке — новый месяц подхватится сам.
+  const plKorpBlocks  = qParsePLBlocks(vr[15]&&vr[15].values);
+  const plMetalBlocks = qParsePLBlocks(vr[16]&&vr[16].values);
+  const plKorpSeries  = qPLSeries(plKorp, plKorpBlocks, MONTHS2);
 
   const korpus = {
     tw: V2_WC_RUN.map(c=>v2Get(runTbu,c)),    tm: V2_IC_RUN.map(c=>v2Get(runTbu,c)),
     cw: V2_WC_RUN.map(c=>v2Get(runMoshch,c)), cm: V2_IC_RUN.map(c=>v2Get(runMoshch,c)),
     fw: V2_WC_RUN.map(c=>v2Get(runProgn,c)),  fm: V2_IC_RUN.map(c=>v2Get(runProgn,c)),
     aw: V2_WC_RUN.map(c=>v2Get(runPrin,c)),   am: V2_IC_RUN.map(c=>v2Get(runPrin,c)),
-    rw: V2_WC_PL_KORPUS.map(c=>{const v=v2Get(plKorp,c);return v==null?null:v/1000;}),
-    rm: V2_IC_PL_KORPUS.map(c=>{const v=v2Get(plKorp,c);return v==null?null:v/1000;}),
+    // Реализации — из «PL 2026», колонки определяются по шапке. Месяца нет в листе → null.
+    rw: plKorpSeries.w, rm: plKorpSeries.m,
   };
 
   // Принятые по контрагентам (RUN, строки 34-42, idx0..8):
@@ -487,50 +527,55 @@ function buildV2(batches){
   // Реализации по контрагентам (PL 2026, строки 4-9, idx0..5):
   // 0 Внутренняя выручка, 1 Сторонние покупатели, 2 ДиванТрейд (= Диван.ру), 3 ДиванБай (= Диван.by),
   // 4 МП, 5 Прочая выручка. В рублях → /1000.
-  const plW=c=>{ return cols=>cols.map(cc=>{const v=v2Get(plBd[c],cc);return v==null?null:v/1000;}); };
+  // Недельные колонки — те же автоопределённые блоки PL, что и у самих реализаций.
+  const plWeekCols=[]; MONTHS2.forEach((mo,mi)=>{
+    const blk=plKorpBlocks[mi+1];
+    mo.wi.forEach((_,j)=>plWeekCols.push(blk?(blk.wc[j]??null):null));
+  });
+  const nullPerMonth=MONTHS2.map(()=>null);
+  const plW=c=>plWeekCols.map(cc=>{const v=cc==null?null:v2Get(plBd[c],cc);return v==null?null:v/1000;});
   korpus.rwBreakdown = [
-    {label:'Диван.ру (ДТ)', w:plW(2)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
-    {label:'Диван.by (ДБ)', w:plW(3)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
-    {label:'МП',            w:plW(4)(V2_WC_PL_KORPUS), m:V2_IC_PL_KORPUS.map(()=>null)},
-    {label:'Прочие',        w:V2_WC_PL_KORPUS.map(c=>{
+    {label:'Диван.ру (ДТ)', w:plW(2), m:nullPerMonth},
+    {label:'Диван.by (ДБ)', w:plW(3), m:nullPerMonth},
+    {label:'МП',            w:plW(4), m:nullPerMonth},
+    {label:'Прочие',        w:plWeekCols.map(c=>{
+        if(c==null) return null;
         const a=v2Get(plBd[0],c),b=v2Get(plBd[1],c),e=v2Get(plBd[5],c);
         const vals=[a,b,e].filter(v=>v!=null);
         return vals.length?vals.reduce((x,y)=>x+y,0)/1000:null;
-      }), m:V2_IC_PL_KORPUS.map(()=>null)},
+      }), m:nullPerMonth},
   ];
 
-  // Реализации Металл: Январь-Апрель из листа «Металл» (как есть, тыс.₽),
-  // Май-Июнь из «PL металл» (свежее, в руб. → /1000) — по указанию заказчика.
-  const metallRwJanApr = V2_METALL_RW_JANAPR_WC.map(c=>v2Get(metReal,c));
-  const metallRmJanApr = V2_METALL_RW_JANAPR_IC.map(c=>v2Get(metReal,c));
-  const plMetalMayW = V2_PL_METALL_MAY_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
-  const plMetalJunW = V2_PL_METALL_JUN_WC.map(c=>{const v=v2Get(plMetal,c);return v==null?null:v/1000;});
-  const plMetalJulW = V2_PL_METALL_JUL_WC.map(c=>{const v=c==null?null:v2Get(plMetal,c);return v==null?null:v/1000;});
-  const plMetalMayM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_MAY_IC);return v==null?null:v/1000;})();
-  const plMetalJunM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUN_IC);return v==null?null:v/1000;})();
-  const plMetalJulM = (()=>{const v=v2Get(plMetal,V2_PL_METALL_JUL_IC);return v==null?null:v/1000;})();
-  // Август: в «PL металл» его пока нет, берём из листа «Металл» (уже в тыс.₽, без деления).
-  const metalAugW = V2_METALL_RW_AUG_WC.map(c=>v2Get(metReal,c));
-  const metalAugM = v2Get(metReal,V2_METALL_RW_AUG_IC);
-  // Реализации Металла лежат в двух листах сразу. Май-июль берём из «PL металл»,
-  // август — из «Металл». Раз источники пересекаются, сверяем их: расхождение
-  // означает, что один из листов не долили, и часть месяцев считается по устаревшим цифрам.
-  [['Май',V2_IC_METALL[4],plMetalMayM],['Июнь',V2_IC_METALL[5],plMetalJunM],['Июль',V2_IC_METALL[6],plMetalJulM]]
-    .forEach(([nm,metCol,plVal])=>{
-      const metVal=v2Get(metReal,metCol);
-      if(metVal==null||plVal==null) return;
-      const diff=Math.abs(metVal-plVal)/Math.max(Math.abs(plVal),1);
-      if(diff>0.01) _v2Issues.push({lvl:'warn',
-        text:`Металл, ${nm}: реализации в листах расходятся — «Металл» ${Math.round(metVal)} тыс. ₽ против «PL металл» ${Math.round(plVal)} тыс. ₽ (${(diff*100).toFixed(1)}%). На графике используется «PL металл».`});
-    });
+  // Реализации Металла есть в двух листах. Правило заказчика: если месяц есть в «PL металл»,
+  // верны именно эти цифры. Лист «Металл» — запасной, для месяцев, до которых PL ещё не дошёл
+  // (сейчас это Январь-Апрель и Август). Расхождение между листами на пересечении —
+  // ожидаемое, а не ошибка: «Металл» просто отстаёт, поэтому и не сигналим о нём.
+  const metRw=[], metRm=[], metFallbackMonths=[];
+  MONTHS2.forEach((mo,mi)=>{
+    const blk=plMetalBlocks[mi+1];
+    if(qPLHasData(plMetal,blk)){
+      mo.wi.forEach((_,j)=>{
+        const c=blk.wc[j], v=c==null?null:v2Get(plMetal,c);
+        metRw.push(v==null?null:v/1000);
+      });
+      const t=v2Get(plMetal,blk.ic);
+      metRm.push(t==null?null:t/1000);
+    } else {
+      // Лист «Металл» уже в тыс.₽ — делить не нужно.
+      mo.wi.forEach(wi=>metRw.push(v2Get(metReal,V2_WC_METALL[wi])));
+      metRm.push(v2Get(metReal,V2_IC_METALL[mi]));
+      if(mo.wi.some(wi=>v2Get(metReal,V2_WC_METALL[wi])!=null)) metFallbackMonths.push(mo.n);
+    }
+  });
+  if(metFallbackMonths.length) _v2Issues.push({lvl:'info',
+    text:`Металл, реализации: ${metFallbackMonths.join(', ')} — этих месяцев ещё нет в «PL металл», данные взяты из листа «Металл» и уточнятся, когда PL заполнят.`});
 
   const metall = {
     tw: V2_WC_METALL.map(c=>v2Get(metTbu,c)),    tm: V2_IC_METALL.map(c=>v2Get(metTbu,c)),
     cw: V2_WC_METALL.map(c=>{const v=v2Get(metMoshch,c);return v!=null?v:v2Get(metProgn,c);}), cm: V2_IC_METALL.map(c=>v2Get(metMoshch,c)),
     fw: V2_WC_METALL.map(c=>v2Get(metProgn,c)),  fm: V2_IC_METALL.map(c=>v2Get(metProgn,c)),
     aw: V2_WC_METALL.map(c=>v2Get(metPrin,c)),   am: V2_IC_METALL.map(c=>v2Get(metPrin,c)),
-    rw: [...metallRwJanApr, ...plMetalMayW, ...plMetalJunW, ...plMetalJulW, ...metalAugW],
-    rm: [...metallRmJanApr, plMetalMayM, plMetalJunM, plMetalJulM, metalAugM],
+    rw: metRw, rm: metRm,
   };
 
   return {korpus2:build(korpus,WL2,MONTHS2), metall2:build(metall,WL2,MONTHS2)};
@@ -2956,9 +3001,10 @@ async function init(){
       "'Металл'!A18:GZ18","'Металл'!A20:GZ20","'Металл'!A21:GZ21","'Металл'!A28:GZ28","'Металл'!A40:GZ40",
       "'PL 2026'!A10:BZ10","'PL металл'!A12:AZ12",
       'RUN!A34:GZ42', "'PL 2026'!A4:BZ9",
-      // Шапки — для валидатора колонок (indices 13,14). Добавлены В КОНЕЦ, чтобы не
-      // сдвинуть индексы, по которым разбирается ответ в buildV2().
+      // Шапки — для валидатора колонок (13,14) и автоопределения блоков PL (15,16).
+      // Добавлены В КОНЕЦ, чтобы не сдвинуть индексы разбора ответа в buildV2().
       'RUN!A1:IZ3', "'Металл'!A1:IZ3",
+      "'PL 2026'!A1:CZ2", "'PL металл'!A1:BZ2",
     ];
     const qs=ranges.map(r=>`ranges=${encodeURIComponent(r)}`).join('&');
     const url4=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID3}/values:batchGet?${qs}&key=${GOOGLE_API_KEY}&valueRenderOption=UNFORMATTED_VALUE`;
