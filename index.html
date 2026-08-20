@@ -3400,31 +3400,52 @@ async function init(){
 
 // ── Выполнение плана производства ММ ─────────────────────────────────
 const SHEET_ID_MM='1wRtjakiS7lQsQzAV34KsFz03UV8fiIqQSsLcTDyY7es';
-const MMP_MONTHS=[
-  {key:'yan26',label:'Январь 2026',sheet:'Январь 2026',days:31},
-  {key:'fev26',label:'Февраль 2026',sheet:'Февраль 2026',days:28},
-  {key:'mar26',label:'Март 2026',sheet:'Март 2026',days:31},
-  {key:'apr26',label:'Апрель 2026',sheet:'Апрель 2026',days:30},
-  {key:'may26',label:'Май 2026',sheet:'Май 2026',days:31},
-  {key:'iun26',label:'Июнь 2026',sheet:'Июнь 2026',days:30},
-  {key:'iul26',label:'Июль 2026',sheet:'Июль 2026',days:31},
-];
+// Список месяцев НЕ задаётся руками: он собирается из вкладок самой таблицы.
+// Раньше здесь был жёсткий перечень, и новый месяц (август) просто не появлялся,
+// пока его не впишут в код. Теперь достаточно завести лист в таблице.
+const MMP_MON_NAMES=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+let MMP_MONTHS=[];
+// Запасной список — если не удалось прочитать перечень вкладок.
+const MMP_MONTHS_FALLBACK=MMP_MON_NAMES.map((n,i)=>({key:'m'+i,label:n+' 2026',sheet:n+' 2026'}));
+async function mmpFetchMonths(){
+  const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID_MM}?fields=sheets.properties.title&key=${GOOGLE_API_KEY}`;
+  const resp=await fetch(url);
+  if(!resp.ok) throw new Error('HTTP '+resp.status);
+  const js=await resp.json();
+  const found=[];
+  (js.sheets||[]).forEach(sh=>{
+    const t=String(sh.properties&&sh.properties.title||'');
+    const m=t.trim().match(/^([А-Яа-яЁё]+)\s+(\d{4})$/);
+    if(!m) return;
+    const mi=MMP_MON_NAMES.findIndex(n=>n.toLowerCase()===m[1].toLowerCase());
+    if(mi<0) return;
+    found.push({sheet:t, mi, year:+m[2]});
+  });
+  if(!found.length) throw new Error('вкладки месяцев не найдены');
+  const year=Math.max(...found.map(f=>f.year));           // работаем с последним годом в книге
+  return found.filter(f=>f.year===year)
+    .sort((a,b)=>a.mi-b.mi)
+    .map(f=>({key:'m'+f.mi, label:MMP_MON_NAMES[f.mi]+' '+f.year, sheet:f.sheet}));
+}
 let mmpLoaded=false;
 let mmpChartInst={};
 
 function mmpKillChart(id){if(mmpChartInst[id]){mmpChartInst[id].destroy();delete mmpChartInst[id];}}
 
-function mmpEnsureLoaded(){
+async function mmpEnsureLoaded(){
   if(mmpLoaded) return;
   mmpLoaded=true;
   const sel=document.getElementById('mmp-month-sel');
-  MMP_MONTHS.forEach((m,i)=>{
+  try{ MMP_MONTHS=await mmpFetchMonths(); }
+  catch(e){ console.warn('Выполнение ММ: не удалось прочитать список вкладок, беру запасной перечень:',e); MMP_MONTHS=MMP_MONTHS_FALLBACK; }
+  sel.innerHTML='';
+  MMP_MONTHS.forEach(m=>{
     const o=document.createElement('option');
     o.value=m.key; o.textContent=m.label;
     sel.appendChild(o);
   });
-  // default to current: june 2026 (index 5)
-  sel.value='iun26';
+  // По умолчанию — последний заведённый месяц.
+  if(MMP_MONTHS.length) sel.value=MMP_MONTHS[MMP_MONTHS.length-1].key;
   mmpLoadMonth();
 }
 
@@ -3443,7 +3464,7 @@ async function mmpLoadMonth(){
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const json=await resp.json();
     const rows=json.values||[];
-    mmpRender(rows, m.label, m.days);
+    mmpRender(rows, m.label);
     badge.textContent='OK ✓';
     badge.style.background='#dcfce7';badge.style.color='#15803d';badge.style.borderColor='#86efac';
   }catch(e){
@@ -3509,7 +3530,7 @@ function mmpStatusBar(pct,factVal,planVal,unit,lbl){
   </div>`;
 }
 
-function mmpRender(rows, label, monthDays){
+function mmpRender(rows, label){
   const hdr5=rows[4]||[];
   const hasNorma=typeof hdr5[6]==='string'&&hdr5[6].includes('Норм');
   const co=hasNorma?1:0;
@@ -3518,8 +3539,11 @@ function mmpRender(rows, label, monthDays){
   const totalPlanRub=(+(planRow[2]||0))/1000;
   const totalPlanUE=+(planRow[3]||0);
   const sheetDays=+(planRow[5]||0);
-  // Use config days as authoritative; sheet value is fallback (unreliable if month not fully set up)
-  const workingDays=monthDays||(sheetDays>=20?sheetDays:31);
+  // РАБОЧИЕ дни берём из самого листа. Раньше здесь стояло жёстко заданное число,
+  // и это были КАЛЕНДАРНЫЕ дни: 31 вместо 25 в мае, 30 вместо 28 в апреле и т.д.
+  // Знаменатель тут — рабочие дни (daysWithData считает только дни с выпуском),
+  // поэтому завышенный знаменатель занижал план на дату и завышал % выполнения.
+  const workingDays=(sheetDays>=15&&sheetDays<=31)?sheetDays:31;
 
   const planUEcol=17+co;
   const mmPlanUE=+(rows[3]?.[planUEcol]||0);
@@ -3673,8 +3697,8 @@ function mmpRenderBalance(){
   const dwP=d.daysWithData, dwV=d.daysWithDataV;
   const factP=d.priniat.totalUE, factV=d.vypush.totalUE;
   // % выполнения от плана на дату (нормировано на свои рабочие дни — временной сдвиг не искажает)
-  const ptdP=workingDays?totalPlanUE*dwP/workingDays:0;
-  const ptdV=workingDays?totalPlanUE*dwV/workingDays:0;
+  const ptdP=workingDays?totalPlanUE*Math.min(1,dwP/workingDays):0;
+  const ptdV=workingDays?totalPlanUE*Math.min(1,dwV/workingDays):0;
   const pctP=ptdP?factP/ptdP:0;
   const pctV=ptdV?factV/ptdV:0;
   // Разница % — главный показатель баланса
@@ -3733,9 +3757,14 @@ function mmpRenderView(){
   mmpRenderBalance();
 
   // KPI cards
-  const proj=(v)=>dw?v/dw*workingDays:0;
+  // Месяц отработан — прогноз равен факту, экстраполировать уже нечего.
+  const proj=(v)=>!dw?0:(dw>=workingDays? v : v/dw*workingDays);
   // plan-to-date = monthly plan proportional to days elapsed
-  const ptd=(plan)=>workingDays?+(plan*dw/workingDays).toFixed(1):0;
+  // Доля месяца ограничена единицей: если работали сверх нормы рабочих дней
+  // (в феврале выпуск был 28 дней при норме 27), план «на дату» не должен
+  // превышать месячный — иначе законченный месяц показывает заниженный процент.
+  const monthShare=workingDays?Math.min(1,dw/workingDays):0;
+  const ptd=(plan)=>+(plan*monthShare).toFixed(1);
   const kpiEl=document.getElementById('mmp-kpi-section');
   if(kpiEl) kpiEl.innerHTML=`
     <div style="font-size:9px;color:#94a3b8;margin-bottom:6px">Прогноз на основе ${dw} из ${workingDays} раб. дней</div>
